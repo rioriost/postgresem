@@ -6,8 +6,11 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use postgresem_compiler::{CompilerOptions, SemanticSnapshot, compile_lsq, normalize_lsq};
+use postgresem_compiler::{
+    CompilerOptions, SemanticSnapshot, compile_lsq, diff_snapshots, normalize_lsq,
+};
 
+mod benchmark;
 mod catalog;
 mod executor;
 mod mcp;
@@ -22,6 +25,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    Benchmark {
+        #[command(subcommand)]
+        command: BenchmarkCommands,
+    },
     Catalog {
         #[command(subcommand)]
         command: CatalogCommands,
@@ -42,6 +49,20 @@ enum Commands {
     Snapshot {
         #[command(subcommand)]
         command: SnapshotCommands,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BenchmarkCommands {
+    Compiler {
+        #[arg(long, default_value_t = 100)]
+        models: usize,
+        #[arg(long, default_value_t = 100)]
+        warmup: usize,
+        #[arg(long, default_value_t = 1000)]
+        iterations: usize,
+        #[arg(long, default_value_t = 50.0)]
+        threshold_ms: f64,
     },
 }
 
@@ -93,6 +114,14 @@ enum QueryCommands {
 
 #[derive(Debug, Subcommand)]
 enum ModelCommands {
+    Diff {
+        #[arg(long)]
+        from: PathBuf,
+        #[arg(long)]
+        to: PathBuf,
+        #[arg(long)]
+        fail_on_breaking: bool,
+    },
     Export {
         #[arg(long)]
         project: String,
@@ -123,10 +152,27 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Box<dyn Error>> {
     match Cli::parse().command {
+        Commands::Benchmark {
+            command:
+                BenchmarkCommands::Compiler {
+                    models,
+                    warmup,
+                    iterations,
+                    threshold_ms,
+                },
+        } => benchmark_compiler(models, warmup, iterations, threshold_ms),
         Commands::Catalog {
             command: CatalogCommands::Scan { database_url_env },
         } => scan_catalog(&database_url_env),
         Commands::Doctor => doctor(),
+        Commands::Model {
+            command:
+                ModelCommands::Diff {
+                    from,
+                    to,
+                    fail_on_breaking,
+                },
+        } => diff_models(&from, &to, fail_on_breaking),
         Commands::Model {
             command:
                 ModelCommands::Export {
@@ -163,6 +209,35 @@ fn run() -> Result<(), Box<dyn Error>> {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
     }
+}
+
+fn benchmark_compiler(
+    models: usize,
+    warmup: usize,
+    iterations: usize,
+    threshold_ms: f64,
+) -> Result<(), Box<dyn Error>> {
+    let result = benchmark::compiler_baseline(models, warmup, iterations, threshold_ms)?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    if !result.passed {
+        return Err(format!(
+            "compiler p95 {:.3} ms exceeded {:.3} ms threshold",
+            result.p95_ms, result.threshold_ms
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn diff_models(from: &PathBuf, to: &PathBuf, fail_on_breaking: bool) -> Result<(), Box<dyn Error>> {
+    let before: SemanticSnapshot = serde_json::from_slice(&fs::read(from)?)?;
+    let after: SemanticSnapshot = serde_json::from_slice(&fs::read(to)?)?;
+    let diff = diff_snapshots(&before, &after)?;
+    println!("{}", serde_json::to_string_pretty(&diff)?);
+    if fail_on_breaking && diff.has_breaking_changes() {
+        return Err("semantic model diff contains breaking changes".into());
+    }
+    Ok(())
 }
 
 fn execute_query(
@@ -249,7 +324,27 @@ fn parse_environment_variable_name(value: &str) -> Result<String, String> {
 mod tests {
     use clap::Parser;
 
-    use super::{CatalogCommands, Cli, Commands, McpCommands, ModelCommands, QueryCommands};
+    use super::{
+        BenchmarkCommands, CatalogCommands, Cli, Commands, McpCommands, ModelCommands,
+        QueryCommands,
+    };
+
+    #[test]
+    fn compiler_benchmark_defaults_to_the_preview_baseline() {
+        assert!(matches!(
+            Cli::try_parse_from(["postgresem", "benchmark", "compiler"]),
+            Ok(Cli {
+                command: Commands::Benchmark {
+                    command: BenchmarkCommands::Compiler {
+                        models: 100,
+                        warmup: 100,
+                        iterations: 1000,
+                        threshold_ms,
+                    }
+                }
+            }) if threshold_ms == 50.0
+        ));
+    }
 
     #[test]
     fn catalog_scan_accepts_only_an_environment_variable_name() {
@@ -339,6 +434,44 @@ mod tests {
                 "commerce",
                 "postgresql://localhost/app",
             ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn model_diff_has_explicit_snapshot_paths_and_breaking_gate() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "model",
+                "diff",
+                "--from",
+                "before.json",
+                "--to",
+                "after.json",
+                "--fail-on-breaking",
+            ]),
+            Ok(Cli {
+                command: Commands::Model {
+                    command: ModelCommands::Diff {
+                        from,
+                        to,
+                        fail_on_breaking: true,
+                    }
+                }
+            }) if from.to_str() == Some("before.json") && to.to_str() == Some("after.json")
+        ));
+    }
+
+    #[test]
+    fn model_diff_breaking_gate_returns_an_error() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        assert!(
+            super::diff_models(
+                &root.join("tests/model-diff/before.json"),
+                &root.join("tests/model-diff/after.json"),
+                true,
+            )
             .is_err()
         );
     }

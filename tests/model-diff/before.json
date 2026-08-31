@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "revision_hash": "sha256:before",
+  "models": [
+    {
+      "semantic_name": "orders",
+      "source": {
+        "schema": "sales",
+        "relation": "orders"
+      },
+      "timezone": "UTC",
+      "queryable": true,
+      "fields": [
+        {
+          "semantic_name": "order_id",
+          "data_type": "integer",
+          "column": "order_id",
+          "time_dimension": false,
+          "entity_key": true,
+          "visible": true
+        }
+      ],
+      "metrics": [],
+      "relationships": []
+    }
+  ]
+}

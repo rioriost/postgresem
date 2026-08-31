@@ -2,7 +2,7 @@ name: postgresem
 
 services:
   db:
-    image: postgres:18
+    image: ${POSTGRES_IMAGE:-postgres:18}
     networks: [postgresem]
     environment:
       POSTGRES_DB: postgresem_dev
@@ -22,7 +22,7 @@ services:
       retries: 30
 
   migrate:
-    image: postgres:18
+    image: ${POSTGRES_IMAGE:-postgres:18}
     networks: [postgresem]
     depends_on:
       db:
@@ -38,7 +38,7 @@ services:
     entrypoint: ["/bin/sh", "/migrations/run.sh"]
 
   seed:
-    image: postgres:18
+    image: ${POSTGRES_IMAGE:-postgres:18}
     networks: [postgresem]
     depends_on:
       migrate:
@@ -81,7 +81,7 @@ services:
     command: ["sleep infinity"]
 
   integration-test:
-    image: postgres:18
+    image: ${POSTGRES_IMAGE:-postgres:18}
     networks: [postgresem]
     depends_on:
       seed:
@@ -151,6 +151,24 @@ services:
     volumes:
       - ./tests/integration:/tests:ro
     entrypoint: ["python3", "/tests/mcp.py"]
+
+  performance-test:
+    build:
+      context: .
+      dockerfile: IntegrationContainerfile
+    networks: [postgresem]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: postgresem_dev
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+    volumes:
+      - ./tests:/tests:ro
+    entrypoint: ["python3", "/tests/performance/preview.py"]
 
 volumes:
   postgres-data:

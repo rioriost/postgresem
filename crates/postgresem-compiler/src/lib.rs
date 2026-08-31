@@ -1,10 +1,15 @@
 mod compiler;
+mod diff;
 mod lsq;
 mod semantic;
 
 pub use compiler::{
     COMPILER_SEMANTIC_VERSION, CompileError, CompiledParameter, CompiledQuery, CompilerOptions,
     Lineage, OutputColumn, compile_lsq,
+};
+pub use diff::{
+    ChangeKind, Compatibility, DiffError, DiffSummary, SemanticChange, SemanticDiff,
+    SemanticObjectKind, diff_snapshots,
 };
 pub use lsq::{
     Dimension, Filter, Literal, LogicalSemanticQuery, LsqError, MetricReference, NormalizedLsq,

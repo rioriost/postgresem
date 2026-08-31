@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "revision_hash": "sha256:after",
+  "models": [
+    {
+      "semantic_name": "orders",
+      "source": {
+        "schema": "sales",
+        "relation": "orders"
+      },
+      "timezone": "UTC",
+      "queryable": false,
+      "fields": [],
+      "metrics": [],
+      "relationships": []
+    }
+  ]
+}

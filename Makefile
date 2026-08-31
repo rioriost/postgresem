@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp fmt check test test-db test-execution test-mcp
+.PHONY: doctor dev-up dev-down mcp fmt check test test-db test-execution test-mcp test-performance preview-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -83,3 +83,25 @@ test-mcp:
 	done; \
 	echo "MCP integration test timed out" >&2; \
 	exit 1
+
+test-performance:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	container-compose up --env-file .env -d --build performance-test
+	@attempt=0; \
+	while [ $$attempt -lt 120 ]; do \
+		logs="$$(container logs postgresem-performance-test 2>&1)"; \
+		if printf '%s\n' "$$logs" | grep -q "developer preview performance checks passed"; then \
+			printf '%s\n' "$$logs"; \
+			exit 0; \
+		fi; \
+		if container inspect postgresem-performance-test 2>/dev/null | grep -q '"state" : "stopped"'; then \
+			printf '%s\n' "$$logs" >&2; \
+			exit 1; \
+		fi; \
+		attempt=$$((attempt + 1)); \
+		sleep 1; \
+	done; \
+	echo "performance integration test timed out" >&2; \
+	exit 1
+
+preview-check: fmt check test test-db test-execution test-mcp test-performance
