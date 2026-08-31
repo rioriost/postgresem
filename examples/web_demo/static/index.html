@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Postgresem Commerce Demo</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">POSTGRESEM / LOCAL BETA DEMO</p>
+        <h1>Ask governed questions.<br>Keep PostgreSQL in control.</h1>
+        <p class="lede">
+          Checked-in LSQ examples are validated, explained, executed through
+          PostgreSQL roles and RLS, and recorded in the mandatory audit trail.
+        </p>
+      </div>
+      <div class="status-card">
+        <span class="pulse" aria-hidden="true"></span>
+        <div>
+          <strong id="connection-status">Connecting</strong>
+          <span id="revision">Waiting for semantic revision</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section aria-labelledby="query-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CURATED LSQ</p>
+            <h2 id="query-heading">Commerce questions</h2>
+          </div>
+          <p>No browser-supplied SQL, role, principal, or database settings.</p>
+        </div>
+        <div id="examples" class="card-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="result-layout" aria-labelledby="result-heading">
+        <article class="result-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">GUARDED RESULT</p>
+              <h2 id="result-heading">Query output</h2>
+            </div>
+            <span id="run-state" class="badge">Choose a question</span>
+          </div>
+          <div id="result-empty" class="empty-state">
+            Results appear here after validation and audited execution.
+          </div>
+          <div id="result-content" hidden>
+            <div id="facts" class="facts"></div>
+            <div class="table-wrap">
+              <table>
+                <thead id="result-head"></thead>
+                <tbody id="result-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+        <aside class="evidence-panel" aria-labelledby="evidence-heading">
+          <p class="eyebrow">EXECUTION EVIDENCE</p>
+          <h2 id="evidence-heading">Safe by construction</h2>
+          <dl id="evidence">
+            <div><dt>Validation</dt><dd>Not run</dd></div>
+            <div><dt>Semantic lineage</dt><dd>Not run</dd></div>
+            <div><dt>Audit query ID</dt><dd>Not run</dd></div>
+            <div><dt>Truncated</dt><dd>Not run</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section aria-labelledby="models-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">DISCOVERY</p>
+            <h2 id="models-heading">Published models</h2>
+          </div>
+        </div>
+        <div id="models" class="model-list"></div>
+      </section>
+    </main>
+
+    <footer>
+      Local loopback demo only. MCP remains stdio; remote HTTP authentication is
+      intentionally out of scope.
+    </footer>
+  </body>
+</html>
+

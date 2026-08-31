@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp fmt check test test-db test-execution test-mcp test-performance preview-check
+.PHONY: doctor dev-up dev-down mcp web-demo fmt check test test-web-demo test-db test-execution test-mcp test-performance preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -12,6 +12,10 @@ mcp:
 	@container-compose up --env-file .env -d --build gateway </dev/null 1>&2
 	@container exec -i --user postgresem postgresem-gateway postgresem mcp serve
 
+web-demo:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	python3 examples/web_demo/server.py -- make mcp
+
 dev-down:
 	container-compose down --env-file .env
 
@@ -23,6 +27,9 @@ check:
 
 test:
 	cargo test --workspace --all-features
+
+test-web-demo:
+	python3 examples/web_demo/test_server.py
 
 test-db:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
@@ -105,3 +112,5 @@ test-performance:
 	exit 1
 
 preview-check: fmt check test test-db test-execution test-mcp test-performance
+
+beta-check: preview-check test-web-demo

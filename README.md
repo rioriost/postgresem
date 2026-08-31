@@ -13,6 +13,7 @@ local evaluation and read-only pilots, not production deployment.
 
 - [30-minute Apple Container quickstart](docs/quickstart.md)
 - [Commerce sample and stdio smoke client](examples/commerce/README.md)
+- [Local commerce Web demo](examples/web_demo/README.md)
 - [Operations guide](docs/operations.md)
 - [Error reference](docs/error-reference.md)
 - [Compatibility policy and support matrix](docs/compatibility.md)

@@ -50,5 +50,8 @@ tools, lists resources, reads every advertised resource, prints privacy-safe
 shape summaries, closes stdin, and exits nonzero on any protocol/tool failure.
 Child stderr remains stderr and is prefixed for visibility.
 
+For a browser demonstration built on the same stdio MCP boundary, see the
+[local commerce Web demo](../web_demo/README.md).
+
 `make mcp` reserves stdout for protocol messages. Do not pipe explanatory text
 into its stdin: send one JSON-RPC object per line or use this client.
