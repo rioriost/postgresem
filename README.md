@@ -18,6 +18,7 @@ local evaluation and read-only pilots, not production deployment.
 - [Compatibility policy and support matrix](docs/compatibility.md)
 - [Performance baseline and reproduction](docs/performance.md)
 - [Developer-preview exit checklist](docs/developer-preview-checklist.md)
+- [M5 beta checklist](docs/beta-checklist.md)
 - [M4 design feedback form](https://github.com/rioriost/postgresem/issues/new?template=m4_design_feedback.yml)
 - [Configured CI](.github/workflows/ci.yml) and
   [release automation](.github/workflows/release.yml)
