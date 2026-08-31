@@ -50,11 +50,10 @@ published.
    supported uninstall in M4. Manual removal is DBA-owned, destructive, and
    requires prior export/backup and dependency review.
 10. Claim PostgreSQL support only where current test evidence exists. For M4
-    documentation, PostgreSQL 18 is locally verified; CI coverage for 16, 17,
-    and 18 is configured, but 16/17 are CI-only and unverified until passing
-    matrix evidence is recorded. Apple Container remains statically pinned to
-    PostgreSQL 18 because `container-compose` does not interpolate image
-    variables.
+    documentation, PostgreSQL 18 is locally verified and PostgreSQL 16, 17, and
+    18 have passing Docker CI matrix evidence. Apple Container remains
+    statically pinned to PostgreSQL 18 because `container-compose` does not
+    interpolate image variables.
 11. Distinguish release automation from published artifacts. Tag automation is
     configured for four native archives, `SHA256SUMS`, and a multi-arch GHCR
     image with image SBOM/provenance, but none exists publicly until a matching

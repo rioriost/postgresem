@@ -117,19 +117,18 @@ bundle. See [ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall
 
 | PostgreSQL | Preview status | Evidence/boundary |
 |---|---|---|
-| 18 | supported for the documented local pilot | static Apple Container image and current local integration target |
-| 17 | CI-only configuration; unverified | Docker Actions matrix is configured, but no passing GitHub run has been recorded as evidence |
-| 16 | CI-only configuration; unverified | Docker Actions matrix is configured, but no passing GitHub run has been recorded as evidence |
+| 18 | supported for the documented local pilot and CI | static Apple Container image, local integration target, and passing Docker Actions matrix |
+| 17 | supported in Docker CI | migrations, database integration, guarded execution, and MCP integration passed |
+| 16 | supported in Docker CI | migrations, database integration, guarded execution, and MCP integration passed |
 | 15 and older | unsupported | outside the project plan and current test target |
 | future major versions | unsupported until evaluated | catalog and behavior changes require explicit validation |
 
 The [CI workflow](../.github/workflows/ci.yml) defines separate PostgreSQL 16,
 17, and 18 jobs for migrations, database integration, guarded execution, and
 MCP integration. The performance service runs only in the PostgreSQL 18 matrix
-job. Workflow configuration is not proof that a GitHub run passed. Until a
-passing matrix run is linked as evidence, the M4 documentation claims verified
-support only for the local PostgreSQL 18 pilot. Core operation requires no
-PostgreSQL extension.
+job. All three jobs passed in
+[CI run 33389810710](https://github.com/rioriost/postgresem/actions/runs/33389810710)
+on 2026-09-01. Core operation requires no PostgreSQL extension.
 
 Apple Container uses the static `postgres:18` image in `compose.yaml`;
 `container-compose` does not interpolate `${POSTGRES_IMAGE}`. Local version

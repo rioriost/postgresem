@@ -16,7 +16,7 @@ production readiness.
 | preview compatibility policy | documented | [compatibility](compatibility.md), [ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall.md) |
 | guarded read-only execution and mandatory audit | implemented | ADRs [0006](adr/0006-guarded-database-execution.md) and [0007](adr/0007-mcp-stdio-mvp-adapter.md) |
 | performance baseline and 100-model/catalog checks | implemented; reference run recorded | [performance baseline](performance.md), `make test-performance` |
-| PostgreSQL 16/17/18 GitHub matrix | configured; passing-run evidence outstanding | [CI workflow](../.github/workflows/ci.yml) |
+| PostgreSQL 16/17/18 GitHub matrix | passed | [CI run 33389810710](https://github.com/rioriost/postgresem/actions/runs/33389810710) |
 | archives/checksums/multi-arch GHCR/SBOM/provenance | configured; no release/tag published | [release workflow](../.github/workflows/release.yml), [compatibility matrix](compatibility.md#artifact-release-and-runtime-matrix) |
 | release signing | **not implemented** | checksums are not signatures |
 | new user completes a real-database read-only pilot in 30 minutes | evidence required | use the form below |
@@ -124,6 +124,6 @@ environment-specific evidence, not universal performance guarantees.
 
 Completing this checklist does not claim production readiness, TLS, HTTP,
 transport cancellation, backup/restore, N-1 upgrades, release signing, a
-successful/published release, a passing PG16/17 GitHub matrix, an external
-security review, or a supported uninstall. Those boundaries remain in
+successful/published release, an external security review, or a supported
+uninstall. Those boundaries remain in
 [compatibility](compatibility.md) and [operations](operations.md).
