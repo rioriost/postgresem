@@ -179,13 +179,20 @@ pub fn diff_snapshots(
 }
 
 fn validate_version(snapshot: &SemanticSnapshot) -> Result<(), DiffError> {
-    if snapshot.schema_version == SUPPORTED_SNAPSHOT_VERSION {
-        Ok(())
-    } else {
-        Err(DiffError::UnsupportedSnapshotVersion(
+    if snapshot.schema_version != SUPPORTED_SNAPSHOT_VERSION {
+        return Err(DiffError::UnsupportedSnapshotVersion(
             snapshot.schema_version.clone(),
-        ))
+        ));
     }
+    named_models(&snapshot.models)?;
+    for model in &snapshot.models {
+        named_objects(&model.fields, "field", |field| &field.semantic_name)?;
+        named_objects(&model.metrics, "metric", |metric| &metric.semantic_name)?;
+        named_objects(&model.relationships, "relationship", |relationship| {
+            &relationship.semantic_name
+        })?;
+    }
+    Ok(())
 }
 
 fn named_models(models: &[Model]) -> Result<BTreeMap<&str, &Model>, DiffError> {
@@ -476,6 +483,21 @@ mod tests {
         let diff = diff_snapshots(&before, &after).expect("snapshots can be diffed");
         assert_eq!(diff.compatibility, Compatibility::Compatible);
         assert_eq!(diff.summary.compatible, 2);
+    }
+
+    #[test]
+    fn duplicate_names_are_rejected_even_on_added_models() {
+        let before = SemanticSnapshot {
+            schema_version: "1".to_owned(),
+            revision_hash: "sha256:before".to_owned(),
+            models: vec![],
+        };
+        let mut after = snapshot();
+        let duplicate = after.models[0].fields[0].clone();
+        after.models[0].fields.push(duplicate);
+
+        let error = diff_snapshots(&before, &after).expect_err("duplicate field must fail");
+        assert!(error.to_string().contains("duplicate field name"));
     }
 
     fn snapshot() -> SemanticSnapshot {
