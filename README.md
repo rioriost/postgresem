@@ -56,6 +56,29 @@ cargo run -p postgresem -- snapshot hash \
   fixtures/evals/m0-semantic-snapshot.json
 ```
 
+Scan the visible, non-system PostgreSQL catalog into a deterministic JSON
+snapshot:
+
+```sh
+export DATABASE_URL='postgresql://postgresem_introspector:password@localhost/app'
+cargo run -p postgresem -- catalog scan > catalog-snapshot.json
+```
+
+The connection URL is read only from an environment variable so it is not
+placed in process arguments. Name a different variable when needed:
+
+```sh
+export POSTGRESEM_SCAN_URL='postgresql://postgresem_introspector:password@localhost/app'
+cargo run -p postgresem -- catalog scan \
+  --database-url-env POSTGRESEM_SCAN_URL
+```
+
+Use a dedicated least-privilege introspection role. The scan runs in a
+`READ ONLY`, `REPEATABLE READ` transaction. Catalog comments are included and
+may be sensitive; CHECK and RLS expressions are never persisted, only their
+SHA-256 hashes. The MVP client currently supports local or otherwise
+non-TLS connections only.
+
 See
 [`docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md`](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 for the architecture, scope, and milestone gates.

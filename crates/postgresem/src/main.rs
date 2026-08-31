@@ -8,6 +8,8 @@ use std::{
 use clap::{Parser, Subcommand};
 use postgresem_compiler::{CompilerOptions, SemanticSnapshot, compile_lsq, normalize_lsq};
 
+mod catalog;
+
 #[derive(Debug, Parser)]
 #[command(name = "postgresem", version, about)]
 struct Cli {
@@ -17,6 +19,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    Catalog {
+        #[command(subcommand)]
+        command: CatalogCommands,
+    },
     Doctor,
     Query {
         #[command(subcommand)]
@@ -25,6 +31,14 @@ enum Commands {
     Snapshot {
         #[command(subcommand)]
         command: SnapshotCommands,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CatalogCommands {
+    Scan {
+        #[arg(long, default_value = "DATABASE_URL", value_name = "NAME")]
+        database_url_env: String,
     },
 }
 
@@ -57,6 +71,9 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Box<dyn Error>> {
     match Cli::parse().command {
+        Commands::Catalog {
+            command: CatalogCommands::Scan { database_url_env },
+        } => scan_catalog(&database_url_env),
         Commands::Doctor => doctor(),
         Commands::Query {
             command: QueryCommands::Validate { path },
@@ -68,6 +85,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
     }
+}
+
+fn scan_catalog(database_url_env: &str) -> Result<(), Box<dyn Error>> {
+    let snapshot = catalog::scan_from_env(database_url_env)?;
+    println!("{}", serde_json::to_string_pretty(&snapshot)?);
+    Ok(())
 }
 
 fn hash_snapshot(path: &PathBuf) -> Result<(), Box<dyn Error>> {
@@ -104,4 +127,41 @@ fn validate_query(path: &PathBuf) -> Result<(), Box<dyn Error>> {
     println!("{}", normalized.canonical_json);
     println!("{}", normalized.hash);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::{CatalogCommands, Cli, Commands};
+
+    #[test]
+    fn catalog_scan_accepts_only_an_environment_variable_name() {
+        let parsed = Cli::try_parse_from([
+            "postgresem",
+            "catalog",
+            "scan",
+            "--database-url-env",
+            "POSTGRESEM_SCAN_URL",
+        ]);
+        assert!(matches!(
+            parsed,
+            Ok(Cli {
+                command: Commands::Catalog {
+                    command: CatalogCommands::Scan { database_url_env }
+                }
+            }) if database_url_env == "POSTGRESEM_SCAN_URL"
+        ));
+
+        assert!(
+            Cli::try_parse_from([
+                "postgresem",
+                "catalog",
+                "scan",
+                "--database-url",
+                "postgresql://localhost/app",
+            ])
+            .is_err()
+        );
+    }
 }
