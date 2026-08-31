@@ -1,0 +1,100 @@
+name: M4 design feedback
+description: Share structured feedback from a 30-minute read-only developer-preview pilot
+title: "[M4 feedback]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        M4 asks whether a new user can start postgresem and complete a real,
+        read-only PostgreSQL pilot within 30 minutes.
+
+        **Do not submit credentials, connection strings, private database or
+        schema names, SQL text, customer data, model contents, or query
+        results. Use generic descriptions and redact all diagnostics.**
+
+  - type: input
+    id: environment
+    attributes:
+      label: Pilot environment
+      description: Hardware, OS, PostgreSQL version, postgresem version, and installation method.
+      placeholder: Apple M4 Pro, macOS 15, PostgreSQL 17, v0.2.0-alpha.1, release archive
+    validations:
+      required: true
+
+  - type: dropdown
+    id: experience
+    attributes:
+      label: Prior experience
+      options:
+        - New to Rust, MCP, and semantic layers
+        - Familiar with PostgreSQL only
+        - Familiar with PostgreSQL and semantic layers
+        - Familiar with this repository
+    validations:
+      required: true
+
+  - type: textarea
+    id: database
+    attributes:
+      label: Redacted pilot database profile
+      description: Describe scale and features without names or data (for example, approximate table count, RLS use, and whether it was a fixture or real database).
+    validations:
+      required: true
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: 30-minute timeline and data points
+      description: Record elapsed minutes, not confidential details.
+      placeholder: |
+        00:00 — Started; intended task:
+        Install completed at:
+        First successful command completed at:
+        Catalog/model setup completed at:
+        First read-only query or MCP result completed at:
+        30:00 — Pilot outcome (completed / partial / blocked):
+        Number of commands retried:
+        Number of documentation searches:
+        Approximate hands-on vs waiting time:
+    validations:
+      required: true
+
+  - type: textarea
+    id: correctness
+    attributes:
+      label: Correctness and safety observations
+      description: Note whether results matched an independently known answer, unsafe or ambiguous input was rejected, RLS behavior was preserved, and writes were prevented. Do not include actual data.
+    validations:
+      required: true
+
+  - type: textarea
+    id: performance
+    attributes:
+      label: Responsiveness
+      description: Optional redacted timings for startup, catalog scan, validation, compilation, or execution, plus approximate database scale.
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: Friction and design feedback
+      description: What was confusing, manual, surprising, or missing? Which step consumed the most time?
+    validations:
+      required: true
+
+  - type: textarea
+    id: value
+    attributes:
+      label: Pilot value and next step
+      description: Did keeping semantic metadata in PostgreSQL help? Would you continue, retry, or stop, and why?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Submission checks
+      options:
+        - label: The pilot used read-only access appropriate for a developer preview.
+          required: true
+        - label: I removed secrets, private metadata, SQL, and data values.
+          required: true

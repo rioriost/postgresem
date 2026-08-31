@@ -1,0 +1,91 @@
+name: Bug report
+description: Report a reproducible defect in the developer preview
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the developer preview.
+
+        **Do not include passwords, connection strings, tokens, private schema
+        names, customer data, query results, or other secrets. Redact logs and
+        examples before submitting.** Report suspected vulnerabilities through
+        the repository's Security policy instead of a public issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: postgresem version
+      description: Include the release tag or commit SHA.
+      placeholder: v0.2.0-alpha.1
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, CPU architecture, PostgreSQL version, and container runtime if used.
+      placeholder: macOS 15, Apple M4, PostgreSQL 18, Apple Container 1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Installer or release archive
+        - Container image or Compose
+        - Catalog scan
+        - Semantic model or migration
+        - LSQ validation or compilation
+        - Guarded execution or RLS
+        - MCP stdio
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide redacted commands and the smallest safe input that reproduces the problem.
+      placeholder: |
+        1. Run ...
+        2. Validate the redacted LSQ ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include exact, redacted error text when possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted diagnostics
+      description: Optional logs or doctor output. Remove all secrets, identifiers, SQL, and data values.
+      render: shell
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed secrets, connection strings, private metadata, and customer data.
+          required: true
+        - label: This is not a suspected security vulnerability.
+          required: true

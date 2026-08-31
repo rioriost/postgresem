@@ -1,0 +1,269 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  metadata:
+    name: Verify release metadata
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Match tag and workspace version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          manifest = tomllib.loads(pathlib.Path("Cargo.toml").read_text(encoding="utf-8"))
+          version = manifest["workspace"]["package"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{version}":
+              raise SystemExit(f"tag {tag!r} does not match workspace version {version!r}")
+          print(f"verified release version {version}")
+          PY
+
+  binaries:
+    name: ${{ matrix.asset_os }} ${{ matrix.asset_arch }}
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset_os: linux
+            asset_arch: amd64
+          - runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset_os: linux
+            asset_arch: arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            asset_os: darwin
+            asset_arch: amd64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            asset_os: darwin
+            asset_arch: arm64
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Rust 1.85 toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.85.0 \
+            --profile minimal \
+            --target "${{ matrix.target }}"
+          rustup default 1.85.0
+
+      - name: Build release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build \
+            --locked \
+            --release \
+            --package postgresem \
+            --target "${{ matrix.target }}"
+
+      - name: Package release archive
+        shell: bash
+        env:
+          ASSET_ARCH: ${{ matrix.asset_arch }}
+          ASSET_OS: ${{ matrix.asset_os }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          archive="postgresem-${version}-${ASSET_OS}-${ASSET_ARCH}"
+          root="dist/${archive}"
+          source_date_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
+
+          mkdir -p "${root}/schemas"
+          install -m 0755 \
+            "target/${TARGET}/release/postgresem" \
+            "${root}/postgresem"
+          cp -R schemas/. "${root}/schemas/"
+          cp CHANGELOG.md LICENSE README.md "${root}/"
+
+          python3 - "${root}" "dist/${archive}.tar.gz" \
+            "${source_date_epoch}" <<'PY'
+          import gzip
+          import pathlib
+          import sys
+          import tarfile
+
+          root = pathlib.Path(sys.argv[1])
+          output = pathlib.Path(sys.argv[2])
+          epoch = int(sys.argv[3])
+          paths = [root, *sorted(root.rglob("*"), key=lambda path: path.as_posix())]
+
+          with output.open("wb") as raw:
+              with gzip.GzipFile(
+                  filename="",
+                  mode="wb",
+                  fileobj=raw,
+                  compresslevel=9,
+                  mtime=epoch,
+              ) as compressed:
+                  with tarfile.open(
+                      fileobj=compressed,
+                      mode="w",
+                      format=tarfile.USTAR_FORMAT,
+                  ) as archive:
+                      for path in paths:
+                          if path.is_symlink():
+                              raise SystemExit(f"refusing to package symlink: {path}")
+                          name = path.relative_to(root.parent).as_posix()
+                          info = archive.gettarinfo(str(path), arcname=name)
+                          info.uid = 0
+                          info.gid = 0
+                          info.uname = "root"
+                          info.gname = "root"
+                          info.mtime = epoch
+                          info.mode = (
+                              0o755
+                              if path.is_dir() or path.name == "postgresem"
+                              else 0o644
+                          )
+                          if path.is_file():
+                              with path.open("rb") as stream:
+                                  archive.addfile(info, stream)
+                          else:
+                              archive.addfile(info)
+          PY
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset_os }}-${{ matrix.asset_arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  checksums:
+    name: Generate checksums
+    needs: binaries
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          set -eu
+          cd dist
+          sha256sum ./*.tar.gz | sed 's#  \./#  #' > SHA256SUMS
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-checksums
+          path: dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  github-release:
+    name: Publish GitHub release
+    needs:
+      - checksums
+      - image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  image:
+    name: Publish multi-architecture image
+    needs: metadata
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Normalize image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: mode=max
+          sbom: true
