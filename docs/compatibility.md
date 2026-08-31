@@ -3,7 +3,7 @@
 ## Version policy
 
 The project uses Semantic Versioning. The latest published release is
-`0.2.0-alpha.1`; the main branch is developing `0.3.0-beta.1`. Before 1.0:
+`0.3.0-beta.1`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -25,7 +25,7 @@ immediately with release-note justification.
 | MCP tool schema | `"1"` | every tool requires this exact version |
 | compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | database migrations | `0001`–`0004` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
-| package | `0.3.0-beta.1` | beta development; latest published package is `0.2.0-alpha.1` |
+| package | `0.3.0-beta.1` | current beta package |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -125,11 +125,12 @@ bundle. See [ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall
 | future major versions | unsupported until evaluated | catalog and behavior changes require explicit validation |
 
 The [CI workflow](../.github/workflows/ci.yml) defines separate PostgreSQL 16,
-17, and 18 jobs for migrations, database integration, guarded execution, and
-MCP integration. The performance service runs only in the PostgreSQL 18 matrix
-job. All three jobs passed in
-[CI run 33389810710](https://github.com/rioriost/postgresem/actions/runs/33389810710)
-on 2026-09-01. Core operation requires no PostgreSQL extension.
+17, and 18 jobs for migrations, database integration, guarded execution, MCP
+integration, N-1 migration, and backup/restore recovery. Integration images
+use the matching PostgreSQL client major. The performance service runs only in
+the PostgreSQL 18 matrix job. All three jobs passed in
+[CI run 33399102194](https://github.com/rioriost/postgresem/actions/runs/33399102194)
+on 2026-08-31. Core operation requires no PostgreSQL extension.
 
 Apple Container uses the static `postgres:18` image in `compose.yaml`;
 `container-compose` does not interpolate `${POSTGRES_IMAGE}`. Local version

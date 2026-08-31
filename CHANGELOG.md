@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.3.0-beta.1] - 2026-08-31
+
+Beta release.
+
 ### Added
 
 - M5 N-1 migration and same-name backup/restore validation.
