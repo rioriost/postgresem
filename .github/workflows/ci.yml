@@ -86,6 +86,7 @@ jobs:
       COMPOSE_FILE: compose.yaml:compose.ci.yaml
       COMPOSE_PROJECT_NAME: postgresem-ci-${{ matrix.postgres }}
       POSTGRES_IMAGE: postgres:${{ matrix.postgres }}
+      POSTGRES_VERSION: ${{ matrix.postgres }}
       POSTGRES_SUPERUSER_PASSWORD: ci-superuser-password
       POSTGRESEM_RUNTIME_PASSWORD: ci-runtime-password
       POSTGRESEM_AUDIT_WRITER_PASSWORD: ci-audit-writer-password
