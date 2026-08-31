@@ -1,9 +1,4 @@
-use std::{
-    error::Error,
-    fs,
-    path::PathBuf,
-    process::{Command, ExitCode},
-};
+use std::{error::Error, fs, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 use postgresem_compiler::{
@@ -12,6 +7,7 @@ use postgresem_compiler::{
 
 mod benchmark;
 mod catalog;
+mod doctor;
 mod executor;
 mod mcp;
 mod published_model;
@@ -33,7 +29,10 @@ enum Commands {
         #[command(subcommand)]
         command: CatalogCommands,
     },
-    Doctor,
+    Doctor {
+        #[arg(long)]
+        json: bool,
+    },
     Model {
         #[command(subcommand)]
         command: ModelCommands,
@@ -164,7 +163,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         Commands::Catalog {
             command: CatalogCommands::Scan { database_url_env },
         } => scan_catalog(&database_url_env),
-        Commands::Doctor => doctor(),
+        Commands::Doctor { json } => doctor(json),
         Commands::Model {
             command:
                 ModelCommands::Diff {
@@ -288,17 +287,35 @@ fn compile_query(path: &PathBuf, snapshot_path: &PathBuf) -> Result<(), Box<dyn 
     Ok(())
 }
 
-fn doctor() -> Result<(), Box<dyn Error>> {
-    println!("postgresem {}", env!("CARGO_PKG_VERSION"));
-    for command in ["container", "container-compose"] {
-        let output = Command::new(command).arg("--version").output()?;
-        if !output.status.success() {
-            return Err(format!("{command} --version failed").into());
-        }
-        let version = String::from_utf8(output.stdout)?;
-        println!("{}", version.trim());
+fn doctor(json: bool) -> Result<(), Box<dyn Error>> {
+    let report = doctor::inspect();
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!("postgresem {}", report.postgresem_version);
+        println!(
+            "platform: {}/{}",
+            report.operating_system, report.architecture
+        );
+        print_runtime("Apple Container", &report.apple_container);
+        print_runtime("Docker", &report.docker);
     }
-    Ok(())
+    doctor::require_runtime(&report).map_err(Into::into)
+}
+
+fn print_runtime(name: &str, runtime: &doctor::RuntimeReport) {
+    let state = if runtime.available {
+        "available"
+    } else {
+        "unavailable"
+    };
+    println!("{name}: {state}");
+    if let Some(version) = &runtime.engine_version {
+        println!("  engine: {version}");
+    }
+    if let Some(version) = &runtime.compose_version {
+        println!("  compose: {version}");
+    }
 }
 
 fn validate_query(path: &PathBuf) -> Result<(), Box<dyn Error>> {
