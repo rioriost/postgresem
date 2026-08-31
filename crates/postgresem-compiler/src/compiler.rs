@@ -510,6 +510,7 @@ fn validate_literal(field: &Field, literal: &Literal) -> Result<(), CompileError
             | (DataType::Numeric, Literal::Integer(_) | Literal::Numeric(_))
             | (DataType::Text, Literal::Text(_))
             | (DataType::Date, Literal::Date(_))
+            | (DataType::Timestamp, Literal::Timestamp(_))
             | (
                 DataType::TimestampTz,
                 Literal::Date(_) | Literal::Timestamp(_)
@@ -648,7 +649,7 @@ fn render(
         DataType::Integer,
         Literal::Integer(i64::from(validated.limit)),
     );
-    sql.push_str(&format!("\nLIMIT ${limit_position}::bigint"));
+    sql.push_str(&format!("\nLIMIT ${limit_position}::text::bigint"));
 
     let sql_hash = hash(&sql);
     let parameter_hash_input =
@@ -734,10 +735,10 @@ fn render_metric(
 
     if let Some((filter_field, value)) = &metric.filter {
         let filter_expression = render_field(model, filter_field, aliases, source_columns)?;
-        let position = push_literal(parameters, value.clone());
+        let position = push_parameter(parameters, filter_field.data_type, value.clone());
         Ok(format!(
-            "{aggregate} FILTER (WHERE {filter_expression} = ${position}::{})",
-            postgres_type(literal_type(value))
+            "{aggregate} FILTER (WHERE {filter_expression} = {})",
+            render_parameter(position, filter_field.data_type)
         ))
     } else {
         Ok(aggregate)
@@ -779,25 +780,26 @@ fn render_filter(
                     push_parameter(parameters, DataType::Text, Literal::Text(timezone.clone()));
                 let value_position = push_literal(parameters, value.clone());
                 Ok(format!(
-                    "{rendered_field} {} timezone(${timezone_position}::text, ${value_position}::date::timestamp)",
+                    "{rendered_field} {} timezone(${timezone_position}::text, ${value_position}::text::date::timestamp)",
                     comparison_operator(*operator)
                 ))
             } else {
-                let position = push_literal(parameters, value.clone());
+                let position = push_parameter(parameters, field_type, value.clone());
                 Ok(format!(
-                    "{rendered_field} {} ${position}::{}",
+                    "{rendered_field} {} {}",
                     comparison_operator(*operator),
-                    postgres_type(literal_type(value))
+                    render_parameter(position, field_type)
                 ))
             }
         }
         ResolvedFilter::In { field, values } => {
+            let field_type = field.data_type;
             let field = render_field(model, field, aliases, source_columns)?;
             let placeholders = values
                 .iter()
                 .map(|value| {
-                    let position = push_literal(parameters, value.clone());
-                    format!("${position}::{}", postgres_type(literal_type(value)))
+                    let position = push_parameter(parameters, field_type, value.clone());
+                    render_parameter(position, field_type)
                 })
                 .collect::<Vec<_>>();
             Ok(format!("{field} IN ({})", placeholders.join(", ")))
@@ -898,6 +900,14 @@ const fn postgres_type(data_type: DataType) -> &'static str {
     }
 }
 
+fn render_parameter(position: usize, data_type: DataType) -> String {
+    if data_type == DataType::Text {
+        format!("${position}::text")
+    } else {
+        format!("${position}::text::{}", postgres_type(data_type))
+    }
+}
+
 const fn comparison_operator(operator: ComparisonOperator) -> &'static str {
     match operator {
         ComparisonOperator::Eq => "=",
@@ -983,13 +993,17 @@ mod tests {
                 "SELECT date_trunc('month', timezone($1::text, t0.\"ordered_at\"))::date AS \"ordered_at\", ",
                 "sum(t0.\"amount\") FILTER (WHERE t0.\"status\" = $2::text) AS \"revenue\"\n",
                 "FROM \"commerce\".\"orders\" AS t0\n",
-                "WHERE t0.\"ordered_at\" >= timezone($1::text, $3::date::timestamp)\n",
+                "WHERE t0.\"ordered_at\" >= timezone($1::text, $3::text::date::timestamp)\n",
                 "GROUP BY 1\n",
                 "ORDER BY \"revenue\" DESC\n",
-                "LIMIT $4::bigint"
+                "LIMIT $4::text::bigint"
             )
         );
         assert_eq!(compiled.parameters.len(), 4);
+        assert_eq!(
+            compiled.sql_hash,
+            "sha256:1c9dedaf4401b65e64a3244ae7257d6521f049ec9fa488df9c01fd0fe335ef54"
+        );
         assert_eq!(
             compiled.lineage.source_columns,
             [
@@ -1036,6 +1050,64 @@ mod tests {
             compile_lsq(&query, &snapshot(), CompilerOptions::default()).expect("compiles");
 
         assert!(compiled.sql.contains("\nGROUP BY 1\n"));
+    }
+
+    #[test]
+    fn renders_all_bind_values_through_text_into_target_types() {
+        for (filter, expected) in [
+            (
+                r#"{"op":"gte","field":"amount","value":{"type":"integer","value":1}}"#,
+                "$1::text::numeric",
+            ),
+            (
+                r#"{"op":"gte","field":"ordered_at","value":{"type":"timestamp","value":"2026-01-01T00:00:00Z"}}"#,
+                "$1::text::timestamptz",
+            ),
+            (
+                r#"{"op":"eq","field":"customer_id","value":{"type":"integer","value":1}}"#,
+                "$1::text::bigint",
+            ),
+        ] {
+            let input = format!(
+                r#"{{
+                    "schema_version":"1",
+                    "model":"orders",
+                    "metrics":[{{"metric":"order_count"}}],
+                    "filters":{filter}
+                }}"#
+            );
+            let query = normalize_lsq(input.as_bytes()).expect("valid LSQ");
+            let compiled = compile_lsq(&query, &snapshot(), CompilerOptions::default())
+                .expect("query compiles");
+            assert!(compiled.sql.contains(expected));
+            assert!(compiled.sql.contains("LIMIT $2::text::bigint"));
+        }
+
+        let query = normalize_lsq(
+            br#"{
+                "schema_version":"1",
+                "model":"subscriptions",
+                "metrics":[{"metric":"subscription_count"}],
+                "filters":{"op":"eq","field":"active","value":{"type":"boolean","value":true}}
+            }"#,
+        )
+        .expect("valid LSQ");
+        let compiled =
+            compile_lsq(&query, &snapshot(), CompilerOptions::default()).expect("query compiles");
+        assert!(compiled.sql.contains("$1::text::boolean"));
+
+        let query = normalize_lsq(
+            br#"{
+                "schema_version":"1",
+                "model":"subscriptions",
+                "metrics":[{"metric":"subscription_count"}],
+                "filters":{"op":"gte","field":"started_on","value":{"type":"date","value":"2026-01-01"}}
+            }"#,
+        )
+        .expect("valid LSQ");
+        let compiled =
+            compile_lsq(&query, &snapshot(), CompilerOptions::default()).expect("query compiles");
+        assert!(compiled.sql.contains("$1::text::date"));
     }
 
     #[test]

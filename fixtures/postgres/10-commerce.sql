@@ -48,3 +48,10 @@ VALUES
   (1, 'SKU-RED', 1),
   (1, 'SKU-BLUE', 2),
   (2, 'SKU-GREEN', 1);
+
+ALTER TABLE commerce.customer OWNER TO postgresem_source_owner;
+ALTER TABLE commerce.orders OWNER TO postgresem_source_owner;
+ALTER TABLE commerce.order_item OWNER TO postgresem_source_owner;
+
+GRANT USAGE ON SCHEMA commerce TO postgresem_analyst;
+GRANT SELECT ON ALL TABLES IN SCHEMA commerce TO postgresem_analyst;

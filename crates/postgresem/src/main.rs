@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use postgresem_compiler::{CompilerOptions, SemanticSnapshot, compile_lsq, normalize_lsq};
 
 mod catalog;
+mod executor;
 mod published_model;
 
 #[derive(Debug, Parser)]
@@ -57,6 +58,32 @@ enum QueryCommands {
         #[arg(long)]
         snapshot: PathBuf,
     },
+    Execute {
+        path: PathBuf,
+        #[arg(long)]
+        project: String,
+        #[arg(
+            long,
+            default_value = "DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_DB_ROLE",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        db_role_env: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -103,10 +130,43 @@ fn run() -> Result<(), Box<dyn Error>> {
         Commands::Query {
             command: QueryCommands::Compile { path, snapshot },
         } => compile_query(&path, &snapshot),
+        Commands::Query {
+            command:
+                QueryCommands::Execute {
+                    path,
+                    project,
+                    database_url_env,
+                    audit_database_url_env,
+                    db_role_env,
+                },
+        } => execute_query(
+            &path,
+            &project,
+            &database_url_env,
+            &audit_database_url_env,
+            &db_role_env,
+        ),
         Commands::Snapshot {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
     }
+}
+
+fn execute_query(
+    path: &PathBuf,
+    project: &str,
+    database_url_env: &str,
+    audit_database_url_env: &str,
+    db_role_env: &str,
+) -> Result<(), Box<dyn Error>> {
+    let config = executor::ExecutorConfig::from_environment(
+        database_url_env,
+        audit_database_url_env,
+        db_role_env,
+    )?;
+    let result = executor::execute(&fs::read(path)?, project, &config)?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
 }
 
 fn export_model(database_url_env: &str, project: &str) -> Result<(), Box<dyn Error>> {
@@ -157,11 +217,22 @@ fn validate_query(path: &PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn parse_environment_variable_name(value: &str) -> Result<String, String> {
+    let mut bytes = value.bytes();
+    if matches!(bytes.next(), Some(b'A'..=b'Z' | b'a'..=b'z' | b'_'))
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        Ok(value.to_owned())
+    } else {
+        Err("must be an environment variable name".to_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
 
-    use super::{CatalogCommands, Cli, Commands, ModelCommands};
+    use super::{CatalogCommands, Cli, Commands, ModelCommands, QueryCommands};
 
     #[test]
     fn catalog_scan_accepts_only_an_environment_variable_name() {
@@ -249,6 +320,79 @@ mod tests {
                 "export",
                 "--project",
                 "commerce",
+                "postgresql://localhost/app",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn query_execute_accepts_only_environment_variable_names_for_guard_config() {
+        let defaults = Cli::try_parse_from([
+            "postgresem",
+            "query",
+            "execute",
+            "query.json",
+            "--project",
+            "commerce",
+        ]);
+        assert!(matches!(
+            defaults,
+            Ok(Cli {
+                command: Commands::Query {
+                    command: QueryCommands::Execute {
+                        database_url_env,
+                        audit_database_url_env,
+                        db_role_env,
+                        ..
+                    }
+                }
+            }) if database_url_env == "DATABASE_URL"
+                && audit_database_url_env == "POSTGRESEM_AUDIT_DATABASE_URL"
+                && db_role_env == "POSTGRESEM_DB_ROLE"
+        ));
+
+        let named = Cli::try_parse_from([
+            "postgresem",
+            "query",
+            "execute",
+            "query.json",
+            "--project",
+            "commerce",
+            "--database-url-env",
+            "RUNTIME_URL",
+            "--audit-database-url-env",
+            "AUDIT_URL",
+            "--db-role-env",
+            "MAPPED_ROLE",
+        ]);
+        assert!(named.is_ok());
+
+        for forbidden in [
+            vec!["--database-url", "postgresql://localhost/app"],
+            vec!["--audit-database-url", "postgresql://localhost/audit"],
+            vec!["--db-role", "postgresem_analyst"],
+        ] {
+            let mut arguments = vec![
+                "postgresem",
+                "query",
+                "execute",
+                "query.json",
+                "--project",
+                "commerce",
+            ];
+            arguments.extend(forbidden);
+            assert!(Cli::try_parse_from(arguments).is_err());
+        }
+        assert!(
+            Cli::try_parse_from([
+                "postgresem",
+                "query",
+                "execute",
+                "query.json",
+                "--project",
+                "commerce",
+                "--database-url-env",
                 "postgresql://localhost/app",
             ])
             .is_err()

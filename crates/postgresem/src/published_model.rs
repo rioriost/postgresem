@@ -199,6 +199,13 @@ pub enum PublishedModelError {
     Commit(#[source] postgres::Error),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedModel {
+    pub project: String,
+    pub revision_id: String,
+    pub snapshot: SemanticSnapshot,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AggregationExpression {
@@ -218,6 +225,13 @@ pub fn load_from_env(
     variable: &str,
     project: &str,
 ) -> Result<SemanticSnapshot, PublishedModelError> {
+    Ok(load_published_from_env(variable, project)?.snapshot)
+}
+
+pub fn load_published_from_env(
+    variable: &str,
+    project: &str,
+) -> Result<PublishedModel, PublishedModelError> {
     let database_url = env::var(variable).map_err(|error| match error {
         env::VarError::NotPresent => PublishedModelError::MissingConnectionUrl(variable.to_owned()),
         env::VarError::NotUnicode(_) => {
@@ -229,10 +243,13 @@ pub fn load_from_env(
             variable: variable.to_owned(),
             source,
         })?;
-    load(&mut client, project)
+    load_published(&mut client, project)
 }
 
-fn load(client: &mut Client, project: &str) -> Result<SemanticSnapshot, PublishedModelError> {
+pub fn load_published(
+    client: &mut Client,
+    project: &str,
+) -> Result<PublishedModel, PublishedModelError> {
     let mut transaction = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
@@ -286,7 +303,11 @@ fn load(client: &mut Client, project: &str) -> Result<SemanticSnapshot, Publishe
     verify_hash(&snapshot, &expected_hash)?;
 
     transaction.commit().map_err(PublishedModelError::Commit)?;
-    Ok(snapshot)
+    Ok(PublishedModel {
+        project: project.to_owned(),
+        revision_id,
+        snapshot,
+    })
 }
 
 fn load_models(rows: &[Row]) -> Result<BTreeMap<String, Model>, PublishedModelError> {

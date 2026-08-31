@@ -1,0 +1,7 @@
+{
+  "schema_version": "1",
+  "model": "orders",
+  "dimensions": [{"field": "status"}],
+  "order_by": [{"ref": "status", "direction": "asc"}],
+  "limit": 20
+}

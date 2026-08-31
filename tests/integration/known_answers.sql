@@ -1,14 +1,14 @@
 \set ON_ERROR_STOP on
 
-PREPARE compiled_revenue_by_month(text, text, date, bigint) AS
+PREPARE compiled_revenue_by_month(text, text, text, text) AS
 SELECT
   date_trunc('month', timezone($1::text, t0."ordered_at"))::date AS "ordered_at",
   sum(t0."amount") FILTER (WHERE t0."status" = $2::text) AS "revenue"
 FROM "commerce"."orders" AS t0
-WHERE t0."ordered_at" >= timezone($1::text, $3::date::timestamp)
+WHERE t0."ordered_at" >= timezone($1::text, $3::text::date::timestamp)
 GROUP BY 1
 ORDER BY "revenue" DESC
-LIMIT $4::bigint;
+LIMIT $4::text::bigint;
 
 SET TimeZone = 'Pacific/Honolulu';
 EXECUTE compiled_revenue_by_month('UTC', 'paid', '2026-01-01', 100);

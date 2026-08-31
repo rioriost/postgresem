@@ -19,3 +19,5 @@ VALUES
   (102, '2026-01-15', 'growth', 99.00, true),
   (103, '2026-02-01', 'enterprise', 499.00, false);
 
+GRANT USAGE ON SCHEMA billing TO postgresem_analyst;
+GRANT SELECT ON billing.subscriptions TO postgresem_analyst;

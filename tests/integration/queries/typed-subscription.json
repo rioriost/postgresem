@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "model": "subscriptions",
+  "dimensions": [
+    {"field": "account_id"},
+    {"field": "started_on"},
+    {"field": "active"}
+  ],
+  "filters": {
+    "op": "eq",
+    "field": "account_id",
+    "value": {"type": "integer", "value": 101}
+  },
+  "order_by": [{"ref": "account_id", "direction": "asc"}],
+  "limit": 1
+}

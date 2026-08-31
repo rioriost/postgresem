@@ -14,7 +14,8 @@ repository = "https://github.com/rioriost/postgresem"
 
 [workspace.dependencies]
 clap = { version = "4.5", features = ["derive"] }
-postgres = "0.19"
+fallible-iterator = "0.2"
+postgres = { version = "0.19", features = ["with-serde_json-1"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"

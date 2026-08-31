@@ -466,6 +466,19 @@ mod tests {
     }
 
     #[test]
+    fn rejects_request_selected_database_role() {
+        let input = VALID_QUERY.replace(
+            "\"limit\": 100",
+            "\"limit\": 100, \"database_role\": \"postgresem_tenant_a\"",
+        );
+
+        assert!(matches!(
+            normalize_lsq(input.as_bytes()),
+            Err(LsqError::InvalidJson(_))
+        ));
+    }
+
+    #[test]
     fn rejects_duplicate_projection_reference() {
         let input = VALID_QUERY.replace(
             r#""metrics": [{"metric": "revenue"}]"#,

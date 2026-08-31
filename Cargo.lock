@@ -552,6 +552,8 @@ dependencies = [
  "bytes",
  "fallible-iterator",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
 ]
 
 [[package]]
@@ -559,6 +561,7 @@ name = "postgresem"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "fallible-iterator",
  "postgres",
  "postgresem-compiler",
  "serde",

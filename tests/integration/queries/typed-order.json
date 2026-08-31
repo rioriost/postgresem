@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "model": "orders",
+  "dimensions": [
+    {"field": "order_id"},
+    {"field": "ordered_at"},
+    {"field": "amount"}
+  ],
+  "filters": {
+    "op": "eq",
+    "field": "order_id",
+    "value": {"type": "integer", "value": 1}
+  },
+  "order_by": [{"ref": "order_id", "direction": "asc"}],
+  "limit": 1
+}

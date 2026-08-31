@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use postgresem_compiler::{CompilerOptions, Literal, SemanticSnapshot, compile_lsq, normalize_lsq};
+use postgresem_compiler::{
+    CompilerOptions, DataType, Literal, SemanticSnapshot, compile_lsq, normalize_lsq,
+};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -120,6 +122,16 @@ fn evaluate_case(case: &EvalCase, snapshot: &SemanticSnapshot) -> Result<(), Str
                     return Err(format!(
                         "{} generated inconsistent parameter positions",
                         case.id
+                    ));
+                }
+                let text_cast = format!("${}::text", parameter.position);
+                if !compiled.sql.contains(&text_cast)
+                    || (parameter.data_type != DataType::Text
+                        && !compiled.sql.contains(&format!("{text_cast}::")))
+                {
+                    return Err(format!(
+                        "{} did not render parameter {} through the uniform text protocol",
+                        case.id, parameter.position
                     ));
                 }
                 let sensitive_value = match &parameter.value {
