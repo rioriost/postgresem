@@ -10,9 +10,8 @@ to the active development branch; there is no long-term-support promise for
 The implemented boundary is MCP stdio plus local/non-TLS PostgreSQL
 connections. There is no HTTP service, remote authentication protocol, TLS,
 release signing, automated backup/restore, or production hardening claim.
-Tag-triggered packaging automation can generate checksums and a container-image
-SBOM/provenance record, but no release/tag artifacts have been published yet.
-Checksums are integrity checks and are not signatures.
+The `v0.2.0-alpha.1` release includes checksums and a container-image
+SBOM/provenance record. Checksums are integrity checks and are not signatures.
 
 The Apple Container gateway service is configured with container user root
 solely so `container-compose` can perform its `/etc/hosts` fallback. Its

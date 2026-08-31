@@ -14,10 +14,9 @@ The implementation currently has forward-only migrations, immutable published
 revisions, canonical hash verification, model export/diff commands, and a local
 Compose volume. It does not have down migrations, N-1 upgrade tests,
 backup/restore automation, a complete import command, a supported uninstaller,
-published release artifacts, or release signing. CI/release automation is now
-configured for a PostgreSQL matrix, native archives, checksums, multi-arch GHCR,
-and image SBOM/provenance, but no release tag or evidence run has been
-published.
+or release signing. CI/release automation covers a PostgreSQL matrix, native
+archives, checksums, multi-arch GHCR, and image SBOM/provenance. The
+`v0.2.0-alpha.1` workflow provides the first published preview evidence.
 
 ## Decision
 
@@ -56,8 +55,8 @@ published.
     interpolate image variables.
 11. Distinguish release automation from published artifacts. Tag automation is
     configured for four native archives, `SHA256SUMS`, and a multi-arch GHCR
-    image with image SBOM/provenance, but none exists publicly until a matching
-    release workflow succeeds.
+    image with image SBOM/provenance. Claim publication only for a matching
+    successful release workflow; `v0.2.0-alpha.1` is the current evidence.
 12. Treat installer checksum verification as integrity checking, not signing.
     Release signing remains unimplemented.
 

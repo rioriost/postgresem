@@ -71,8 +71,9 @@ and unknown semantic objects receive the same public “not available” errors.
   is the cancellation boundary.
 - Backup/restore automation, N-1 migration testing, release signing, and
   production hardening are not implemented.
-- PostgreSQL 18 is the currently verified development target. See the
-  [compatibility matrix](docs/compatibility.md) before trying another version.
+- PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
+  and 18 pass the Docker CI matrix. See the
+  [compatibility matrix](docs/compatibility.md) for the exact boundary.
 
 ## Packaging status
 
@@ -81,9 +82,12 @@ Tag-triggered automation is configured to build four native archives, generate
 provenance. [`scripts/install.sh`](scripts/install.sh) downloads a matching
 archive and verifies its SHA-256 checksum before installation.
 
-No release/tag, GitHub release, archive, checksum file, or GHCR release image
-has been published yet. Release signing is not implemented; a checksum verifies
-integrity against the downloaded checksum file, not publisher authenticity. See the
+The
+[`v0.2.0-alpha.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.2.0-alpha.1)
+contains Linux and macOS archives for amd64 and arm64 plus `SHA256SUMS`.
+The public image is `ghcr.io/rioriost/postgresem:0.2.0-alpha.1`. Release
+signing is not implemented; a checksum verifies integrity against the
+downloaded checksum file, not publisher authenticity. See the
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
 
 ## Development

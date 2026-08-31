@@ -147,12 +147,12 @@ version must be local or reached through an independently protected channel.
 | Apple Container 1.0.0 + `container-compose` 1.1.0 on macOS arm64 | supported quickstart path |
 | locally built `gateway:latest` OCI image | supported by `make dev-up`; Linux arm64 on the documented M4 path |
 | Docker/Docker Compose | doctor can detect it, but the Make targets invoke `container-compose`; not the documented M4 path |
-| native binary archives | release automation configured for Linux amd64/arm64 and macOS amd64/arm64; none published |
-| `SHA256SUMS` | generation configured after all four archives; none published |
-| `scripts/install.sh` | implemented for macOS/Linux amd64/arm64 and verifies the selected archive against `SHA256SUMS`; unusable until a matching release exists |
-| versioned GHCR image | tag-triggered publication configured; no release image published |
-| multi-architecture OCI manifest | configured for `linux/amd64` and `linux/arm64`; no published manifest evidence |
-| image SBOM and provenance | configured through Docker Buildx for the GHCR image; no published release evidence |
+| native binary archives | `v0.2.0-alpha.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
+| `SHA256SUMS` | published with `v0.2.0-alpha.1` |
+| `scripts/install.sh` | supports macOS/Linux amd64/arm64, verifies `SHA256SUMS`, and was exercised against the published macOS arm64 archive |
+| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.2.0-alpha.1` |
+| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:a8b4899dbc62a67dc902208d774df8eecde81628d07ad6bccbeece306045cadf` |
+| image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
 | cryptographic release signatures | not implemented |
 | HTTP/server artifact | not implemented |
@@ -160,9 +160,10 @@ version must be local or reached through an independently protected channel.
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
 tags, requires the tag to match the workspace version, builds the four native
 archives, generates `SHA256SUMS`, publishes the multi-architecture image, then
-creates a GitHub release. No release/tag has been published, so this describes
-automation present in the repository rather than artifacts users can currently
-download.
+creates a GitHub release.
+[Release run 33390223411](https://github.com/rioriost/postgresem/actions/runs/33390223411)
+completed successfully and published the
+[`v0.2.0-alpha.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.2.0-alpha.1).
 
 The installer uses HTTPS and verifies SHA-256 equality, and also rejects unsafe
 archive paths and link entry types. Because `SHA256SUMS` is downloaded from the
@@ -187,8 +188,8 @@ supply-chain artifact.
 - query row limit and result-byte truncation, with no result pagination;
 - no automated backup/restore, N-1 migration validation, rollback, retention,
   disaster recovery, or uninstall;
-- packaging/release automation is configured, but no release/tag artifacts have
-  been published and signing is unimplemented;
+- release artifacts are unsigned; checksum verification does not authenticate
+  the publisher;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist
