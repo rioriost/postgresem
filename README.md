@@ -23,6 +23,19 @@ make test
 make check
 ```
 
+Start PostgreSQL 18 and apply the semantic schema migration:
+
+```sh
+cp .env.example .env
+# Replace both placeholder passwords in .env.
+make dev-up
+make test-db
+```
+
+`make dev-up` currently starts PostgreSQL and applies migrations. The long-lived
+Gateway service will be added after the execution and MCP transport boundaries
+are implemented.
+
 Validate an LSQ document:
 
 ```sh
