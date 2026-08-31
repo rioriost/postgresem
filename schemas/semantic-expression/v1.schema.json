@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postgresem.dev/schemas/semantic-expression/v1.schema.json",
+  "title": "PostgreSQL Semantic Expression v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "expression"],
+  "properties": {
+    "version": {"const": "1"},
+    "expression": {"$ref": "#/$defs/expression"}
+  },
+  "$defs": {
+    "semanticName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "expression": {
+      "oneOf": [
+        {"$ref": "#/$defs/fieldReference"},
+        {"$ref": "#/$defs/literal"},
+        {"$ref": "#/$defs/aggregate"},
+        {"$ref": "#/$defs/binary"}
+      ]
+    },
+    "fieldReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "field"],
+      "properties": {
+        "op": {"const": "field_ref"},
+        "field": {"$ref": "#/$defs/semanticName"}
+      }
+    },
+    "literal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "type", "value"],
+      "properties": {
+        "op": {"const": "literal"},
+        "type": {"enum": ["text", "boolean", "integer", "numeric", "date", "timestamp"]},
+        "value": {}
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "function", "arg"],
+      "properties": {
+        "op": {"const": "aggregate"},
+        "function": {"enum": ["count", "count_distinct", "sum", "min", "max", "avg"]},
+        "arg": {"$ref": "#/$defs/expression"},
+        "filter": {"$ref": "#/$defs/expression"}
+      }
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "left", "right"],
+      "properties": {
+        "op": {"enum": ["add", "subtract", "multiply", "divide", "eq", "not_eq", "gt", "gte", "lt", "lte", "and", "or"]},
+        "left": {"$ref": "#/$defs/expression"},
+        "right": {"$ref": "#/$defs/expression"}
+      }
+    }
+  }
+}
+
