@@ -2,8 +2,7 @@ name: postgresem
 
 services:
   db:
-    image: ${POSTGRES_IMAGE:-postgres:18}
-    networks: [postgresem]
+    image: postgres:18
     environment:
       POSTGRES_DB: postgresem_dev
       POSTGRES_USER: postgres
@@ -22,8 +21,7 @@ services:
       retries: 30
 
   migrate:
-    image: ${POSTGRES_IMAGE:-postgres:18}
-    networks: [postgresem]
+    image: postgres:18
     depends_on:
       db:
         condition: service_healthy
@@ -38,8 +36,7 @@ services:
     entrypoint: ["/bin/sh", "/migrations/run.sh"]
 
   seed:
-    image: ${POSTGRES_IMAGE:-postgres:18}
-    networks: [postgresem]
+    image: postgres:18
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -57,7 +54,8 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-    networks: [postgresem]
+    # Apple Container's compose fallback must patch /etc/hosts before startup.
+    user: "0"
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -78,11 +76,10 @@ services:
       POSTGRESEM_MCP_AUDIT_PASSWORD_ENV: POSTGRESEM_AUDIT_WRITER_PASSWORD
       POSTGRESEM_MCP_DB_ROLE_ENV: POSTGRESEM_DB_ROLE
     entrypoint: ["/bin/sh", "-c"]
-    command: ["sleep infinity"]
+    command: ["exec gosu postgresem sleep infinity"]
 
   integration-test:
-    image: ${POSTGRES_IMAGE:-postgres:18}
-    networks: [postgresem]
+    image: postgres:18
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -100,7 +97,6 @@ services:
     build:
       context: .
       dockerfile: IntegrationContainerfile
-    networks: [postgresem]
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -125,7 +121,6 @@ services:
     build:
       context: .
       dockerfile: IntegrationContainerfile
-    networks: [postgresem]
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -156,7 +151,6 @@ services:
     build:
       context: .
       dockerfile: IntegrationContainerfile
-    networks: [postgresem]
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -172,6 +166,3 @@ services:
 
 volumes:
   postgres-data:
-
-networks:
-  postgresem:

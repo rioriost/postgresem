@@ -83,6 +83,7 @@ jobs:
       matrix:
         postgres: ["16", "17", "18"]
     env:
+      COMPOSE_FILE: compose.yaml:compose.ci.yaml
       COMPOSE_PROJECT_NAME: postgresem-ci-${{ matrix.postgres }}
       POSTGRES_IMAGE: postgres:${{ matrix.postgres }}
       POSTGRES_SUPERUSER_PASSWORD: ci-superuser-password

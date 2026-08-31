@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "model": "subscriptions",
+  "dimensions": [
+    {
+      "field": "plan"
+    }
+  ],
+  "metrics": [
+    {
+      "metric": "mrr"
+    }
+  ],
+  "filters": {
+    "op": "eq",
+    "field": "active",
+    "value": {
+      "type": "boolean",
+      "value": true
+    }
+  },
+  "order_by": [
+    {
+      "ref": "mrr",
+      "direction": "desc"
+    }
+  ],
+  "limit": 10
+}

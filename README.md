@@ -1,21 +1,90 @@
 # PostgreSQL Semantic Gateway
 
 `postgresem` is a PostgreSQL-native semantic gateway for AI agents and
-applications. It accepts versioned Logical Semantic Queries (LSQ), validates
-them against a published semantic model, and compiles them into deterministic,
-parameterized PostgreSQL queries.
+applications. It accepts strict, versioned Logical Semantic Queries (LSQ),
+resolves them against an immutable published semantic revision, and executes
+deterministic parameterized `SELECT` queries through a guarded PostgreSQL
+boundary.
 
-The project now has an executable M3 MVP. It provides the LSQ v1 contract,
-typed validation, deterministic compilation, catalog scanning, DB-backed
-published semantic snapshots, guarded execution with mandatory audit records,
-fixed role mapping, RLS preservation, read-only transactions, bounded JSON
-results, and a semantic-only MCP stdio adapter with tools and resources.
+The current release is **0.2.0-alpha.1 developer preview**. It is suitable for
+local evaluation and read-only pilots, not production deployment.
 
-## Requirements
+## Start here
 
-- Rust 1.85 or later
-- Apple Container 1.0.0 or a compatible OCI runtime
-- `container-compose` 1.1.0
+- [30-minute Apple Container quickstart](docs/quickstart.md)
+- [Commerce sample and stdio smoke client](examples/commerce/README.md)
+- [Operations guide](docs/operations.md)
+- [Error reference](docs/error-reference.md)
+- [Compatibility policy and support matrix](docs/compatibility.md)
+- [Performance baseline and reproduction](docs/performance.md)
+- [Developer-preview exit checklist](docs/developer-preview-checklist.md)
+- [M4 design feedback form](https://github.com/rioriost/postgresem/issues/new?template=m4_design_feedback.yml)
+- [Configured CI](.github/workflows/ci.yml) and
+  [release automation](.github/workflows/release.yml)
+- [Architecture decisions](docs/adr/)
+- [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
+
+## What the preview implements
+
+- LSQ v1 validation and deterministic compilation
+- Semantic Snapshot/Schema v1 backed by PostgreSQL
+- immutable published revisions with canonical hashes
+- guarded read-only execution with row and byte limits
+- fixed PostgreSQL role mapping with GRANT and RLS enforcement
+- mandatory query audit lifecycle records
+- MCP `2024-11-05` over line-delimited JSON-RPC stdio
+- five semantic-only tools and three resource URI forms
+- deterministic semantic model compatibility diffs with a breaking-change gate
+- a 100-model compiler baseline and deterministic 100-relation catalog check
+- local Apple Container Compose development stack using PostgreSQL 18
+
+The MCP tools are `list_semantic_models`, `describe_semantic_model`,
+`validate_semantic_query`, `query_semantic_model`, and
+`explain_semantic_query`. There is no raw SQL or compiler-output MCP tool, and
+MCP responses do not expose generated SQL or physical lineage.
+
+## Security boundary
+
+Runtime and audit credentials, project, mapped database role, principal, and
+execution profile are fixed by environment at process startup; requests cannot
+override them. Execution requires a durable `started` audit row, then uses a
+`READ ONLY` transaction with `SET LOCAL ROLE` and transaction-local timeouts.
+The executor rejects missing role membership, superuser or `BYPASSRLS` roles,
+and roles that own a source relation used by the query.
+
+Apple Container requires the gateway Compose configuration user to be root for
+its `/etc/hosts` fallback. The startup command immediately drops to
+`postgresem` for the idle process, and `make mcp` explicitly execs MCP as
+`postgresem`; the application processes are unprivileged even though the
+container configuration is not nonroot.
+
+MCP diagnostics go to stderr as structured JSON and omit request values,
+connection data, SQL, result rows, private names, and principal data. Hidden
+and unknown semantic objects receive the same public “not available” errors.
+
+## Preview limitations
+
+- PostgreSQL connections use `NoTls`; use only local or otherwise protected
+  connections.
+- MCP is stdio only. There is no HTTP listener or remote authentication layer.
+- Concurrent MCP cancellation is not implemented; PostgreSQL statement timeout
+  is the cancellation boundary.
+- Backup/restore automation, N-1 migration testing, release signing, and
+  production hardening are not implemented.
+- PostgreSQL 18 is the currently verified development target. See the
+  [compatibility matrix](docs/compatibility.md) before trying another version.
+
+## Packaging status
+
+Tag-triggered automation is configured to build four native archives, generate
+`SHA256SUMS`, and publish a multi-architecture GHCR image with image SBOM and
+provenance. [`scripts/install.sh`](scripts/install.sh) downloads a matching
+archive and verifies its SHA-256 checksum before installation.
+
+No release/tag, GitHub release, archive, checksum file, or GHCR release image
+has been published yet. Release signing is not implemented; a checksum verifies
+integrity against the downloaded checksum file, not publisher authenticity. See the
+[artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
 
 ## Development
 
@@ -25,218 +94,25 @@ make test
 make check
 ```
 
-Start PostgreSQL 18, apply forward-only migrations, and publish the idempotent
-development semantic fixture:
+The complete preview gate is:
 
 ```sh
-cp .env.example .env
-# Replace all placeholder password and connection URL values in .env.
-make dev-up
-make test-db
-make test-execution
-make test-mcp
+make preview-check
 ```
 
-`make dev-up` waits for PostgreSQL, applies migrations, runs the one-shot
-semantic seed, and starts the long-lived gateway container. Repeating it does
-not create another revision.
-
-Validate an LSQ document:
+Run the M4 compatibility and performance surfaces directly:
 
 ```sh
-cargo run -p postgresem -- query validate path/to/query.json
+postgresem model diff --from BEFORE.json --to AFTER.json --fail-on-breaking
+postgresem benchmark compiler \
+  --models 100 --warmup 100 --iterations 1000 --threshold-ms 50
+make test-performance
 ```
 
-Compile an LSQ document against an immutable semantic snapshot:
+Both CLI commands emit structured JSON. The benchmark exits nonzero when p95
+does not remain strictly below the threshold; model diff exits nonzero on a
+breaking diff only when `--fail-on-breaking` is present. See
+[performance.md](docs/performance.md) for scope and reference measurements.
 
-```sh
-cargo run -p postgresem -- query compile path/to/query.json \
-  --snapshot fixtures/evals/m0-semantic-snapshot.json
-```
-
-Calculate the canonical hash after editing a semantic snapshot:
-
-```sh
-cargo run -p postgresem -- snapshot hash \
-  fixtures/evals/m0-semantic-snapshot.json
-```
-
-Scan the visible, non-system PostgreSQL catalog into a deterministic JSON
-snapshot:
-
-```sh
-export DATABASE_URL='postgresql://postgresem_introspector:password@localhost/app'
-cargo run -p postgresem -- catalog scan > catalog-snapshot.json
-```
-
-The connection URL is read only from an environment variable so it is not
-placed in process arguments. Name a different variable when needed:
-
-```sh
-export POSTGRESEM_SCAN_URL='postgresql://postgresem_introspector:password@localhost/app'
-cargo run -p postgresem -- catalog scan \
-  --database-url-env POSTGRESEM_SCAN_URL
-```
-
-Use a dedicated least-privilege introspection role. The scan runs in a
-`READ ONLY`, `REPEATABLE READ` transaction. Catalog comments are included and
-may be sensitive; CHECK and RLS expressions are never persisted, only their
-SHA-256 hashes. The MVP client currently supports local or otherwise
-non-TLS connections only.
-
-Export a named project's current published semantic revision:
-
-```sh
-export DATABASE_URL='******localhost/postgresem_dev'
-cargo run -p postgresem -- model export --project commerce
-```
-
-As with catalog scan, the URL is accepted only through an environment variable.
-Use `--database-url-env POSTGRESEM_MODEL_URL` to name a different variable.
-Export runs in a `READ ONLY`, `REPEATABLE READ` transaction, parses the
-normalized schema fail-closed, canonicalizes collection order, and rejects a
-snapshot whose calculated hash differs from the published revision hash.
-
-Execute an LSQ against a project's published revision:
-
-```sh
-export DATABASE_URL='postgresql://postgresem_runtime:<runtime-password>@127.0.0.1:55432/postgresem_dev'
-export POSTGRESEM_AUDIT_DATABASE_URL='postgresql://postgresem_audit_writer:<audit-password>@127.0.0.1:55432/postgresem_dev'
-export POSTGRESEM_DB_ROLE='postgresem_analyst'
-
-cargo run -p postgresem -- query execute path/to/query.json \
-  --project commerce
-```
-
-The URLs and mapped role cannot be passed as CLI values. To use differently
-named environment variables, name only those variables:
-
-```sh
-cargo run -p postgresem -- query execute path/to/query.json \
-  --project commerce \
-  --database-url-env MY_RUNTIME_URL \
-  --audit-database-url-env MY_AUDIT_URL \
-  --db-role-env MY_MAPPED_ROLE
-```
-
-The runtime login is granted membership in local `NOLOGIN` roles.
-`postgresem_analyst` can select the commerce and billing fixtures, while
-`postgresem_tenant_a` and `postgresem_tenant_b` exercise source RLS. The
-executor rejects missing memberships, superuser or `BYPASSRLS` roles, and a
-role that owns any physical source relation in the compiled lineage.
-
-Execution writes a mandatory `started` audit row through the dedicated audit
-connection before opening the source transaction. It then runs only the
-compiled single `SELECT` in a `READ ONLY` transaction with transaction-local
-role and timeout settings, followed by a terminal audit update. The response
-contains `schema_version`, `query_id`, `semantic_revision`, `columns`, `rows`,
-`truncated`, `lineage`, and `warnings`. Numeric JSON values are strings;
-integers and booleans retain their JSON types.
-
-Optional nonsecret execution limits are configured with:
-
-```sh
-export POSTGRESEM_MAX_RESULT_BYTES=1048576
-export POSTGRESEM_STATEMENT_TIMEOUT_MS=30000
-export POSTGRESEM_LOCK_TIMEOUT_MS=5000
-export POSTGRESEM_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS=5000
-```
-
-## MCP stdio server
-
-`postgresem mcp serve` implements the MCP JSON-RPC 2.0 stdio transport using
-one JSON object per line. Standard output is reserved for protocol messages;
-diagnostics are written to standard error. The MVP supports `initialize`,
-`notifications/initialized`, `ping`, `tools/list`, `tools/call`,
-`resources/list`, and `resources/read`.
-
-The server exposes exactly these tools:
-
-- `list_semantic_models`
-- `describe_semantic_model`
-- `validate_semantic_query`
-- `query_semantic_model`
-- `explain_semantic_query`
-
-There is no raw query or compiler tool. Validation and explanation return only
-semantic outputs and public lineage, never generated physical queries. Model
-and resource responses omit nonqueryable models and hidden fields or metrics.
-
-All MCP configuration is read once from environment variables at startup:
-
-```sh
-export POSTGRESEM_MCP_PROJECT=commerce
-export MCP_RUNTIME_DATABASE_URL='host=127.0.0.1 port=55432 dbname=postgresem_dev user=postgresem_runtime'
-export POSTGRESEM_RUNTIME_PASSWORD='<runtime-password>'
-export MCP_AUDIT_DATABASE_URL='host=127.0.0.1 port=55432 dbname=postgresem_dev user=postgresem_audit_writer'
-export POSTGRESEM_AUDIT_WRITER_PASSWORD='<audit-password>'
-export POSTGRESEM_MCP_RUNTIME_URL_ENV=MCP_RUNTIME_DATABASE_URL
-export POSTGRESEM_MCP_RUNTIME_PASSWORD_ENV=POSTGRESEM_RUNTIME_PASSWORD
-export POSTGRESEM_MCP_AUDIT_URL_ENV=MCP_AUDIT_DATABASE_URL
-export POSTGRESEM_MCP_AUDIT_PASSWORD_ENV=POSTGRESEM_AUDIT_WRITER_PASSWORD
-export POSTGRESEM_MCP_DB_ROLE_ENV=POSTGRESEM_DB_ROLE
-
-postgresem mcp serve
-```
-
-The five `*_ENV` values name the environment variables containing the runtime
-conninfo, runtime password, audit conninfo, audit password, and mapped database
-role. Environment-variable names are validated strictly. The two conninfo
-values can remain passwordless: the server parses each with `postgres::Config`
-and applies the corresponding password in memory before connecting. Requests
-cannot override the project, connection, password, role, principal, or
-execution profile. MCP executions use the mandatory guarded executor and are
-audited with profile `mcp-stdio` and a fixed MCP stdio principal subject.
-
-Blank stdio lines are ignored. MCP protocol parameter envelopes accept standard
-extensions such as `_meta`, while each tool's actual argument object remains
-strict and rejects undeclared properties. `initialize` requires a string
-`protocolVersion`, an object `capabilities`, and a `clientInfo` object with
-nonempty string `name` and `version` values. Request IDs must be non-null
-strings or integer JSON numbers; invalid IDs receive `MCP_INVALID_REQUEST` with
-a null response ID. Structured JSON request completion and error logs are
-written only to standard error and omit LSQ values, database configuration,
-physical queries, result rows, and principal data.
-
-Published resources use these URI forms:
-
-```text
-semantic://projects/{project}/revisions/current
-semantic://projects/{project}/models/{model}
-semantic://schemas/lsq/v1
-```
-
-The LSQ resource is the same bundled `schemas/lsq/v1.schema.json` used by the
-project. `make test-mcp` builds the integration image, starts the server as a
-stdio child, exercises all tools and resources, and checks the audit row.
-
-Start the seeded database and long-lived gateway, then attach the MCP server's
-stdin and stdout through Apple Container:
-
-```sh
-make dev-up
-make mcp
-```
-
-`make mcp` uses `container exec -i` to run the server as the image's
-unprivileged `postgresem` user. The exec process inherits the gateway
-container's startup-fixed MCP configuration, `host=db` database connection
-settings, and password variables. Passwords are not interpolated into shell
-commands, conninfo strings, or process arguments. MCP is intentionally not
-exposed over HTTP in this milestone.
-
-The MVP does not implement concurrent protocol cancellation. The guarded
-executor's configured PostgreSQL statement timeout is the current cancellation
-boundary.
-
-See
-[`docs/adr/0006-guarded-database-execution.md`](docs/adr/0006-guarded-database-execution.md)
-for the execution trust boundary and audit decisions.
-
-See
-[`docs/adr/0007-mcp-stdio-mvp-adapter.md`](docs/adr/0007-mcp-stdio-mvp-adapter.md)
-for the MCP transport, visibility, configuration, and public-error decisions.
-
-See
-[`docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md`](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
-for the architecture, scope, and milestone gates.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md) before
+submitting changes or reports.

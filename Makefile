@@ -10,7 +10,7 @@ dev-up:
 mcp:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
 	@container-compose up --env-file .env -d --build gateway </dev/null 1>&2
-	@container exec -i postgresem-gateway postgresem mcp serve
+	@container exec -i --user postgresem postgresem-gateway postgresem mcp serve
 
 dev-down:
 	container-compose down --env-file .env

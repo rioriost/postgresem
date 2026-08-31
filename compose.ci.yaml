@@ -1,0 +1,12 @@
+services:
+  db:
+    image: ${POSTGRES_IMAGE}
+
+  migrate:
+    image: ${POSTGRES_IMAGE}
+
+  seed:
+    image: ${POSTGRES_IMAGE}
+
+  integration-test:
+    image: ${POSTGRES_IMAGE}
