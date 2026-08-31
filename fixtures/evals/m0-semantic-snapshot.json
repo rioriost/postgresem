@@ -1,0 +1,123 @@
+{
+  "schema_version": "1",
+  "revision_hash": "sha256:330450c64f978802b1d008c9b046f622f112ec13a85226b1c599e8593eb725c4",
+  "models": [
+    {
+      "semantic_name": "orders",
+      "source": {"schema": "commerce", "relation": "orders"},
+      "timezone": "UTC",
+      "fields": [
+        {"semantic_name": "order_id", "data_type": "integer", "column": "order_id", "entity_key": true},
+        {"semantic_name": "customer_id", "data_type": "integer", "column": "customer_id"},
+        {"semantic_name": "ordered_at", "data_type": "timestamp_tz", "column": "ordered_at", "time_dimension": true},
+        {"semantic_name": "status", "data_type": "text", "column": "status"},
+        {"semantic_name": "amount", "data_type": "numeric", "column": "amount"},
+        {"semantic_name": "customer_region", "data_type": "text", "column": "region", "relationship": "customer"},
+        {"semantic_name": "customer_credit_limit", "data_type": "numeric", "column": "credit_limit", "relationship": "customer"},
+        {"semantic_name": "item_sku", "data_type": "text", "column": "sku", "relationship": "order_items"},
+        {"semantic_name": "internal_note", "data_type": "text", "column": "internal_note", "visible": false},
+        {"semantic_name": "orphan_value", "data_type": "text", "column": "value", "relationship": "missing_relationship"}
+      ],
+      "metrics": [
+        {"semantic_name": "order_count", "data_type": "integer", "aggregation": "count", "field": "order_id"},
+        {
+          "semantic_name": "revenue",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "amount",
+          "filter": {"field": "status", "value": {"type": "text", "value": "paid"}}
+        },
+        {
+          "semantic_name": "average_order_value",
+          "data_type": "numeric",
+          "aggregation": "avg",
+          "field": "amount",
+          "filter": {"field": "status", "value": {"type": "text", "value": "paid"}}
+        },
+        {"semantic_name": "distinct_orders", "data_type": "integer", "aggregation": "count_distinct", "field": "order_id"},
+        {"semantic_name": "distinct_statuses", "data_type": "integer", "aggregation": "count_distinct", "field": "status"},
+        {"semantic_name": "broken_metric", "data_type": "numeric", "aggregation": "sum", "field": "missing_field"},
+        {"semantic_name": "customer_credit_total", "data_type": "numeric", "aggregation": "sum", "field": "customer_credit_limit"},
+        {"semantic_name": "internal_revenue", "data_type": "numeric", "aggregation": "sum", "field": "amount", "visible": false}
+      ],
+      "relationships": [
+        {
+          "semantic_name": "customer",
+          "target_model": "customers",
+          "target": {"schema": "commerce", "relation": "customer"},
+          "cardinality": "many_to_one",
+          "join_type": "left",
+          "from_column": "customer_id",
+          "to_column": "customer_id"
+        },
+        {
+          "semantic_name": "order_items",
+          "target_model": "order_items",
+          "target": {"schema": "commerce", "relation": "order_item"},
+          "cardinality": "one_to_many",
+          "join_type": "left",
+          "from_column": "order_id",
+          "to_column": "order_id"
+        }
+      ]
+    },
+    {
+      "semantic_name": "customers",
+      "source": {"schema": "commerce", "relation": "customer"},
+      "queryable": false,
+      "fields": [
+        {"semantic_name": "customer_id", "data_type": "integer", "column": "customer_id", "entity_key": true},
+        {"semantic_name": "region", "data_type": "text", "column": "region"},
+        {"semantic_name": "credit_limit", "data_type": "numeric", "column": "credit_limit"}
+      ],
+      "metrics": []
+    },
+    {
+      "semantic_name": "order_items",
+      "source": {"schema": "commerce", "relation": "order_item"},
+      "queryable": false,
+      "fields": [
+        {"semantic_name": "order_item_id", "data_type": "integer", "column": "order_item_id", "entity_key": true},
+        {"semantic_name": "order_id", "data_type": "integer", "column": "order_id"},
+        {"semantic_name": "sku", "data_type": "text", "column": "sku"}
+      ],
+      "metrics": []
+    },
+    {
+      "semantic_name": "tenant_orders",
+      "source": {"schema": "rls_fixture", "relation": "orders"},
+      "fields": [
+        {"semantic_name": "order_id", "data_type": "integer", "column": "order_id", "entity_key": true},
+        {"semantic_name": "tenant_id", "data_type": "text", "column": "tenant_id"},
+        {"semantic_name": "amount", "data_type": "numeric", "column": "amount"}
+      ],
+      "metrics": [
+        {"semantic_name": "order_count", "data_type": "integer", "aggregation": "count", "field": "order_id"},
+        {"semantic_name": "revenue", "data_type": "numeric", "aggregation": "sum", "field": "amount"}
+      ]
+    },
+    {
+      "semantic_name": "subscriptions",
+      "source": {"schema": "billing", "relation": "subscriptions"},
+      "timezone": "UTC",
+      "fields": [
+        {"semantic_name": "subscription_id", "data_type": "integer", "column": "subscription_id", "entity_key": true},
+        {"semantic_name": "account_id", "data_type": "integer", "column": "account_id"},
+        {"semantic_name": "started_on", "data_type": "date", "column": "started_on", "time_dimension": true},
+        {"semantic_name": "plan", "data_type": "text", "column": "plan"},
+        {"semantic_name": "monthly_amount", "data_type": "numeric", "column": "monthly_amount"},
+        {"semantic_name": "active", "data_type": "boolean", "column": "active"}
+      ],
+      "metrics": [
+        {"semantic_name": "subscription_count", "data_type": "integer", "aggregation": "count", "field": "subscription_id"},
+        {
+          "semantic_name": "mrr",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "monthly_amount",
+          "filter": {"field": "active", "value": {"type": "boolean", "value": true}}
+        }
+      ]
+    }
+  ]
+}

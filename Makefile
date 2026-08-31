@@ -25,7 +25,7 @@ test-db:
 	@attempt=0; \
 	while [ $$attempt -lt 30 ]; do \
 		logs="$$(container logs postgresem-integration-test 2>&1)"; \
-		if printf '%s\n' "$$logs" | grep -q "semantic schema integration checks passed"; then \
+		if printf '%s\n' "$$logs" | grep -q "all database integration checks passed"; then \
 			printf '%s\n' "$$logs"; \
 			exit 0; \
 		fi; \

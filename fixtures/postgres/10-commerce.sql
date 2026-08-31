@@ -5,7 +5,8 @@ CREATE SCHEMA commerce;
 CREATE TABLE commerce.customer (
   customer_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   customer_name text NOT NULL,
-  region text NOT NULL CHECK (region IN ('apac', 'emea', 'amer'))
+  region text NOT NULL CHECK (region IN ('apac', 'emea', 'amer')),
+  credit_limit numeric(18, 2) NOT NULL CHECK (credit_limit >= 0)
 );
 
 COMMENT ON TABLE commerce.customer IS 'Customers that place commerce orders.';
@@ -22,11 +23,18 @@ CREATE TABLE commerce.orders (
 COMMENT ON TABLE commerce.orders IS 'One row per customer order.';
 COMMENT ON COLUMN commerce.orders.amount IS 'Order amount in the fixture currency.';
 
-INSERT INTO commerce.customer (customer_name, region)
+CREATE TABLE commerce.order_item (
+  order_item_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  order_id bigint NOT NULL REFERENCES commerce.orders(order_id),
+  sku text NOT NULL,
+  quantity integer NOT NULL CHECK (quantity > 0)
+);
+
+INSERT INTO commerce.customer (customer_name, region, credit_limit)
 VALUES
-  ('Aster Trading', 'apac'),
-  ('Birch Retail', 'emea'),
-  ('Cedar Market', 'amer');
+  ('Aster Trading', 'apac', 1000.00),
+  ('Birch Retail', 'emea', 2000.00),
+  ('Cedar Market', 'amer', 3000.00);
 
 INSERT INTO commerce.orders (customer_id, ordered_at, status, amount)
 VALUES
@@ -35,3 +43,8 @@ VALUES
   (2, '2026-02-12T09:15:00Z', 'pending', 45.00),
   (3, '2026-03-01T15:45:00Z', 'cancelled', 300.00);
 
+INSERT INTO commerce.order_item (order_id, sku, quantity)
+VALUES
+  (1, 'SKU-RED', 1),
+  (1, 'SKU-BLUE', 2),
+  (2, 'SKU-GREEN', 1);

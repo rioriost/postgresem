@@ -1,0 +1,314 @@
+{
+  "cases": [
+    {
+      "id": "commerce-accept-01",
+      "dataset": "commerce",
+      "question": "What is paid revenue by order month in 2026?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "ordered_at", "time_grain": "month"}],
+        "metrics": [{"metric": "revenue"}],
+        "filters": {"op": "gte", "field": "ordered_at", "value": {"type": "date", "value": "2026-01-01"}},
+        "order_by": [{"ref": "revenue", "direction": "desc"}],
+        "limit": 100
+      },
+      "expect": {"outcome": "accept", "output": ["ordered_at", "revenue"], "parameter_count": 4}
+    },
+    {
+      "id": "commerce-accept-02",
+      "dataset": "commerce",
+      "question": "How many orders exist?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "order_count"}]
+      },
+      "expect": {"outcome": "accept", "output": ["order_count"], "parameter_count": 1}
+    },
+    {
+      "id": "commerce-accept-03",
+      "dataset": "commerce",
+      "question": "What is paid revenue by customer region?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "customer_region"}],
+        "metrics": [{"metric": "revenue"}]
+      },
+      "expect": {"outcome": "accept", "output": ["customer_region", "revenue"], "parameter_count": 2}
+    },
+    {
+      "id": "commerce-accept-04",
+      "dataset": "commerce",
+      "question": "What is the average paid order value?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "average_order_value"}]
+      },
+      "expect": {"outcome": "accept", "output": ["average_order_value"], "parameter_count": 2}
+    },
+    {
+      "id": "commerce-accept-05",
+      "dataset": "commerce",
+      "question": "List order statuses.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "status"}],
+        "order_by": [{"ref": "status", "direction": "asc"}],
+        "limit": 20
+      },
+      "expect": {"outcome": "accept", "output": ["status"], "parameter_count": 1}
+    },
+    {
+      "id": "commerce-accept-06",
+      "dataset": "commerce",
+      "question": "Count paid or pending orders.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "order_count"}],
+        "filters": {
+          "op": "in",
+          "field": "status",
+          "values": [
+            {"type": "text", "value": "paid"},
+            {"type": "text", "value": "pending"}
+          ]
+        }
+      },
+      "expect": {"outcome": "accept", "output": ["order_count"], "parameter_count": 3}
+    },
+    {
+      "id": "commerce-accept-07",
+      "dataset": "commerce",
+      "question": "Count distinct orders with an order timestamp.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "distinct_orders"}],
+        "filters": {"op": "is_not_null", "field": "ordered_at"}
+      },
+      "expect": {"outcome": "accept", "output": ["distinct_orders"], "parameter_count": 1}
+    },
+    {
+      "id": "commerce-accept-08",
+      "dataset": "commerce",
+      "question": "Count orders by status.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "status"}],
+        "metrics": [{"metric": "order_count"}],
+        "order_by": [{"ref": "status", "direction": "asc"}]
+      },
+      "expect": {"outcome": "accept", "output": ["status", "order_count"], "parameter_count": 1}
+    },
+    {
+      "id": "tenant-accept-01",
+      "dataset": "rls-multitenant",
+      "question": "What revenue is visible to the current tenant?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "tenant_orders",
+        "metrics": [{"metric": "revenue"}]
+      },
+      "expect": {"outcome": "accept", "output": ["revenue"], "parameter_count": 1}
+    },
+    {
+      "id": "tenant-accept-02",
+      "dataset": "rls-multitenant",
+      "question": "How many tenant A orders are visible?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "tenant_orders",
+        "metrics": [{"metric": "order_count"}],
+        "filters": {"op": "eq", "field": "tenant_id", "value": {"type": "text", "value": "tenant_a"}}
+      },
+      "expect": {"outcome": "accept", "output": ["order_count"], "parameter_count": 2}
+    },
+    {
+      "id": "tenant-accept-03",
+      "dataset": "rls-multitenant",
+      "question": "List visible order amounts.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "tenant_orders",
+        "dimensions": [{"field": "amount"}],
+        "limit": 50
+      },
+      "expect": {"outcome": "accept", "output": ["amount"], "parameter_count": 1}
+    },
+    {
+      "id": "subscriptions-accept-01",
+      "dataset": "subscriptions",
+      "question": "What is active MRR by plan?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "subscriptions",
+        "dimensions": [{"field": "plan"}],
+        "metrics": [{"metric": "mrr"}]
+      },
+      "expect": {"outcome": "accept", "output": ["plan", "mrr"], "parameter_count": 2}
+    },
+    {
+      "id": "subscriptions-accept-02",
+      "dataset": "subscriptions",
+      "question": "How many subscriptions started each month?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "subscriptions",
+        "dimensions": [{"field": "started_on", "time_grain": "month"}],
+        "metrics": [{"metric": "subscription_count"}]
+      },
+      "expect": {"outcome": "accept", "output": ["started_on", "subscription_count"], "parameter_count": 1}
+    },
+    {
+      "id": "subscriptions-accept-03",
+      "dataset": "subscriptions",
+      "question": "What active MRR started after February 2026?",
+      "lsq": {
+        "schema_version": "1",
+        "model": "subscriptions",
+        "metrics": [{"metric": "mrr"}],
+        "filters": {"op": "gte", "field": "started_on", "value": {"type": "date", "value": "2026-02-01"}}
+      },
+      "expect": {"outcome": "accept", "output": ["mrr"], "parameter_count": 3}
+    },
+    {
+      "id": "subscriptions-accept-04",
+      "dataset": "subscriptions",
+      "question": "Count active subscriptions by active state.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "subscriptions",
+        "dimensions": [{"field": "active"}],
+        "metrics": [{"metric": "subscription_count"}],
+        "filters": {"op": "eq", "field": "active", "value": {"type": "boolean", "value": true}}
+      },
+      "expect": {"outcome": "accept", "output": ["active", "subscription_count"], "parameter_count": 2}
+    },
+    {
+      "id": "reject-01",
+      "dataset": "commerce",
+      "question": "Query an unknown model.",
+      "lsq": {"schema_version": "1", "model": "secret_orders", "metrics": [{"metric": "revenue"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_MODEL_NOT_AVAILABLE"}
+    },
+    {
+      "id": "reject-02",
+      "dataset": "commerce",
+      "question": "Query an unknown field.",
+      "lsq": {"schema_version": "1", "model": "orders", "dimensions": [{"field": "credit_card"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_FIELD_NOT_AVAILABLE"}
+    },
+    {
+      "id": "reject-03",
+      "dataset": "commerce",
+      "question": "Query an unknown metric.",
+      "lsq": {"schema_version": "1", "model": "orders", "metrics": [{"metric": "profit"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_METRIC_NOT_AVAILABLE"}
+    },
+    {
+      "id": "reject-04",
+      "dataset": "commerce",
+      "question": "Apply a time grain to text.",
+      "lsq": {"schema_version": "1", "model": "orders", "dimensions": [{"field": "status", "time_grain": "month"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_INVALID_TIME_GRAIN"}
+    },
+    {
+      "id": "reject-05",
+      "dataset": "commerce",
+      "question": "Compare a numeric amount with text.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "order_count"}],
+        "filters": {"op": "gte", "field": "amount", "value": {"type": "text", "value": "large"}}
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_LITERAL_TYPE_MISMATCH"}
+    },
+    {
+      "id": "reject-06",
+      "dataset": "commerce",
+      "question": "Order by an output that was not selected.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "order_count"}],
+        "order_by": [{"ref": "revenue", "direction": "desc"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_ORDER_REFERENCE_NOT_PROJECTED"}
+    },
+    {
+      "id": "reject-07",
+      "dataset": "commerce",
+      "question": "Traverse a one-to-many relationship.",
+      "lsq": {"schema_version": "1", "model": "orders", "dimensions": [{"field": "item_sku"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_UNSAFE_RELATIONSHIP"}
+    },
+    {
+      "id": "reject-08",
+      "dataset": "commerce",
+      "question": "Count distinct values that are not an entity key.",
+      "lsq": {"schema_version": "1", "model": "orders", "metrics": [{"metric": "distinct_statuses"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_COUNT_DISTINCT_REQUIRES_ENTITY_KEY"}
+    },
+    {
+      "id": "reject-09",
+      "dataset": "commerce",
+      "question": "Use a field whose relationship is not defined.",
+      "lsq": {"schema_version": "1", "model": "orders", "dimensions": [{"field": "orphan_value"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_RELATIONSHIP_NOT_AVAILABLE"}
+    },
+    {
+      "id": "reject-10",
+      "dataset": "commerce",
+      "question": "Use a metric with a missing source field.",
+      "lsq": {"schema_version": "1", "model": "orders", "metrics": [{"metric": "broken_metric"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_INVALID_METRIC_FIELD"}
+    },
+    {
+      "id": "reject-11",
+      "dataset": "commerce",
+      "question": "Access a hidden field.",
+      "lsq": {"schema_version": "1", "model": "orders", "dimensions": [{"field": "internal_note"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_FIELD_NOT_AVAILABLE"}
+    },
+    {
+      "id": "reject-12",
+      "dataset": "commerce",
+      "question": "Access a hidden metric.",
+      "lsq": {"schema_version": "1", "model": "orders", "metrics": [{"metric": "internal_revenue"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_METRIC_NOT_AVAILABLE"}
+    },
+    {
+      "id": "reject-13",
+      "dataset": "commerce",
+      "question": "Submit an empty projection.",
+      "lsq": {"schema_version": "1", "model": "orders"},
+      "expect": {"outcome": "reject", "code": "LSQ_EMPTY_PROJECTION"}
+    },
+    {
+      "id": "reject-14",
+      "dataset": "commerce",
+      "question": "Aggregate a measure from the many-to-one dimension side.",
+      "lsq": {"schema_version": "1", "model": "orders", "metrics": [{"metric": "customer_credit_total"}]},
+      "expect": {"outcome": "reject", "code": "SEMANTIC_JOINED_METRIC_FIELD"}
+    },
+    {
+      "id": "reject-15",
+      "dataset": "commerce",
+      "question": "Submit an empty IN predicate.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "order_count"}],
+        "filters": {"op": "in", "field": "status", "values": []}
+      },
+      "expect": {"outcome": "reject", "code": "LSQ_INVALID_IN_FILTER_SIZE"}
+    }
+  ]
+}

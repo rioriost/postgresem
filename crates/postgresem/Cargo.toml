@@ -9,7 +9,7 @@ repository.workspace = true
 [dependencies]
 clap.workspace = true
 postgresem-compiler = { path = "../postgresem-compiler" }
+serde_json.workspace = true
 
 [lints]
 workspace = true
-

@@ -47,7 +47,7 @@ services:
       PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
     volumes:
       - ./tests/integration:/tests:ro
-    entrypoint: ["psql", "--no-psqlrc", "-v", "ON_ERROR_STOP=1", "-f", "/tests/semantic_schema.sql"]
+    entrypoint: ["/bin/sh", "/tests/run.sh"]
 
 volumes:
   postgres-data:

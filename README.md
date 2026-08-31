@@ -42,7 +42,20 @@ Validate an LSQ document:
 cargo run -p postgresem -- query validate path/to/query.json
 ```
 
+Compile an LSQ document against an immutable semantic snapshot:
+
+```sh
+cargo run -p postgresem -- query compile path/to/query.json \
+  --snapshot fixtures/evals/m0-semantic-snapshot.json
+```
+
+Calculate the canonical hash after editing a semantic snapshot:
+
+```sh
+cargo run -p postgresem -- snapshot hash \
+  fixtures/evals/m0-semantic-snapshot.json
+```
+
 See
 [`docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md`](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 for the architecture, scope, and milestone gates.
-
