@@ -1,7 +1,7 @@
 # Error reference
 
-This is the public/stored taxonomy implemented by
-`0.2.0-alpha.1`. Codes are stable within this preview contract but remain
+This is the public/stored taxonomy implemented through
+`0.3.0-beta.1`. Codes are stable within this prerelease contract but remain
 subject to the pre-1.0 compatibility policy.
 
 ## Response envelopes

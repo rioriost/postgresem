@@ -6,8 +6,9 @@ resolves them against an immutable published semantic revision, and executes
 deterministic parameterized `SELECT` queries through a guarded PostgreSQL
 boundary.
 
-The current release is **0.2.0-alpha.1 developer preview**. It is suitable for
-local evaluation and read-only pilots, not production deployment.
+The latest published release is **0.2.0-alpha.1 developer preview**. The main
+branch is developing **0.3.0-beta.1**. Both are suitable for local evaluation
+and read-only pilots, not production deployment.
 
 ## Start here
 
@@ -20,6 +21,10 @@ local evaluation and read-only pilots, not production deployment.
 - [Performance baseline and reproduction](docs/performance.md)
 - [Developer-preview exit checklist](docs/developer-preview-checklist.md)
 - [M5 beta checklist](docs/beta-checklist.md)
+- [Backup and restore](docs/backup-restore.md)
+- [SLO and adoption reporting](docs/slo-and-adoption.md)
+- [Incident runbook](docs/incident-runbook.md)
+- [Beta security review checklist](docs/security-review-checklist.md)
 - [M4 design feedback form](https://github.com/rioriost/postgresem/issues/new?template=m4_design_feedback.yml)
 - [Configured CI](.github/workflows/ci.yml) and
   [release automation](.github/workflows/release.yml)
@@ -71,8 +76,10 @@ and unknown semantic objects receive the same public “not available” errors.
 - MCP is stdio only. There is no HTTP listener or remote authentication layer.
 - Concurrent MCP cancellation is not implemented; PostgreSQL statement timeout
   is the cancellation boundary.
-- Backup/restore automation, N-1 migration testing, release signing, and
-  production hardening are not implemented.
+- N-1 and same-name restore paths are fixture-tested, but production backup,
+  RPO/RTO, disaster recovery, and down migrations remain operator-owned.
+- Future beta releases are configured for keyless signing; the published
+  `v0.2.0-alpha.1` assets remain unsigned.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
   and 18 pass the Docker CI matrix. See the
   [compatibility matrix](docs/compatibility.md) for the exact boundary.
@@ -87,9 +94,10 @@ archive and verifies its SHA-256 checksum before installation.
 The
 [`v0.2.0-alpha.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.2.0-alpha.1)
 contains Linux and macOS archives for amd64 and arm64 plus `SHA256SUMS`.
-The public image is `ghcr.io/rioriost/postgresem:0.2.0-alpha.1`. Release
-signing is not implemented; a checksum verifies integrity against the
-downloaded checksum file, not publisher authenticity. See the
+The public image is `ghcr.io/rioriost/postgresem:0.2.0-alpha.1`. The published
+preview is unsigned; a checksum verifies integrity against the downloaded
+checksum file, not publisher authenticity. Future beta releases are configured
+for GitHub OIDC keyless signing. See the
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
 
 ## Development

@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp web-demo fmt check test test-web-demo test-db test-execution test-mcp test-performance preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-web-demo test-db test-execution test-mcp test-performance test-recovery preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -15,6 +15,19 @@ mcp:
 web-demo:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
 	python3 examples/web_demo/server.py -- make mcp
+
+backup:
+	scripts/backup.sh $(BACKUP_ROOT)
+
+verify-backup:
+	@test -n "$(BACKUP_DIR)" || (echo "set BACKUP_DIR to a backup directory" >&2; exit 1)
+	scripts/verify-backup.sh "$(BACKUP_DIR)"
+
+report-beta:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	@container-compose up --env-file .env -d --build gateway </dev/null 1>&2
+	@container exec --user postgresem postgresem-gateway postgresem report beta \
+		--audit-database-url-env MCP_AUDIT_DATABASE_URL
 
 dev-down:
 	container-compose down --env-file .env
@@ -111,6 +124,26 @@ test-performance:
 	echo "performance integration test timed out" >&2; \
 	exit 1
 
+test-recovery:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	container-compose up --env-file .env -d --build recovery-test
+	@attempt=0; \
+	while [ $$attempt -lt 180 ]; do \
+		logs="$$(container logs postgresem-recovery-test 2>&1)"; \
+		if printf '%s\n' "$$logs" | grep -q "N-1 migration and backup/restore recovery checks passed"; then \
+			printf '%s\n' "$$logs"; \
+			exit 0; \
+		fi; \
+		if container inspect postgresem-recovery-test 2>/dev/null | grep -q '"state" : "stopped"'; then \
+			printf '%s\n' "$$logs" >&2; \
+			exit 1; \
+		fi; \
+		attempt=$$((attempt + 1)); \
+		sleep 1; \
+	done; \
+	echo "recovery integration test timed out" >&2; \
+	exit 1
+
 preview-check: fmt check test test-db test-execution test-mcp test-performance
 
-beta-check: preview-check test-web-demo
+beta-check: preview-check test-web-demo test-recovery

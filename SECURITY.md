@@ -2,16 +2,18 @@
 
 ## Supported versions and scope
 
-No production-ready version has been released. `0.2.0-alpha.1` is a developer
-preview for local evaluation and read-only pilots. Security fixes are applied
-to the active development branch; there is no long-term-support promise for
-0.x prereleases.
+No production-ready version has been released. `0.2.0-alpha.1` is the published
+developer preview and `0.3.0-beta.1` is the active beta development line for
+local evaluation and read-only pilots. There is no long-term-support promise
+for 0.x prereleases.
 
 The implemented boundary is MCP stdio plus local/non-TLS PostgreSQL
 connections. There is no HTTP service, remote authentication protocol, TLS,
-release signing, automated backup/restore, or production hardening claim.
+published signed release, production backup/restore, or production hardening
+claim. The loopback Web demo is not a remotely supported transport.
 The `v0.2.0-alpha.1` release includes checksums and a container-image
-SBOM/provenance record. Checksums are integrity checks and are not signatures.
+SBOM/provenance record. Checksums are integrity checks and are not signatures;
+future beta releases are configured for keyless GitHub OIDC signing.
 
 The Apple Container gateway service is configured with container user root
 solely so `container-compose` can perform its `/etc/hosts` fallback. Its

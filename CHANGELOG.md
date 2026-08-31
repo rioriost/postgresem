@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- M5 N-1 migration and same-name backup/restore validation.
+- Privacy-safe `postgresem report beta` audit aggregation.
+- Loopback-only commerce Web demo over the existing MCP stdio boundary.
+- Beta incident, recovery, SLO/adoption, and release-verification guidance.
+- Keyless GitHub OIDC signing for future checksum and GHCR releases.
+
 All notable changes to PostgreSQL Semantic Gateway are documented here.
 
 The project follows Semantic Versioning. Before 1.0, minor and prerelease

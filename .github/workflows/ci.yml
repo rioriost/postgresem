@@ -102,7 +102,7 @@ jobs:
         run: docker compose up --detach --wait --wait-timeout 120 db
 
       - name: Build integration images
-        run: docker compose build execution-test mcp-test performance-test
+        run: docker compose build execution-test mcp-test performance-test recovery-test
 
       - name: Apply migrations
         run: docker compose run --rm --no-deps migrate
@@ -122,6 +122,9 @@ jobs:
       - name: Run developer-preview performance checks
         if: matrix.postgres == '18'
         run: docker compose run --rm --no-deps performance-test
+
+      - name: Run N-1 migration and recovery checks
+        run: docker compose run --rm --no-deps recovery-test
 
       - name: Show service logs after failure
         if: failure()

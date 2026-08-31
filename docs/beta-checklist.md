@@ -6,14 +6,15 @@ that must come from independent environments.
 | Requirement | Status | Evidence |
 |---|---|---|
 | beta scope and transport decision | implemented | [ADR 0009](adr/0009-beta-operations-transport-and-evidence.md) |
-| N-1 migration validation | planned | must preserve the published revision and guarded-query behavior |
-| semantic/audit backup and disposable restore validation | planned | source database and cluster-level backup remain operator-owned |
-| failure-recovery checks | planned | migration, audit, timeout, and unavailable-database cases |
-| local SLO/adoption report | planned | aggregate audit data only; no external telemetry by default |
-| incident runbook | planned | detection, containment, evidence, recovery, and communication |
-| release signing verification | planned | prefer GitHub OIDC/keyless identity |
+| N-1 migration validation | implemented | `make test-recovery` builds `0001`–`0003`, executes, then upgrades |
+| backup and same-name restore validation | implemented for isolated fixture | [backup/restore](backup-restore.md); production policy remains operator-owned |
+| failure-recovery checks | partially implemented | mandatory audit failures, unsafe roles, timeouts, N-1, and restore paths |
+| local SLO/adoption report | implemented | [SLO and adoption](slo-and-adoption.md), `postgresem report beta` |
+| incident runbook | documented | [incident runbook](incident-runbook.md) |
+| release signing verification | configured for future releases | [verification](release-verification.md); `v0.2.0-alpha.1` remains unsigned |
+| security review preparation | documented | [security review checklist](security-review-checklist.md) |
 | MCP Streamable HTTP | deferred | authentication and request identity are prerequisites |
-| loopback commerce Web demo | planned | existing stdio MCP path; no raw SQL or browser-selected role |
+| loopback commerce Web demo | implemented | [Web demo](../examples/web_demo/README.md); existing stdio MCP path |
 | independent security review | **outstanding** | cannot be self-certified |
 | two non-fixture databases operated for four weeks | **outstanding** | external evidence required |
 | P0/P1 security or correctness defects during field period | **not measurable yet** | field period has not started |
@@ -37,4 +38,3 @@ M5 repository work does not by itself establish production readiness, remote
 HTTP safety, a recovery-time guarantee, a recovery-point guarantee, regulatory
 compliance, successful external adoption, or completion of an independent
 security review.
-

@@ -74,7 +74,7 @@ make doctor
 make dev-up
 ```
 
-`make doctor` should report `postgresem 0.2.0-alpha.1`, `macos/aarch64`, and
+`make doctor` should report `postgresem 0.3.0-beta.1`, `macos/aarch64`, and
 Apple Container as available. `make dev-up` builds the gateway, starts
 PostgreSQL 18 on `127.0.0.1:55432`, applies migrations in order, publishes the
 idempotent commerce revision, and leaves `postgresem-db` and
@@ -90,8 +90,9 @@ container exec postgresem-db \
 ```
 
 Expected migration rows are `0001_semantic_schema`,
-`0002_published_snapshot_v1`, and `0003_guarded_execution_audit`. Hashes,
-container addresses, and timestamps are intentionally not fixed.
+`0002_published_snapshot_v1`, `0003_guarded_execution_audit`, and
+`0004_beta_operational_report`. Hashes, container addresses, and timestamps are
+intentionally not fixed.
 
 ## 4. Attach to MCP and run the pilot
 

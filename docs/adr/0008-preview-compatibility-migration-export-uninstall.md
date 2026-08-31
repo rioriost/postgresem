@@ -3,6 +3,10 @@
 - Status: Accepted
 - Date: 2026-08-31
 
+M5 operational decisions supersede the preview-only recovery and signing
+status statements below; see
+[ADR 0009](0009-beta-operations-transport-and-evidence.md).
+
 ## Context
 
 M4 publishes a developer-preview contract spanning LSQ v1, Semantic

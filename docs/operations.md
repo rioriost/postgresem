@@ -203,8 +203,8 @@ Never mutate the current published rows or canonical hash to force acceptance.
 
 ## Upgrade order
 
-Only fresh forward migrations `0001` through `0003` and idempotent reruns are
-provided. N-1 upgrade testing is not implemented.
+Forward migrations `0001` through `0004`, idempotent reruns, N-1 execution, and
+N-1-to-current migration are tested.
 
 For a disposable/local preview upgrade:
 
@@ -217,16 +217,17 @@ For a disposable/local preview upgrade:
 7. run model diff/validation, the MCP smoke, and audit checks;
 8. retain the old environment until acceptance.
 
-Do not run a newer binary against an older schema or assume downgrade support.
-There are no down migrations.
+The current binary is tested against the latest N-1 schema only. Do not assume
+older combinations or downgrade support. There are no down migrations.
 
 ## Backup, export, and uninstall boundary
 
-Automated backup/restore, restore validation, N-1 recovery, and a supported
-uninstaller are explicitly **M5 work**. `dev-down` retaining a volume is not a
-backup. `model export` exports only the current published semantic snapshot; it
-does not export audit history, catalog/import state, source data, roles, or
-grants.
+The local reference backup and isolated same-name restore validation are
+documented in [backup and restore](backup-restore.md). Production backup,
+encryption, retention, replication, RPO/RTO, and cutover remain operator-owned.
+`dev-down` retaining a volume is not a backup. `model export` exports only the
+current published semantic snapshot; it does not export audit history,
+catalog/import state, source data, roles, or grants.
 
 Any manual removal of the `semantic` schema, roles, or volume is destructive
 DBA work outside the developer-preview support boundary. Export and back up

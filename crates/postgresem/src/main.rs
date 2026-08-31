@@ -11,6 +11,7 @@ mod doctor;
 mod executor;
 mod mcp;
 mod published_model;
+mod report;
 
 #[derive(Debug, Parser)]
 #[command(name = "postgresem", version, about)]
@@ -44,6 +45,10 @@ enum Commands {
     Query {
         #[command(subcommand)]
         command: QueryCommands,
+    },
+    Report {
+        #[command(subcommand)]
+        command: ReportCommands,
     },
     Snapshot {
         #[command(subcommand)]
@@ -135,6 +140,28 @@ enum McpCommands {
 }
 
 #[derive(Debug, Subcommand)]
+enum ReportCommands {
+    Beta {
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_WRITER_PASSWORD",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_password_env: String,
+        #[arg(long, default_value_t = 24)]
+        window_hours: u32,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum SnapshotCommands {
     Hash { path: PathBuf },
 }
@@ -204,10 +231,28 @@ fn run() -> Result<(), Box<dyn Error>> {
             &audit_database_url_env,
             &db_role_env,
         ),
+        Commands::Report {
+            command:
+                ReportCommands::Beta {
+                    audit_database_url_env,
+                    audit_password_env,
+                    window_hours,
+                },
+        } => beta_report(&audit_database_url_env, &audit_password_env, window_hours),
         Commands::Snapshot {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
     }
+}
+
+fn beta_report(
+    audit_database_url_env: &str,
+    audit_password_env: &str,
+    window_hours: u32,
+) -> Result<(), Box<dyn Error>> {
+    let result = report::beta(audit_database_url_env, audit_password_env, window_hours)?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
 }
 
 fn benchmark_compiler(

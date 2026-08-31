@@ -1,4 +1,6 @@
 .DS_Store
 .env
 target/
-
+backups/
+__pycache__/
+*.py[cod]

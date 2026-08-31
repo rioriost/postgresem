@@ -27,8 +27,11 @@ directly to PostgreSQL would weaken that boundary.
 2. Rollback means restoring a validated pre-upgrade backup into a new database
    or volume and redeploying the previous binary. Down migrations and in-place
    destructive rollback are not supported.
-3. Postgresem backup tooling covers Semantic Schema state and audit records.
-   Source business-data backup, cluster roles, encryption, retention, and
+3. The local reference backup captures the complete disposable pilot database
+   and cluster globals so same-name guarded restore can be tested. It therefore
+   contains source rows, all cluster roles, and password verifiers and must be
+   handled as highly sensitive. It is not a general production backup product.
+   Production source-data backup, cluster roles, encryption, retention, and
    disaster-recovery policy remain the database operator's responsibility.
 4. Restore validation must use a disposable database, apply current
    migrations, verify the published semantic revision, and run a guarded query.
@@ -61,4 +64,3 @@ directly to PostgreSQL would weaken that boundary.
 - M5 can publish implementation evidence, but beta completion remains blocked
   until two non-fixture databases complete four weeks of operation without a
   P0/P1 security or correctness defect.
-

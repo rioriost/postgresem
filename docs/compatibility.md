@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The current release is
-`0.2.0-alpha.1`, before 1.0:
+The project uses Semantic Versioning. The latest published release is
+`0.2.0-alpha.1`; the main branch is developing `0.3.0-beta.1`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -24,8 +24,8 @@ immediately with release-note justification.
 | MCP protocol | `2024-11-05` | initialize returns this version; stdio JSON-RPC only |
 | MCP tool schema | `"1"` | every tool requires this exact version |
 | compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
-| database migrations | `0001`–`0003` | forward-only; applied in filename order; no down migrations |
-| package | `0.2.0-alpha.1` | developer preview |
+| database migrations | `0001`–`0004` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
+| package | `0.3.0-beta.1` | beta development; latest published package is `0.2.0-alpha.1` |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -103,11 +103,12 @@ Migrations are forward-only and recorded in `semantic.schema_migration`.
 Rerunning the current migration runner skips recorded versions. Applied
 migration files must never be edited or reordered.
 
-Only fresh installation and same-version idempotent rerun behavior are
-provided by the current repository. N-1 upgrade/restore tests, down migrations,
-and an expand/contract rollout guarantee are not implemented. Follow the
-[operations upgrade order](operations.md#upgrade-order) and do not assume
-downgrade compatibility.
+The repository tests the current binary against the N-1 schema, upgrades it to
+the current schema, and restores a full fixture backup under the original
+database name before running a guarded query. Down migrations and a general
+expand/contract rollout guarantee are not implemented. Follow
+[backup and restore](backup-restore.md) and do not assume downgrade
+compatibility.
 
 `model export` is the implemented semantic portability boundary. It exports one
 project's current published snapshot, not a full database backup or uninstall
@@ -154,8 +155,8 @@ version must be local or reached through an independently protected channel.
 | multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:a8b4899dbc62a67dc902208d774df8eecde81628d07ad6bccbeece306045cadf` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
-| cryptographic release signatures | not implemented |
-| HTTP/server artifact | not implemented |
+| cryptographic release signatures | keyless signing is configured for future releases; `v0.2.0-alpha.1` is unsigned |
+| MCP HTTP/server artifact | not implemented; the loopback Web demo is a sample adapter over stdio |
 
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
 tags, requires the tag to match the workspace version, builds the four native
@@ -166,9 +167,10 @@ completed successfully and published the
 [`v0.2.0-alpha.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.2.0-alpha.1).
 
 The installer uses HTTPS and verifies SHA-256 equality, and also rejects unsafe
-archive paths and link entry types. Because `SHA256SUMS` is downloaded from the
-same unsigned release and no signing step exists, this is integrity checking,
-not cryptographic publisher authentication.
+archive paths and link entry types. `v0.2.0-alpha.1` downloads its unsigned
+checksum from the same release, so that version provides integrity checking,
+not cryptographic publisher authentication. Future signed releases require the
+workflow identity checks in [release verification](release-verification.md).
 
 The local `gateway:latest` image is built from the current checkout. `latest`
 is not a stable release identifier and must not be treated as a signed
@@ -186,10 +188,10 @@ supply-chain artifact.
 - strict subset of single-fact and safe many-to-one semantics; unsupported
   relationships/metrics fail closed;
 - query row limit and result-byte truncation, with no result pagination;
-- no automated backup/restore, N-1 migration validation, rollback, retention,
-  disaster recovery, or uninstall;
-- release artifacts are unsigned; checksum verification does not authenticate
-  the publisher;
+- no down migrations, production backup retention, RPO/RTO guarantee, disaster
+  recovery service, or uninstall;
+- the current published release is unsigned; future signing is configured but
+  has no published evidence yet;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist

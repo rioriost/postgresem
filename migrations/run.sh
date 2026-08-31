@@ -1,6 +1,24 @@
 #!/bin/sh
 set -eu
 
+maximum_version=${POSTGRESEM_MIGRATION_MAX_VERSION:-}
+maximum_reached=false
+
+if [ -n "$maximum_version" ]; then
+  case "$maximum_version" in
+    [0-9][0-9][0-9][0-9]_[A-Za-z0-9_]*)
+      ;;
+    *)
+      echo "maximum migration version is invalid: $maximum_version" >&2
+      exit 1
+      ;;
+  esac
+  if [ ! -f "/migrations/$maximum_version.sql" ]; then
+    echo "maximum migration was not found: $maximum_version" >&2
+    exit 1
+  fi
+fi
+
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
 CREATE SCHEMA IF NOT EXISTS semantic AUTHORIZATION postgresem_owner;
 CREATE TABLE IF NOT EXISTS semantic.schema_migration (
@@ -24,8 +42,17 @@ SQL
 
   if [ "$applied" = "1" ]; then
     echo "migration $version already applied"
-    continue
+  else
+    psql --no-psqlrc -v ON_ERROR_STOP=1 -f "$migration"
   fi
 
-  psql --no-psqlrc -v ON_ERROR_STOP=1 -f "$migration"
+  if [ -n "$maximum_version" ] && [ "$version" = "$maximum_version" ]; then
+    maximum_reached=true
+    break
+  fi
 done
+
+if [ -n "$maximum_version" ] && [ "$maximum_reached" != true ]; then
+  echo "maximum migration was not reached: $maximum_version" >&2
+  exit 1
+fi
