@@ -5,7 +5,7 @@ doctor:
 
 dev-up:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
-	container-compose up --env-file .env -d db migrate
+	container-compose up --env-file .env -d db migrate seed
 
 dev-down:
 	container-compose down --env-file .env

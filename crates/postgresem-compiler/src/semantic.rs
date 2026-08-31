@@ -132,10 +132,139 @@ pub enum SnapshotHashError {
 }
 
 impl SemanticSnapshot {
-    pub fn calculate_revision_hash(&self) -> Result<String, SnapshotHashError> {
+    #[must_use]
+    pub fn normalized(&self) -> Self {
         let mut canonical = self.clone();
+        canonical.models.sort_by(|left, right| {
+            left.semantic_name
+                .cmp(&right.semantic_name)
+                .then_with(|| left.source.schema.cmp(&right.source.schema))
+                .then_with(|| left.source.relation.cmp(&right.source.relation))
+        });
+        for model in &mut canonical.models {
+            model
+                .fields
+                .sort_by(|left, right| left.semantic_name.cmp(&right.semantic_name));
+            model
+                .metrics
+                .sort_by(|left, right| left.semantic_name.cmp(&right.semantic_name));
+            model.relationships.sort_by(|left, right| {
+                left.semantic_name
+                    .cmp(&right.semantic_name)
+                    .then_with(|| left.target_model.cmp(&right.target_model))
+            });
+        }
+        canonical
+    }
+
+    pub fn calculate_revision_hash(&self) -> Result<String, SnapshotHashError> {
+        let mut canonical = self.normalized();
         canonical.revision_hash.clear();
         let bytes = serde_json::to_vec(&canonical)?;
         Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        Aggregation, Cardinality, DataType, Field, JoinType, Metric, Model, Relation, Relationship,
+        SemanticSnapshot,
+    };
+
+    #[test]
+    fn canonical_hash_sorts_all_semantic_collections() {
+        let model = Model {
+            semantic_name: "z_model".to_owned(),
+            source: Relation {
+                schema: "public".to_owned(),
+                relation: "z_source".to_owned(),
+            },
+            timezone: None,
+            queryable: true,
+            fields: vec![field("z_field"), field("a_field")],
+            metrics: vec![metric("z_metric"), metric("a_metric")],
+            relationships: vec![
+                relationship("z_relationship"),
+                relationship("a_relationship"),
+            ],
+        };
+        let mut reversed = SemanticSnapshot {
+            schema_version: "1".to_owned(),
+            revision_hash: "ignored".to_owned(),
+            models: vec![
+                model,
+                Model {
+                    semantic_name: "a_model".to_owned(),
+                    source: Relation {
+                        schema: "public".to_owned(),
+                        relation: "a_source".to_owned(),
+                    },
+                    timezone: None,
+                    queryable: false,
+                    fields: vec![],
+                    metrics: vec![],
+                    relationships: vec![],
+                },
+            ],
+        };
+        let expected_hash = reversed
+            .calculate_revision_hash()
+            .expect("snapshot is serializable");
+
+        reversed.models.reverse();
+        reversed.models[1].fields.reverse();
+        reversed.models[1].metrics.reverse();
+        reversed.models[1].relationships.reverse();
+
+        assert_eq!(
+            reversed
+                .calculate_revision_hash()
+                .expect("snapshot is serializable"),
+            expected_hash
+        );
+        assert_eq!(reversed.normalized().models[0].semantic_name, "a_model");
+        assert_eq!(
+            reversed.normalized().models[1].fields[0].semantic_name,
+            "a_field"
+        );
+    }
+
+    fn field(semantic_name: &str) -> Field {
+        Field {
+            semantic_name: semantic_name.to_owned(),
+            data_type: DataType::Text,
+            column: semantic_name.to_owned(),
+            relationship: None,
+            time_dimension: false,
+            entity_key: false,
+            visible: true,
+        }
+    }
+
+    fn metric(semantic_name: &str) -> Metric {
+        Metric {
+            semantic_name: semantic_name.to_owned(),
+            data_type: DataType::Integer,
+            aggregation: Aggregation::Count,
+            field: "a_field".to_owned(),
+            filter: None,
+            visible: true,
+        }
+    }
+
+    fn relationship(semantic_name: &str) -> Relationship {
+        Relationship {
+            semantic_name: semantic_name.to_owned(),
+            target_model: "a_model".to_owned(),
+            target: Relation {
+                schema: "public".to_owned(),
+                relation: "a_source".to_owned(),
+            },
+            cardinality: Cardinality::ManyToOne,
+            join_type: JoinType::Left,
+            from_column: "a_model_id".to_owned(),
+            to_column: "id".to_owned(),
+        }
     }
 }

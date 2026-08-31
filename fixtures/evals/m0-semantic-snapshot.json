@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "revision_hash": "sha256:330450c64f978802b1d008c9b046f622f112ec13a85226b1c599e8593eb725c4",
+  "revision_hash": "sha256:04c5fb737eb6031284d2364323f03ed333a5002987a76e7df2d99612a8647b08",
   "models": [
     {
       "semantic_name": "orders",

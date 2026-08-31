@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use postgresem_compiler::{CompilerOptions, SemanticSnapshot, compile_lsq, normalize_lsq};
 
 mod catalog;
+mod published_model;
 
 #[derive(Debug, Parser)]
 #[command(name = "postgresem", version, about)]
@@ -24,6 +25,10 @@ enum Commands {
         command: CatalogCommands,
     },
     Doctor,
+    Model {
+        #[command(subcommand)]
+        command: ModelCommands,
+    },
     Query {
         #[command(subcommand)]
         command: QueryCommands,
@@ -55,6 +60,16 @@ enum QueryCommands {
 }
 
 #[derive(Debug, Subcommand)]
+enum ModelCommands {
+    Export {
+        #[arg(long)]
+        project: String,
+        #[arg(long, default_value = "DATABASE_URL", value_name = "NAME")]
+        database_url_env: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum SnapshotCommands {
     Hash { path: PathBuf },
 }
@@ -75,6 +90,13 @@ fn run() -> Result<(), Box<dyn Error>> {
             command: CatalogCommands::Scan { database_url_env },
         } => scan_catalog(&database_url_env),
         Commands::Doctor => doctor(),
+        Commands::Model {
+            command:
+                ModelCommands::Export {
+                    project,
+                    database_url_env,
+                },
+        } => export_model(&database_url_env, &project),
         Commands::Query {
             command: QueryCommands::Validate { path },
         } => validate_query(&path),
@@ -85,6 +107,12 @@ fn run() -> Result<(), Box<dyn Error>> {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
     }
+}
+
+fn export_model(database_url_env: &str, project: &str) -> Result<(), Box<dyn Error>> {
+    let snapshot = published_model::load_from_env(database_url_env, project)?;
+    println!("{}", serde_json::to_string_pretty(&snapshot)?);
+    Ok(())
 }
 
 fn scan_catalog(database_url_env: &str) -> Result<(), Box<dyn Error>> {
@@ -133,7 +161,7 @@ fn validate_query(path: &PathBuf) -> Result<(), Box<dyn Error>> {
 mod tests {
     use clap::Parser;
 
-    use super::{CatalogCommands, Cli, Commands};
+    use super::{CatalogCommands, Cli, Commands, ModelCommands};
 
     #[test]
     fn catalog_scan_accepts_only_an_environment_variable_name() {
@@ -159,6 +187,68 @@ mod tests {
                 "catalog",
                 "scan",
                 "--database-url",
+                "postgresql://localhost/app",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn model_export_accepts_project_and_only_an_environment_variable_name() {
+        let default_env =
+            Cli::try_parse_from(["postgresem", "model", "export", "--project", "commerce"]);
+        assert!(matches!(
+            default_env,
+            Ok(Cli {
+                command: Commands::Model {
+                    command: ModelCommands::Export {
+                        project,
+                        database_url_env
+                    }
+                }
+            }) if project == "commerce" && database_url_env == "DATABASE_URL"
+        ));
+
+        let parsed = Cli::try_parse_from([
+            "postgresem",
+            "model",
+            "export",
+            "--project",
+            "commerce",
+            "--database-url-env",
+            "POSTGRESEM_MODEL_URL",
+        ]);
+        assert!(matches!(
+            parsed,
+            Ok(Cli {
+                command: Commands::Model {
+                    command: ModelCommands::Export {
+                        project,
+                        database_url_env
+                    }
+                }
+            }) if project == "commerce" && database_url_env == "POSTGRESEM_MODEL_URL"
+        ));
+
+        assert!(
+            Cli::try_parse_from([
+                "postgresem",
+                "model",
+                "export",
+                "--project",
+                "commerce",
+                "--database-url",
+                "postgresql://localhost/app",
+            ])
+            .is_err()
+        );
+        assert!(
+            Cli::try_parse_from([
+                "postgresem",
+                "model",
+                "export",
+                "--project",
+                "commerce",
                 "postgresql://localhost/app",
             ])
             .is_err()

@@ -9,7 +9,7 @@ DECLARE
   v_model_id uuid := '00000000-0000-0000-0000-000000000003';
 BEGIN
   INSERT INTO semantic.project (project_id, semantic_name, display_name)
-  VALUES (v_project_id, 'commerce', 'Commerce');
+  VALUES (v_project_id, 'lifecycle_test', 'Lifecycle test');
 
   INSERT INTO semantic.revision (
     revision_id,
