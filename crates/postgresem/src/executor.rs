@@ -5,7 +5,7 @@ use std::{
 };
 
 use fallible_iterator::FallibleIterator;
-use postgres::{Client, IsolationLevel, NoTls, Transaction, error::SqlState, types::ToSql};
+use postgres::{Client, Config, IsolationLevel, NoTls, Transaction, error::SqlState, types::ToSql};
 use postgresem_compiler::{
     COMPILER_SEMANTIC_VERSION, CompiledParameter, CompiledQuery, CompilerOptions, DataType,
     Lineage, Literal, NormalizedLsq, OutputColumn, SemanticSnapshot, compile_lsq, normalize_lsq,
@@ -21,17 +21,27 @@ const DEFAULT_MAX_RESULT_BYTES: usize = 1_048_576;
 const DEFAULT_STATEMENT_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_LOCK_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 5_000;
+const RESULT_TRUNCATION_WARNING: &str =
+    "result is incomplete because it exceeded the byte limit; narrow the query";
 
 pub struct ExecutorConfig {
     database_url: String,
     database_url_variable: String,
+    database_password: Option<String>,
     audit_database_url: String,
     audit_database_url_variable: String,
+    audit_database_password: Option<String>,
     database_role: String,
     max_result_bytes: usize,
     statement_timeout: Duration,
     lock_timeout: Duration,
     idle_transaction_timeout: Duration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionContext {
+    principal_subject: String,
+    config_profile: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +68,8 @@ pub enum ExecuteError {
     InvalidIntegerConfiguration { variable: &'static str },
     #[error("configured database role is not a safe unquoted PostgreSQL identifier")]
     InvalidDatabaseRole,
+    #[error("execution context must have a non-empty principal subject and config profile")]
+    InvalidExecutionContext,
     #[error("failed to connect using runtime URL environment variable {0}")]
     RuntimeConnect(String),
     #[error("failed to connect using audit URL environment variable {0}")]
@@ -106,11 +118,32 @@ impl ExecutorConfig {
         audit_database_url_variable: &str,
         database_role_variable: &str,
     ) -> Result<Self, ExecuteError> {
-        for variable in [
+        Self::from_environment_with_passwords(
             database_url_variable,
+            None,
             audit_database_url_variable,
+            None,
             database_role_variable,
-        ] {
+        )
+    }
+
+    pub fn from_environment_with_passwords(
+        database_url_variable: &str,
+        database_password_variable: Option<&str>,
+        audit_database_url_variable: &str,
+        audit_database_password_variable: Option<&str>,
+        database_role_variable: &str,
+    ) -> Result<Self, ExecuteError> {
+        for variable in [
+            Some(database_url_variable),
+            database_password_variable,
+            Some(audit_database_url_variable),
+            audit_database_password_variable,
+            Some(database_role_variable),
+        ]
+        .into_iter()
+        .flatten()
+        {
             if !valid_environment_variable_name(variable) {
                 return Err(ExecuteError::InvalidEnvironmentVariableName(
                     variable.to_owned(),
@@ -119,7 +152,13 @@ impl ExecutorConfig {
         }
 
         let database_url = required_environment(database_url_variable)?;
+        let database_password = database_password_variable
+            .map(required_environment)
+            .transpose()?;
         let audit_database_url = required_environment(audit_database_url_variable)?;
+        let audit_database_password = audit_database_password_variable
+            .map(required_environment)
+            .transpose()?;
         let database_role = required_environment(database_role_variable)?;
         if !valid_database_role(&database_role) {
             return Err(ExecuteError::InvalidDatabaseRole);
@@ -128,8 +167,10 @@ impl ExecutorConfig {
         Ok(Self {
             database_url,
             database_url_variable: database_url_variable.to_owned(),
+            database_password,
             audit_database_url,
             audit_database_url_variable: audit_database_url_variable.to_owned(),
+            audit_database_password,
             database_role,
             max_result_bytes: positive_integer_environment(
                 "POSTGRESEM_MAX_RESULT_BYTES",
@@ -149,15 +190,58 @@ impl ExecutorConfig {
             )?),
         })
     }
+
+    #[must_use]
+    pub fn database_role(&self) -> &str {
+        &self.database_role
+    }
+
+    #[must_use]
+    pub const fn max_result_bytes(&self) -> usize {
+        self.max_result_bytes
+    }
+
+    pub(crate) fn connect_runtime(&self) -> Result<Client, ExecuteError> {
+        connect(
+            &self.database_url,
+            self.database_password.as_deref(),
+            || ExecuteError::RuntimeConnect(self.database_url_variable.clone()),
+        )
+    }
+
+    fn connect_audit(&self) -> Result<Client, ExecuteError> {
+        connect(
+            &self.audit_database_url,
+            self.audit_database_password.as_deref(),
+            || ExecuteError::AuditConnect(self.audit_database_url_variable.clone()),
+        )
+    }
+}
+
+impl ExecutionContext {
+    pub fn new(
+        principal_subject: impl Into<String>,
+        config_profile: impl Into<String>,
+    ) -> Result<Self, ExecuteError> {
+        let principal_subject = principal_subject.into();
+        let config_profile = config_profile.into();
+        if principal_subject.trim().is_empty() || config_profile.trim().is_empty() {
+            return Err(ExecuteError::InvalidExecutionContext);
+        }
+        Ok(Self {
+            principal_subject,
+            config_profile,
+        })
+    }
 }
 
 pub fn execute(
     input: &[u8],
     project: &str,
     config: &ExecutorConfig,
+    context: &ExecutionContext,
 ) -> Result<QueryResult, ExecuteError> {
-    let mut runtime = Client::connect(&config.database_url, NoTls)
-        .map_err(|_| ExecuteError::RuntimeConnect(config.database_url_variable.clone()))?;
+    let mut runtime = config.connect_runtime()?;
     let published = published_model::load_published(&mut runtime, project)?;
 
     let validation_started = Instant::now();
@@ -168,14 +252,14 @@ pub fn execute(
     let compiled = compile_lsq(&normalized, &published.snapshot, CompilerOptions::default())?;
     let compile_duration = compile_started.elapsed();
 
-    let mut audit = Client::connect(&config.audit_database_url, NoTls)
-        .map_err(|_| ExecuteError::AuditConnect(config.audit_database_url_variable.clone()))?;
+    let mut audit = config.connect_audit()?;
     let query_id = write_started_audit(
         &mut audit,
         &published,
         &normalized,
         &compiled,
         config,
+        context,
         validation_duration,
         compile_duration,
     )?;
@@ -203,9 +287,10 @@ pub fn execute(
                 rows: execution.rows,
                 truncated: execution.truncated,
                 lineage: compiled.lineage,
-                warnings: vec![],
+                warnings: result_warnings(execution.truncated),
             })
         }
+
         Err(error) => {
             let status = if matches!(error, ExecuteError::SourceCancelled(_)) {
                 "cancelled"
@@ -226,6 +311,14 @@ pub fn execute(
             )?;
             Err(error)
         }
+    }
+}
+
+fn result_warnings(truncated: bool) -> Vec<String> {
+    if truncated {
+        vec![RESULT_TRUNCATION_WARNING.to_owned()]
+    } else {
+        vec![]
     }
 }
 
@@ -428,12 +521,14 @@ fn parameter_text(parameter: &CompiledParameter) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_started_audit(
     audit: &mut Client,
     published: &PublishedModel,
     normalized: &NormalizedLsq,
     compiled: &CompiledQuery,
     config: &ExecutorConfig,
+    context: &ExecutionContext,
     validation_duration: Duration,
     compile_duration: Duration,
 ) -> Result<String, ExecuteError> {
@@ -451,7 +546,7 @@ fn write_started_audit(
         "database_role": config.database_role,
         "project": published.project,
     });
-    let principal_hash = hash(&format!("database-role:{}", config.database_role));
+    let principal_hash = hash(&context.principal_subject);
     let validation_ms = duration_milliseconds(validation_duration);
     let compile_ms = duration_milliseconds(compile_duration);
     let row = audit
@@ -469,7 +564,7 @@ fn write_started_audit(
                 &published.revision_id,
                 &published.snapshot.revision_hash,
                 &COMPILER_SEMANTIC_VERSION,
-                &"cli",
+                &context.config_profile,
                 &compiled.sql_hash,
                 &compiled.query_hash,
                 &parameter_types,
@@ -554,6 +649,23 @@ fn required_environment(variable: &str) -> Result<String, ExecuteError> {
     })
 }
 
+fn connect(
+    conninfo: &str,
+    password: Option<&str>,
+    error: impl Fn() -> ExecuteError,
+) -> Result<Client, ExecuteError> {
+    let config = connection_config(conninfo, password).map_err(|_| error())?;
+    config.connect(NoTls).map_err(|_| error())
+}
+
+fn connection_config(conninfo: &str, password: Option<&str>) -> Result<Config, postgres::Error> {
+    let mut config = conninfo.parse::<Config>()?;
+    if let Some(password) = password {
+        config.password(password);
+    }
+    Ok(config)
+}
+
 fn positive_integer_environment<T>(variable: &'static str, default: T) -> Result<T, ExecuteError>
 where
     T: std::str::FromStr + PartialOrd + From<u8> + Copy,
@@ -597,7 +709,11 @@ fn hash(value: &str) -> String {
 mod tests {
     use postgresem_compiler::{CompiledQuery, DataType, Lineage, OutputColumn};
 
-    use super::{result_wrapper_sql, valid_database_role, valid_environment_variable_name};
+    use super::{
+        ExecuteError, ExecutionContext, ExecutorConfig, RESULT_TRUNCATION_WARNING,
+        connection_config, result_warnings, result_wrapper_sql, valid_database_role,
+        valid_environment_variable_name,
+    };
 
     #[test]
     fn configuration_names_and_roles_are_strict_identifiers() {
@@ -608,6 +724,33 @@ mod tests {
         assert!(!valid_environment_variable_name("ROLE-NAME"));
         assert!(valid_database_role("postgresem_analyst"));
         assert!(!valid_database_role("analyst\"; RESET ROLE; --"));
+        assert!(matches!(
+            ExecutorConfig::from_environment_with_passwords(
+                "DATABASE_URL",
+                Some("INVALID-NAME"),
+                "POSTGRESEM_AUDIT_DATABASE_URL",
+                Some("POSTGRESEM_AUDIT_WRITER_PASSWORD"),
+                "POSTGRESEM_DB_ROLE",
+            ),
+            Err(ExecuteError::InvalidEnvironmentVariableName(variable))
+                if variable == "INVALID-NAME"
+        ));
+    }
+
+    #[test]
+    fn connection_config_applies_passwords_without_conninfo_quoting() {
+        let special_password = br#"quote' and backslash\ password"#;
+        let configured = connection_config(
+            "host=localhost dbname=postgresem user=runtime",
+            Some(std::str::from_utf8(special_password).expect("ASCII password")),
+        )
+        .expect("passwordless conninfo parses");
+        assert_eq!(configured.get_password(), Some(special_password.as_slice()));
+
+        let complete_url =
+            connection_config("postgresql://runtime:embedded@localhost/postgresem", None)
+                .expect("complete URL parses");
+        assert_eq!(complete_url.get_password(), Some(b"embedded".as_slice()));
     }
 
     #[test]
@@ -645,5 +788,18 @@ mod tests {
                 ") AS compiled_result"
             )
         );
+    }
+
+    #[test]
+    fn execution_context_requires_fixed_non_empty_identity_values() {
+        assert!(ExecutionContext::new("mcp:stdio", "mcp-stdio").is_ok());
+        assert!(ExecutionContext::new("", "mcp-stdio").is_err());
+        assert!(ExecutionContext::new("mcp:stdio", " ").is_err());
+    }
+
+    #[test]
+    fn byte_truncation_has_a_stable_incomplete_result_warning() {
+        assert!(result_warnings(false).is_empty());
+        assert_eq!(result_warnings(true), [RESULT_TRUNCATION_WARNING]);
     }
 }

@@ -3,6 +3,7 @@ name: postgresem
 services:
   db:
     image: postgres:18
+    networks: [postgresem]
     environment:
       POSTGRES_DB: postgresem_dev
       POSTGRES_USER: postgres
@@ -22,6 +23,7 @@ services:
 
   migrate:
     image: postgres:18
+    networks: [postgresem]
     depends_on:
       db:
         condition: service_healthy
@@ -37,6 +39,7 @@ services:
 
   seed:
     image: postgres:18
+    networks: [postgresem]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -50,8 +53,36 @@ services:
       - ./fixtures/semantic:/semantic:ro
     entrypoint: ["/bin/sh", "/semantic/run.sh"]
 
+  gateway:
+    build:
+      context: .
+      dockerfile: Containerfile
+    networks: [postgresem]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      MCP_RUNTIME_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_runtime"
+      MCP_AUDIT_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_audit_writer"
+      POSTGRESEM_RUNTIME_PASSWORD: ${POSTGRESEM_RUNTIME_PASSWORD}
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: ${POSTGRESEM_AUDIT_WRITER_PASSWORD}
+      POSTGRESEM_DB_ROLE: postgresem_analyst
+      POSTGRESEM_MAX_RESULT_BYTES: "1048576"
+      POSTGRESEM_STATEMENT_TIMEOUT_MS: "30000"
+      POSTGRESEM_LOCK_TIMEOUT_MS: "5000"
+      POSTGRESEM_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS: "5000"
+      POSTGRESEM_MCP_PROJECT: commerce
+      POSTGRESEM_MCP_RUNTIME_URL_ENV: MCP_RUNTIME_DATABASE_URL
+      POSTGRESEM_MCP_RUNTIME_PASSWORD_ENV: POSTGRESEM_RUNTIME_PASSWORD
+      POSTGRESEM_MCP_AUDIT_URL_ENV: MCP_AUDIT_DATABASE_URL
+      POSTGRESEM_MCP_AUDIT_PASSWORD_ENV: POSTGRESEM_AUDIT_WRITER_PASSWORD
+      POSTGRESEM_MCP_DB_ROLE_ENV: POSTGRESEM_DB_ROLE
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep infinity"]
+
   integration-test:
     image: postgres:18
+    networks: [postgresem]
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -69,6 +100,7 @@ services:
     build:
       context: .
       dockerfile: IntegrationContainerfile
+    networks: [postgresem]
     depends_on:
       seed:
         condition: service_completed_successfully
@@ -89,5 +121,39 @@ services:
       - ./tests/integration:/tests:ro
     entrypoint: ["/bin/sh", "/tests/execution.sh"]
 
+  mcp-test:
+    build:
+      context: .
+      dockerfile: IntegrationContainerfile
+    networks: [postgresem]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: postgresem_dev
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRESEM_RUNTIME_PASSWORD: ${POSTGRESEM_RUNTIME_PASSWORD}
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: ${POSTGRESEM_AUDIT_WRITER_PASSWORD}
+      POSTGRESEM_MCP_PROJECT: commerce
+      POSTGRESEM_MCP_RUNTIME_URL_ENV: MCP_RUNTIME_DATABASE_URL
+      POSTGRESEM_MCP_RUNTIME_PASSWORD_ENV: POSTGRESEM_RUNTIME_PASSWORD
+      POSTGRESEM_MCP_AUDIT_URL_ENV: MCP_AUDIT_DATABASE_URL
+      POSTGRESEM_MCP_AUDIT_PASSWORD_ENV: POSTGRESEM_AUDIT_WRITER_PASSWORD
+      POSTGRESEM_MCP_DB_ROLE_ENV: MCP_MAPPED_DB_ROLE
+      MCP_MAPPED_DB_ROLE: postgresem_analyst
+      POSTGRESEM_MAX_RESULT_BYTES: "1048576"
+      POSTGRESEM_STATEMENT_TIMEOUT_MS: "30000"
+      POSTGRESEM_LOCK_TIMEOUT_MS: "5000"
+      POSTGRESEM_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS: "5000"
+    volumes:
+      - ./tests/integration:/tests:ro
+    entrypoint: ["python3", "/tests/mcp.py"]
+
 volumes:
   postgres-data:
+
+networks:
+  postgresem:

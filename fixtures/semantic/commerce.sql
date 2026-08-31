@@ -7,7 +7,7 @@ DO $$
 DECLARE
   v_project_id uuid := '10000000-0000-0000-0000-000000000001';
   v_revision_id uuid := '10000000-0000-0000-0000-000000000002';
-  v_hash text := 'sha256:b88fb0ed27ee611f69fa81deb28167a57e720606bcd26ccb224d24715fb90bbd';
+  v_hash text := 'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6';
 BEGIN
   INSERT INTO semantic.project (project_id, semantic_name, display_name, description)
   VALUES (
@@ -87,6 +87,7 @@ BEGIN
     ('10000000-0000-0000-0000-000000000103', v_revision_id, '10000000-0000-0000-0000-000000000010', 'ordered_at', 'Ordered at', 'time_dimension', 'timestamp_tz', 'ordered_at', false, false),
     ('10000000-0000-0000-0000-000000000104', v_revision_id, '10000000-0000-0000-0000-000000000010', 'status', 'Status', 'dimension', 'text', 'status', false, false),
     ('10000000-0000-0000-0000-000000000105', v_revision_id, '10000000-0000-0000-0000-000000000010', 'amount', 'Amount', 'dimension', 'numeric', 'amount', false, false),
+    ('10000000-0000-0000-0000-000000000108', v_revision_id, '10000000-0000-0000-0000-000000000010', 'internal_amount', 'Internal amount', 'dimension', 'numeric', 'amount', false, true),
     ('10000000-0000-0000-0000-000000000111', v_revision_id, '10000000-0000-0000-0000-000000000011', 'customer_id', 'Customer ID', 'entity_key', 'integer', 'customer_id', false, false),
     ('10000000-0000-0000-0000-000000000112', v_revision_id, '10000000-0000-0000-0000-000000000011', 'region', 'Region', 'dimension', 'text', 'region', false, false),
     ('10000000-0000-0000-0000-000000000113', v_revision_id, '10000000-0000-0000-0000-000000000011', 'credit_limit', 'Credit limit', 'dimension', 'numeric', 'credit_limit', false, false),
@@ -137,6 +138,8 @@ BEGIN
      '{"version":"1","kind":"aggregation","aggregation":"avg","field":"amount"}', '{"field":"status","value":{"type":"text","value":"paid"}}', 'non_additive', false),
     ('10000000-0000-0000-0000-000000000304', v_revision_id, '10000000-0000-0000-0000-000000000010', 'distinct_orders', 'Distinct orders', 'integer',
      '{"version":"1","kind":"aggregation","aggregation":"count_distinct","field":"order_id"}', NULL, 'non_additive', false),
+    ('10000000-0000-0000-0000-000000000305', v_revision_id, '10000000-0000-0000-0000-000000000010', 'internal_revenue', 'Internal revenue', 'numeric',
+     '{"version":"1","kind":"aggregation","aggregation":"sum","field":"amount"}', NULL, 'additive', true),
     ('10000000-0000-0000-0000-000000000311', v_revision_id, '10000000-0000-0000-0000-000000000013', 'order_count', 'Order count', 'integer',
      '{"version":"1","kind":"aggregation","aggregation":"count","field":"order_id"}', NULL, 'additive', false),
     ('10000000-0000-0000-0000-000000000312', v_revision_id, '10000000-0000-0000-0000-000000000013', 'revenue', 'Revenue', 'numeric',

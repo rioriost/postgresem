@@ -13,7 +13,7 @@ BEGIN
     AND revision.status = 'published'
     AND revision.schema_version = '1'
     AND revision.canonical_hash =
-      'sha256:b88fb0ed27ee611f69fa81deb28167a57e720606bcd26ccb224d24715fb90bbd';
+      'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6';
 
   IF (
     SELECT count(*)
@@ -27,10 +27,10 @@ BEGIN
   IF (SELECT count(*) FROM semantic.model WHERE revision_id = v_revision_id) <> 4 THEN
     RAISE EXCEPTION 'semantic seed model count is incorrect';
   END IF;
-  IF (SELECT count(*) FROM semantic.field WHERE revision_id = v_revision_id) <> 19 THEN
+  IF (SELECT count(*) FROM semantic.field WHERE revision_id = v_revision_id) <> 20 THEN
     RAISE EXCEPTION 'semantic seed field count is incorrect';
   END IF;
-  IF (SELECT count(*) FROM semantic.metric WHERE revision_id = v_revision_id) <> 8 THEN
+  IF (SELECT count(*) FROM semantic.metric WHERE revision_id = v_revision_id) <> 9 THEN
     RAISE EXCEPTION 'semantic seed metric count is incorrect';
   END IF;
   IF (SELECT count(*) FROM semantic.relationship WHERE revision_id = v_revision_id) <> 1 THEN
@@ -50,6 +50,17 @@ BEGIN
       AND source_relationship_id IS NOT NULL
   ) <> 2 THEN
     RAISE EXCEPTION 'semantic seed declared relationship field bindings are incorrect';
+  END IF;
+  IF (
+    SELECT count(*)
+    FROM semantic.field
+    WHERE revision_id = v_revision_id AND hidden
+  ) <> 1 OR (
+    SELECT count(*)
+    FROM semantic.metric
+    WHERE revision_id = v_revision_id AND hidden
+  ) <> 1 THEN
+    RAISE EXCEPTION 'semantic seed hidden object state is incorrect';
   END IF;
   IF EXISTS (
     SELECT 1

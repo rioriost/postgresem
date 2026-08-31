@@ -10,6 +10,7 @@ use postgresem_compiler::{CompilerOptions, SemanticSnapshot, compile_lsq, normal
 
 mod catalog;
 mod executor;
+mod mcp;
 mod published_model;
 
 #[derive(Debug, Parser)]
@@ -29,6 +30,10 @@ enum Commands {
     Model {
         #[command(subcommand)]
         command: ModelCommands,
+    },
+    Mcp {
+        #[command(subcommand)]
+        command: McpCommands,
     },
     Query {
         #[command(subcommand)]
@@ -97,6 +102,11 @@ enum ModelCommands {
 }
 
 #[derive(Debug, Subcommand)]
+enum McpCommands {
+    Serve,
+}
+
+#[derive(Debug, Subcommand)]
 enum SnapshotCommands {
     Hash { path: PathBuf },
 }
@@ -124,6 +134,9 @@ fn run() -> Result<(), Box<dyn Error>> {
                     database_url_env,
                 },
         } => export_model(&database_url_env, &project),
+        Commands::Mcp {
+            command: McpCommands::Serve,
+        } => mcp::serve().map_err(Into::into),
         Commands::Query {
             command: QueryCommands::Validate { path },
         } => validate_query(&path),
@@ -164,7 +177,11 @@ fn execute_query(
         audit_database_url_env,
         db_role_env,
     )?;
-    let result = executor::execute(&fs::read(path)?, project, &config)?;
+    let context = executor::ExecutionContext::new(
+        format!("database-role:{}", config.database_role()),
+        "cli",
+    )?;
+    let result = executor::execute(&fs::read(path)?, project, &config, &context)?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }
@@ -232,7 +249,7 @@ fn parse_environment_variable_name(value: &str) -> Result<String, String> {
 mod tests {
     use clap::Parser;
 
-    use super::{CatalogCommands, Cli, Commands, ModelCommands, QueryCommands};
+    use super::{CatalogCommands, Cli, Commands, McpCommands, ModelCommands, QueryCommands};
 
     #[test]
     fn catalog_scan_accepts_only_an_environment_variable_name() {
@@ -397,5 +414,28 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn mcp_serve_has_no_request_selected_configuration() {
+        assert!(matches!(
+            Cli::try_parse_from(["postgresem", "mcp", "serve"]),
+            Ok(Cli {
+                command: Commands::Mcp {
+                    command: McpCommands::Serve
+                }
+            })
+        ));
+        for forbidden in [
+            "--project",
+            "--database-url-env",
+            "--audit-database-url-env",
+            "--db-role-env",
+            "--principal",
+        ] {
+            assert!(
+                Cli::try_parse_from(["postgresem", "mcp", "serve", forbidden, "value"]).is_err()
+            );
+        }
     }
 }
