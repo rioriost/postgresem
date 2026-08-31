@@ -6,9 +6,8 @@ resolves them against an immutable published semantic revision, and executes
 deterministic parameterized `SELECT` queries through a guarded PostgreSQL
 boundary.
 
-The latest published release is **0.2.0-alpha.1 developer preview**. The main
-branch is developing **0.3.0-beta.1**. Both are suitable for local evaluation
-and read-only pilots, not production deployment.
+The latest published release is **0.3.0-beta.1**. It is suitable for local
+evaluation and governed read-only pilots, not production deployment.
 
 ## Start here
 
@@ -78,10 +77,10 @@ and unknown semantic objects receive the same public “not available” errors.
   is the cancellation boundary.
 - N-1 and same-name restore paths are fixture-tested, but production backup,
   RPO/RTO, disaster recovery, and down migrations remain operator-owned.
-- Future beta releases are configured for keyless signing; the published
-  `v0.2.0-alpha.1` assets remain unsigned.
+- `v0.3.0-beta.1` checksums and immutable container image digest are keyless
+  signed by the GitHub release workflow.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
-  and 18 pass the Docker CI matrix. See the
+  and 18 pass the Docker CI migration, integration, and recovery matrix. See the
   [compatibility matrix](docs/compatibility.md) for the exact boundary.
 
 ## Packaging status
@@ -92,12 +91,12 @@ provenance. [`scripts/install.sh`](scripts/install.sh) downloads a matching
 archive and verifies its SHA-256 checksum before installation.
 
 The
-[`v0.2.0-alpha.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.2.0-alpha.1)
-contains Linux and macOS archives for amd64 and arm64 plus `SHA256SUMS`.
-The public image is `ghcr.io/rioriost/postgresem:0.2.0-alpha.1`. The published
-preview is unsigned; a checksum verifies integrity against the downloaded
-checksum file, not publisher authenticity. Future beta releases are configured
-for GitHub OIDC keyless signing. See the
+[`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1)
+contains Linux and macOS archives for amd64 and arm64, `SHA256SUMS`, and its
+Sigstore signature and certificate. The public image is
+`ghcr.io/rioriost/postgresem:0.3.0-beta.1`. The checksum and immutable image
+digest are GitHub OIDC keyless-signed; verification must constrain the expected
+workflow identity and issuer. See the
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
 
 ## Development

@@ -1,9 +1,10 @@
 # Release verification
 
-`v0.2.0-alpha.1` predates signing and is checksum-only. The M5 release workflow
-is configured to add keyless Sigstore signatures to future releases.
+`v0.2.0-alpha.1` predates signing and is checksum-only. `v0.3.0-beta.1` is the
+first release with keyless Sigstore signatures for its checksums and immutable
+container image digest.
 
-Future release assets include `SHA256SUMS`, `SHA256SUMS.sig`, and
+Signed release assets include `SHA256SUMS`, `SHA256SUMS.sig`, and
 `SHA256SUMS.pem`. Verify them with Cosign:
 
 ```sh
@@ -11,24 +12,27 @@ cosign verify-blob \
   --certificate SHA256SUMS.pem \
   --signature SHA256SUMS.sig \
   --certificate-identity-regexp \
-    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v' \
+    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v0\.3\.0-beta\.1$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   SHA256SUMS
 ```
 
 Then verify the selected archive against `SHA256SUMS`.
 
-Verify a future signed image by immutable digest:
+Verify `v0.3.0-beta.1` by immutable image digest:
 
 ```sh
 cosign verify \
   --certificate-identity-regexp \
-    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v' \
+    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v0\.3\.0-beta\.1$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/rioriost/postgresem@sha256:<digest>
+  ghcr.io/rioriost/postgresem@sha256:b2f67b4a8da954b129b93a47641a55810ce36772d3efc6960a39bdaaad7a282d
 ```
 
 The certificate identity and OIDC issuer checks are required. A signature
 without an expected workflow identity does not establish the intended
-publisher.
+publisher. Substitute the exact expected tag when verifying another release.
 
+These commands were exercised against the published beta assets. The checksum
+certificate matched the release workflow tag identity, and one valid image
+signature was found in the transparency log.

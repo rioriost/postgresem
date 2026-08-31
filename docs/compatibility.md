@@ -149,29 +149,29 @@ version must be local or reached through an independently protected channel.
 | Apple Container 1.0.0 + `container-compose` 1.1.0 on macOS arm64 | supported quickstart path |
 | locally built `gateway:latest` OCI image | supported by `make dev-up`; Linux arm64 on the documented M4 path |
 | Docker/Docker Compose | doctor can detect it, but the Make targets invoke `container-compose`; not the documented M4 path |
-| native binary archives | `v0.2.0-alpha.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
-| `SHA256SUMS` | published with `v0.2.0-alpha.1` |
-| `scripts/install.sh` | supports macOS/Linux amd64/arm64, verifies `SHA256SUMS`, and was exercised against the published macOS arm64 archive |
-| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.2.0-alpha.1` |
-| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:a8b4899dbc62a67dc902208d774df8eecde81628d07ad6bccbeece306045cadf` |
+| native binary archives | `v0.3.0-beta.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
+| `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
+| `scripts/install.sh` | supports macOS/Linux amd64/arm64, verifies `SHA256SUMS`, and was exercised against the published `v0.3.0-beta.1` macOS arm64 archive |
+| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.3.0-beta.1` |
+| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:b2f67b4a8da954b129b93a47641a55810ce36772d3efc6960a39bdaaad7a282d` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
-| cryptographic release signatures | keyless signing is configured for future releases; `v0.2.0-alpha.1` is unsigned |
+| cryptographic release signatures | `v0.3.0-beta.1` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
 | MCP HTTP/server artifact | not implemented; the loopback Web demo is a sample adapter over stdio |
 
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
 tags, requires the tag to match the workspace version, builds the four native
 archives, generates `SHA256SUMS`, publishes the multi-architecture image, then
 creates a GitHub release.
-[Release run 33390223411](https://github.com/rioriost/postgresem/actions/runs/33390223411)
+[Release run 33399332825](https://github.com/rioriost/postgresem/actions/runs/33399332825)
 completed successfully and published the
-[`v0.2.0-alpha.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.2.0-alpha.1).
+[`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1).
 
 The installer uses HTTPS and verifies SHA-256 equality, and also rejects unsafe
-archive paths and link entry types. `v0.2.0-alpha.1` downloads its unsigned
-checksum from the same release, so that version provides integrity checking,
-not cryptographic publisher authentication. Future signed releases require the
-workflow identity checks in [release verification](release-verification.md).
+archive paths and link entry types. `v0.3.0-beta.1` publishes a signed checksum;
+publisher authentication requires the workflow identity checks in
+[release verification](release-verification.md), because the installer itself
+does not invoke Cosign.
 
 The local `gateway:latest` image is built from the current checkout. `latest`
 is not a stable release identifier and must not be treated as a signed
