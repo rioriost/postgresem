@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::{
     Aggregation, Cardinality, DataType, Field, Filter, JoinType, Literal, Metric, Model,
-    NormalizedLsq, OrderBy, Relationship, SemanticSnapshot, SortDirection, TimeGrain,
+    NormalizedLsq, OrderBy, Relationship, SemanticSnapshot, SortDirection, TimeGrain, hash::sha256,
 };
 
 pub const COMPILER_SEMANTIC_VERSION: &str = "0.1.0";
@@ -946,7 +945,7 @@ fn is_sha256(value: &str) -> bool {
 }
 
 fn hash(value: &str) -> String {
-    format!("sha256:{:x}", Sha256::digest(value.as_bytes()))
+    sha256(value)
 }
 
 fn expected_metric_type(aggregation: Aggregation, field_type: DataType) -> DataType {

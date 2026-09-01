@@ -10,6 +10,7 @@ mod catalog;
 mod database;
 mod doctor;
 mod executor;
+mod hash;
 mod mcp;
 mod published_model;
 mod report;

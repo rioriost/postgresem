@@ -1,5 +1,6 @@
 mod compiler;
 mod diff;
+mod hash;
 mod lsq;
 mod semantic;
 

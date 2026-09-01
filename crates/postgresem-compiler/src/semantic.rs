@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::Literal;
+use crate::{Literal, hash::sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -161,7 +160,7 @@ impl SemanticSnapshot {
         let mut canonical = self.normalized();
         canonical.revision_hash.clear();
         let bytes = serde_json::to_vec(&canonical)?;
-        Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
+        Ok(sha256(bytes))
     }
 }
 

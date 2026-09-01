@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+use crate::hash::sha256;
 
 const LSQ_SCHEMA_VERSION: &str = "1";
 const MAX_LIMIT: u32 = 10_000;
@@ -155,7 +156,7 @@ pub fn normalize_lsq(input: &[u8]) -> Result<NormalizedLsq, LsqError> {
     validate_query(&query)?;
 
     let canonical_json = serde_json::to_string(&query)?;
-    let hash = format!("sha256:{:x}", Sha256::digest(canonical_json.as_bytes()));
+    let hash = sha256(&canonical_json);
 
     Ok(NormalizedLsq {
         query,
