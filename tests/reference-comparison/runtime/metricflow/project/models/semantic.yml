@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: orders
+    description: Commerce orders used by the M7 reference comparison.
+  - name: metricflow_time_spine
+    description: Daily time spine required by MetricFlow.
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        granularity: day
+
+semantic_models:
+  - name: orders
+    model: ref('orders')
+    defaults:
+      agg_time_dimension: ordered_at
+    entities:
+      - name: order
+        type: primary
+        expr: order_id
+    dimensions:
+      - name: ordered_at
+        type: time
+        type_params:
+          time_granularity: day
+      - name: status
+        type: categorical
+    measures:
+      - name: total_revenue
+        agg: sum
+        expr: amount
+
+metrics:
+  - name: total_revenue
+    label: Total revenue
+    type: simple
+    type_params:
+      measure: total_revenue

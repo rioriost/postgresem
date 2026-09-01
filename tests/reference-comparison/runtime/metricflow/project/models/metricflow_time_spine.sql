@@ -1,0 +1,2 @@
+select date_day
+from commerce.metricflow_time_spine

@@ -1,0 +1,5 @@
+name: postgresem_reference
+version: "1.0"
+config-version: 2
+profile: postgresem_reference
+model-paths: ["models"]

@@ -39,10 +39,24 @@ jq -n \
 chmod 600 "$connection_file"
 
 wren() {
-  uvx --quiet --python 3.12 --from 'wrenai[postgres]==0.13.3' wren "$@"
+  uvx \
+    --quiet \
+    --python 3.12 \
+    --from 'wrenai[postgres]==0.13.3' \
+    --with 'wren-core-py==0.7.5' \
+    wren "$@"
 }
 
 version="$(wren --version)"
+engine_version="$(
+  uv run \
+    --quiet \
+    --isolated \
+    --python 3.12 \
+    --with 'wrenai[postgres]==0.13.3' \
+    --with 'wren-core-py==0.7.5' \
+    python -c 'from importlib.metadata import version; print(version("wren-core-py"))'
+)"
 wren context validate --path "$project" >/dev/null
 wren context build --path "$project" --output "$mdl_file" >/dev/null
 wren query \
@@ -63,6 +77,7 @@ fi
 jq -n \
   --arg engine "wren-ai" \
   --arg version "$version" \
+  --arg engine_version "$engine_version" \
   --arg task "commerce-total-revenue" \
   --arg expected "$expected" \
   --arg actual "$actual" \
@@ -70,6 +85,7 @@ jq -n \
     schema_version: "1",
     engine: $engine,
     version: $version,
+    dependencies: {"wren-core-py": $engine_version},
     scope: "oss",
     task: $task,
     expected: {total_revenue: $expected},
