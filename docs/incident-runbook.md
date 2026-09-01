@@ -33,9 +33,21 @@ Treat any confirmed cross-tenant result as P0.
 - stop execution if a durable `started` row or terminal update cannot be
   written;
 - run `postgresem report beta` and inspect incomplete counts;
-- do not edit audit rows to manufacture success;
-- repair permissions or database availability, then reconcile incomplete rows
-  according to the deployment's incident policy.
+- preserve incomplete rows as evidence and do not rewrite them as successful;
+- determine whether the gateway process and PostgreSQL backend that owned each
+  query have terminated before reconciliation;
+- repair permissions or database availability, then use the restricted audit
+  lifecycle function to record an explicit `failed` or `cancelled` terminal
+  state according to the deployment's incident policy;
+- use an error code that records uncertainty or confirmed process termination,
+  and retain the supporting process/database evidence under restricted access;
+- rerun `postgresem report beta` and resume only when the expected window has
+  no unexplained incomplete records.
+
+Postgresem does not automatically convert old `started` rows into terminal
+states. Age alone cannot prove whether a database query is still running, and
+silently marking uncertain execution as successful or failed would weaken the
+audit record.
 
 ## Migration or restore failure
 
@@ -64,4 +76,3 @@ Treat any confirmed cross-tenant result as P0.
 - publish a corrected release rather than replacing existing immutable assets.
 
 Report security issues using the private process in [SECURITY.md](../SECURITY.md).
-

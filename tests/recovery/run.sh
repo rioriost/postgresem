@@ -113,6 +113,54 @@ postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
+
+incomplete_query_id=$(
+  PGUSER=postgresem_audit_writer \
+    PGPASSWORD="$POSTGRESEM_AUDIT_WRITER_PASSWORD" \
+    psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 <<SQL
+SELECT semantic.start_query_audit(
+  'sha256:recovery-test-principal',
+  '1',
+  'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  '10000000-0000-0000-0000-000000000002',
+  '$expected_revision',
+  '0.1.0',
+  'recovery-test',
+  'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+  '[]'::jsonb,
+  '{}'::jsonb,
+  '{}'::jsonb,
+  0,
+  0
+);
+SQL
+)
+postgresem report beta --window-hours 1 |
+  grep -q '"incomplete": 1'
+postgresem report beta --window-hours 1 |
+  grep -q '"audit_complete": false'
+
+PGUSER=postgresem_audit_writer \
+  PGPASSWORD="$POSTGRESEM_AUDIT_WRITER_PASSWORD" \
+  psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -v query_id="$incomplete_query_id" <<'SQL'
+SELECT semantic.finish_query_audit(
+  :'query_id'::uuid,
+  'failed',
+  'RECOVERY_CONFIRMED_PROCESS_TERMINATION',
+  0,
+  0,
+  0,
+  0,
+  false
+);
+SQL
+postgresem report beta --window-hours 1 |
+  grep -q '"incomplete": 0'
+postgresem report beta --window-hours 1 |
+  grep -q '"audit_complete": true'
+
 if PGUSER=postgresem_audit_writer \
   PGPASSWORD="$POSTGRESEM_AUDIT_WRITER_PASSWORD" \
   psql --no-psqlrc -v ON_ERROR_STOP=1 \
