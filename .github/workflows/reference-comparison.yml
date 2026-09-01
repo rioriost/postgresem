@@ -1,0 +1,91 @@
+name: Reference runtime comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/reference-comparison.yml"
+      - "tests/reference-comparison/runtime/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reference-comparison-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: ${{ matrix.engine }} on PostgreSQL 18
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        engine:
+          - wren
+          - cube
+          - metricflow
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: reference
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: reference-superuser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d reference"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      REFERENCE_DATABASE_HOST: 127.0.0.1
+      REFERENCE_DATABASE_PORT: "5432"
+      REFERENCE_DATABASE_NAME: reference
+      REFERENCE_DATABASE_USER: semantic_user
+      REFERENCE_DATABASE_PASSWORD: semantic-runtime
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        if: matrix.engine == 'wren' || matrix.engine == 'metricflow'
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: false
+
+      - name: Initialize common PostgreSQL dataset
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i \
+            "${{ job.services.postgres.id }}" \
+            psql \
+              --username postgres \
+              --dbname reference \
+              --set ON_ERROR_STOP=1 \
+            < tests/reference-comparison/runtime/postgres/init.sql
+
+      - name: Run pinned reference
+        shell: bash
+        env:
+          REFERENCE_ENGINE: ${{ matrix.engine }}
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-evidence
+          "tests/reference-comparison/runtime/run-${REFERENCE_ENGINE}.sh" \
+            runtime-evidence
+
+      - name: Upload reference evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reference-${{ matrix.engine }}
+          path: runtime-evidence/${{ matrix.engine }}-runtime.json
+          if-no-files-found: error
+          retention-days: 30
