@@ -44,8 +44,7 @@ review. Completion is not a substitute for an external assessment.
 
 - tag equals workspace version;
 - archives are reproducible and checksummed;
-- future signed releases verify the expected GitHub workflow identity and OIDC
-  issuer;
+- signed releases verify the expected GitHub workflow identity and OIDC issuer;
 - image digest, SBOM, provenance, and signature refer to the same manifest;
 - every GitHub Actions dependency is pinned to an immutable commit SHA;
 - no long-lived signing key is stored in repository secrets.

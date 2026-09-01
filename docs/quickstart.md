@@ -1,8 +1,13 @@
 # 30-minute read-only commerce pilot on macOS
 
-This developer-preview path uses Apple Container, `container-compose`, the
+This beta evaluation path uses Apple Container, `container-compose`, the
 repository's fictional commerce fixture, and MCP stdio. It does not require or
 accept production credentials.
+
+This remains the maintainer's macOS reference path. M6 (`0.4`) separately
+requires released binaries and images to execute on Linux amd64 and arm64;
+this Apple Container quickstart is not a substitute for that architecture
+matrix.
 
 ## 1. Clone and enter the repository
 

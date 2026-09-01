@@ -49,6 +49,12 @@ for every compiler literal type.
 
 RLS identity is selected by trusted deployment configuration rather than LSQ.
 Source relation owners, superusers, and `BYPASSRLS` roles cannot be mapped.
-Audit availability is on the critical execution path by design. The MVP uses
-local non-TLS PostgreSQL connections and synchronous execution; transport-level
+Audit availability is on the critical execution path by design. The M5
+security remediation replaced the initial local-only `NoTls` connector with
+explicit `sslmode=require` or `sslmode=disable` handling. Transport-level
 cancellation can be added without changing the audit lifecycle.
+
+This ADR remains authoritative for queries: the executor stays
+transaction-level `READ ONLY`. M6 mutation support requires a separate ADR,
+credential, mapped writer role, compiler entry point, executor, and audit
+lifecycle rather than weakening this decision.

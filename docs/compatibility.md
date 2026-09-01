@@ -1,4 +1,4 @@
-# Developer-preview compatibility
+# Beta compatibility and release roadmap
 
 ## Version policy
 
@@ -15,6 +15,12 @@ When practical, a public feature is deprecated for at least one preview minor
 before removal. Unsafe, privacy-breaking, or incorrect behavior may be removed
 immediately with release-note justification.
 
+M6 is assigned to `0.4`, not `1.0`. It adds a separately versioned governed
+mutation contract and release-blocking Linux amd64/arm64 runtime evidence.
+Versions `0.5` through `0.9` are comparison-driven compatibility stages before
+the stable `1.0` contract. PostgreSQL remains the only execution engine through
+`1.0`; non-PostgreSQL dialect support is not part of this roadmap.
+
 ## Contract versions
 
 | Contract | Current | Compatibility boundary |
@@ -26,6 +32,7 @@ immediately with release-note justification.
 | compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | database migrations | `0001`–`0004` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
 | package | `0.3.0-beta.1` | current beta package |
+| planned mutation contract | not implemented | M6/`0.4`; separate schema/capability for bounded insert and approved idempotent upsert |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -150,8 +157,9 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 |---|---|
 | source checkout + Rust 1.85 build | supported developer path |
 | Apple Container 1.0.0 + `container-compose` 1.1.0 on macOS arm64 | supported quickstart path |
-| locally built `gateway:latest` OCI image | supported by `make dev-up`; Linux arm64 on the documented M4 path |
-| Docker/Docker Compose | doctor can detect it, but the Make targets invoke `container-compose`; not the documented M4 path |
+| locally built `gateway:latest` OCI image | supported by `make dev-up`; Apple Container runs the image in a Linux arm64 VM on the documented macOS path |
+| Docker/Docker Compose on Linux amd64 | exercised by GitHub Actions integration jobs; not yet the end-user quickstart |
+| Linux arm64 runtime execution gate | planned for M6; a published archive/manifest alone is not considered sufficient runtime evidence |
 | native binary archives | `v0.3.0-beta.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
 | `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`, and was exercised against the published `v0.3.0-beta.1` macOS arm64 archive |
@@ -180,12 +188,14 @@ supply-chain artifact.
 
 ## Known limitations
 
-- developer preview, not production-ready;
+- beta, not production-ready;
 - stdio MCP only; no HTTP, remote authentication, or TLS termination;
 - remote PostgreSQL TLS requires a platform-trusted certificate and hostname;
   custom trust roots and client certificates are not yet configurable;
 - no concurrent MCP cancellation;
 - no connection pool or remote multi-user service;
+- no governed mutation contract or write-capable public operation; the current
+  query executor remains `READ ONLY`;
 - snapshot is reloaded per operation;
 - semantic discovery is not a full source-GRANT preflight;
 - strict subset of single-fact and safe many-to-one semantics; unsupported
@@ -193,8 +203,8 @@ supply-chain artifact.
 - query row limit and result-byte truncation, with no result pagination;
 - no down migrations, production backup retention, RPO/RTO guarantee, disaster
   recovery service, or uninstall;
-- the current published release is unsigned; future signing is configured but
-  has no published evidence yet;
+- Linux arm64 release artifacts are published, but dedicated release-blocking
+  execution coverage for both Linux architectures is an M6 requirement;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist

@@ -4,7 +4,8 @@
 - Date: 2026-08-31
 
 M5 operational decisions supersede the preview-only recovery and signing
-status statements below; see
+status statements below. The current published evidence is the signed
+`v0.3.0-beta.1` release; see
 [ADR 0009](0009-beta-operations-transport-and-evidence.md).
 
 ## Context
@@ -14,7 +15,7 @@ Snapshot/Schema v1, compiler semantics, MCP tools/resources, PostgreSQL
 migrations, and locally built OCI images. Users need to know which changes are
 compatible and how to preserve semantic metadata before an upgrade.
 
-The implementation currently has forward-only migrations, immutable published
+At M4, the implementation had forward-only migrations, immutable published
 revisions, canonical hash verification, model export/diff commands, and a local
 Compose volume. It does not have down migrations, N-1 upgrade tests,
 backup/restore automation, a complete import command, a supported uninstaller,
@@ -60,9 +61,9 @@ archives, checksums, multi-arch GHCR, and image SBOM/provenance. The
 11. Distinguish release automation from published artifacts. Tag automation is
     configured for four native archives, `SHA256SUMS`, and a multi-arch GHCR
     image with image SBOM/provenance. Claim publication only for a matching
-    successful release workflow; `v0.2.0-alpha.1` is the current evidence.
+    successful release workflow; `v0.2.0-alpha.1` was the M4 evidence.
 12. Treat installer checksum verification as integrity checking, not signing.
-    Release signing remains unimplemented.
+    Release signing was unimplemented at M4.
 
 ## Upgrade sequence
 

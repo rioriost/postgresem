@@ -1,9 +1,10 @@
 # PostgreSQL Semantic Gateway Implementation Plan
 
 - Project name: `postgresem` / PostgreSQL Semantic Gateway
-- Document status: Formal project promotion proposal
+- Document status: Living implementation and release plan
 - Created: 2026-08-31
-- Target environment: Apple silicon Mac Studio, Apple Container 1.0.0, `container-compose` 1.1.0, PostgreSQL containers
+- Last revised: 2026-09-01
+- Target environments: Linux amd64 and arm64 for required runtime support; macOS amd64 and arm64 for development and native archives; Apple silicon Mac Studio with Apple Container as the maintainer reference environment; PostgreSQL 16–18
 - Translations: [Japanese](POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
 ## 1. Executive Summary
@@ -33,6 +34,15 @@ AI Agent / Application
 
 The MVP is limited to PostgreSQL only, analytical read-only queries, a single Gateway, a single database, and explicitly authenticated users. Multi-data-source support, natural-language response UIs, caching, pre-aggregation, pgvector, free-form SQL, and write operations are excluded from the MVP.
 
+The post-beta direction keeps PostgreSQL as the only target database while
+expanding the governed contract beyond extraction. M6 is version `0.4`, not
+`1.0`, and introduces a separate typed mutation contract for controlled data
+ingestion plus mandatory Linux amd64/arm64 runtime evidence. After `0.4`, each
+minor release re-evaluates current reference implementations such as Wren AI,
+Cube, Malloy, and MetricFlow, selects evidence-backed gaps that fit the
+PostgreSQL-native position, and advances through several compatibility stages
+before `1.0`.
+
 ## 2. Goals and Success Criteria
 
 ### 2.1 Goals
@@ -42,7 +52,9 @@ The MVP is limited to PostgreSQL only, analytical read-only queries, a single Ga
 3. Compile LSQ v1 into identical normalized SQL and parameter lists given the same input, the same Semantic Revision, and the same Compiler Version.
 4. Prevent LLMs from directly manipulating physical schemas or free-form SQL, providing discovery, validation, execution, and explanation through MCP instead.
 5. Make every query result traceable down to the Semantic Revision used, the metrics, source columns, policies, and the generated SQL hash.
-6. Provide a development environment reproducible both on a Mac Studio with Apple Container for local development and in Linux CI.
+6. Provide a development environment reproducible on a Mac Studio with Apple Container and a production/runtime path verified on Linux amd64 and arm64.
+7. Add governed data ingestion without exposing raw SQL or arbitrary DML, while preserving PostgreSQL GRANT, RLS `WITH CHECK`, constraints, triggers, and transaction semantics as the final authority.
+8. Use comparison with maintained reference implementations to prioritize missing capabilities without broadening into non-PostgreSQL dialect support.
 
 ### 2.2 MVP Success Criteria
 
@@ -55,15 +67,43 @@ The MVP is limited to PostgreSQL only, analytical read-only queries, a single Ga
 - Pass the CI matrix for PostgreSQL 16, 17, and 18.
 - Enable a first-time developer to start the Apple Container environment within 30 minutes and run integration tests.
 
-### 2.3 Non-Goals
+### 2.3 Direction from 0.4 to 1.0
+
+- `0.4` adds a versioned Logical Semantic Mutation (LSM) contract for bounded
+  `insert` and explicitly modeled idempotent `upsert` operations. It does not
+  accept table names, column names, conflict SQL, predicates, expressions, or
+  stored procedure names from callers.
+- Writable models and fields are published explicitly and independently from
+  query visibility. Server-managed columns, generated columns, immutable
+  fields, allowed conflict keys, batch size, and returned fields are part of
+  the published revision.
+- Read and write credentials, mapped roles, transaction modes, audit records,
+  rate limits, and MCP capabilities are separate. Enabling mutation must not
+  make the read-only query path writable.
+- PostgreSQL permissions, RLS including `WITH CHECK`, constraints, and triggers
+  remain authoritative. The Gateway may narrow permitted mutations but cannot
+  make a database-denied mutation succeed.
+- Linux amd64 and arm64 are release-blocking runtime targets. Cross-compilation
+  or a multi-architecture manifest alone is not sufficient evidence; the
+  binary or image must start and pass architecture-specific smoke and contract
+  tests.
+- Versions `0.5` through `0.9` are comparison-driven compatibility stages.
+  Features are selected from measured user needs and reference-implementation
+  gaps, then accepted only when they preserve the PostgreSQL-only and no-raw-SQL
+  boundaries.
+
+### 2.4 Non-Goals
 
 - Building a general-purpose Text-to-SQL product, chat UI, visualization tool, or BI product.
 - Supporting warehouses or federated queries outside PostgreSQL.
 - Replacing dbt, ETL/ELT, data catalogs, or MDM.
 - Exposing arbitrary SQL, DDL, DML, or stored-procedure execution through MCP.
+- Treating the governed mutation contract as a replacement for bulk ETL/ELT,
+  replication, CDC, or database administration.
 - Replacing PostgreSQL's GRANT/RLS with Gateway-proprietary authorization.
 - Implementing caching, pre-aggregation, vector search, or learned join inference in the MVP.
 - Automatically correcting complex many-to-many or non-additive metrics when their semantics are unclear.
+- Supporting non-PostgreSQL execution engines before or at `1.0`.
 
 ## 3. Design Principles
 
@@ -247,7 +287,8 @@ The MVP is a modularized monolith without network distribution.
 | Planner | Anchor, join graph, grain, aggregate, policy binding, cost guard |
 | Compiler | Generates PostgreSQL AST/SQL and bind parameters from a typed relational IR |
 | Executor | Read-only transaction, timeout, row/byte limit, cancel |
-| Lineage/Audit | Design-time/query-time edges, hashes, audit events |
+| Mutation compiler/executor | M6: typed insert/upsert plan, separate writer role, idempotency, rollback |
+| Lineage/Audit | Design-time/query-time/mutation-time edges, hashes, audit events |
 | Telemetry | Structured logs, metrics, traces, health/readiness |
 | Admin CLI | migrate, scan, validate, publish, diff, doctor |
 
@@ -265,6 +306,26 @@ The MVP is a modularized monolith without network distribution.
 - Secrets are sourced from environment variables or an external secret store; they are never stored in config files, the Semantic Schema, COMMENTs, or logs.
 - Principal mapping, statement timeout, result limits, permitted revisions, and audit retention period are configurable.
 - At startup, the database version, migration version, required privileges, and RLS safety conditions are verified via a `doctor`-equivalent check; the process fails if a dangerous execution role is detected.
+
+### 7.3 Governed Mutation Boundary (M6 Target)
+
+- Query and mutation planning share immutable semantic snapshots and typed
+  scalar semantics, but use distinct request types, compiler entry points,
+  credentials, roles, budgets, audit records, and executors.
+- The current query executor remains transaction-level `READ ONLY`. Mutation
+  support cannot be implemented by weakening or parameterizing that invariant.
+- A dedicated login assumes only explicitly allowed non-owner, non-superuser,
+  non-`BYPASSRLS` writer roles. The request cannot select a connection, role,
+  project, conflict policy, or transaction isolation level.
+- The M6 compiler emits one parameterized `INSERT` or approved
+  `INSERT ... ON CONFLICT` statement against a published writable model.
+  Arbitrary `UPDATE`, `DELETE`, `MERGE`, `COPY`, `CALL`, DDL, expressions, and
+  multi-statement input remain rejected in `0.4`.
+- Idempotency keys, maximum rows and bytes, statement/lock timeouts, atomic
+  audit start/finish, and explicit affected-row expectations are mandatory.
+- The compiler crate remains free of database, transport, logging, and audit
+  I/O. Database-enforced rejection is surfaced as a stable mutation error, not
+  converted into a success-shaped response.
 
 ## 8. MCP API
 
@@ -318,6 +379,22 @@ Resources pass through the same authorization filter as tools. Prompt templates 
 ```
 
 numeric, timestamp, date, interval, and similar types follow documented precision and timezone conventions for JSON. In the MVP, numeric is returned as a string, timestamp as RFC 3339, and date as ISO 8601.
+
+### 8.5 Post-MVP Mutation API
+
+M6 adds mutation only through a separately versioned capability. Candidate CLI
+and MCP operations are `validate_semantic_mutation` and
+`mutate_semantic_model`; final names and schemas require an ADR. A process that
+has no configured writer profile does not advertise or accept mutation tools.
+Mutation requests use published semantic model and field names only, and never
+return generated SQL or accept physical identifiers. Request-supplied
+principals, roles, projects, credentials, idempotency storage, or conflict
+expressions are rejected.
+
+The original five read-only MCP tools retain their existing meaning. Mutation
+capability negotiation, audit taxonomy, response shape, replay semantics, and
+compatibility rules are versioned independently so a read-only deployment
+cannot become writable through a client request.
 
 ## 9. Logical Semantic Query JSON Schema Policy
 
@@ -429,6 +506,26 @@ compile(
 
 No database connections, MCP, logging, or execution reside in the core. This boundary is the focal point for property tests, fuzz tests, and golden tests.
 
+### 10.6 Deterministic Mutation Compiler (M6 Target)
+
+```text
+compile_mutation(
+  normalized_lsm,
+  immutable_semantic_snapshot,
+  principal_capabilities,
+  mutation_options
+) -> { statement, typed_parameters, affected_model, write_lineage, hash }
+```
+
+The M6 mutation compiler supports bounded inserts and explicitly modeled
+idempotent upserts only. It validates writable visibility, required/defaulted
+fields, PostgreSQL scalar types, nullability, generated/identity columns,
+immutable fields, allowed conflict keys, batch limits, and return visibility.
+The same input, revision, compiler semantic version, and capability profile
+must produce identical statement text, parameter ordering, lineage, and hash.
+Unknown or ambiguous fields, client-selected physical names, partial conflict
+keys, unsafe defaults, and unsupported expressions fail closed.
+
 ## 11. Security
 
 ### 11.1 Threat Model
@@ -436,6 +533,8 @@ No database connections, MCP, logging, or execution reside in the core. This bou
 - Prompt injection attempting to discover non-public models, execute raw SQL, or bypass limits.
 - SQL injection or identifier injection.
 - Connection role or pool context leaks that bypass RLS/GRANT.
+- Mutation attempts that bypass writable-field policy, RLS `WITH CHECK`,
+  constraints, idempotency, or affected-row expectations.
 - DoS via high-cost queries, massive `IN` lists, Cartesian joins, or enormous result sets.
 - Sensitive information leakage through catalog/comment/error/log channels.
 - Malicious modification of the Semantic Model or supply-chain contamination.
@@ -451,6 +550,10 @@ No database connections, MCP, logging, or execution reside in the core. This bou
 - Errors are separated into public codes and internal details; non-public object names and SQL are never returned to the general scope.
 - Logs do not record actual query/result values by default; instead, hashes, types, counts, and timings are recorded.
 - Source query read-only pool, introspection, and audit writer are separated by credential and pool. The audit writer is permitted only to append/update `semantic.query_audit`.
+- Mutation uses a dedicated writer credential and a separate allowlisted mapped
+  role. Read-only credentials retain no business-data write privilege, and
+  writer credentials receive only the modeled table/column operations required
+  by the published mutation contract.
 - Migration/model publishing goes through signed releases or review-required CI.
 - Dependency audit, SBOM, container image scanning, and secret scanning are release gates.
 
@@ -464,13 +567,22 @@ No database connections, MCP, logging, or execution reside in the core. This bou
 - After cancel/timeout, the transaction is aborted/rolled back, and the connection is returned to the pool in a safe state.
 - The stdio fixed principal and the HTTP request principal produce the same visibility under the same authorization fixtures.
 - The source execution role cannot write to the Semantic Schema or audit tables, and the audit writer cannot read business data.
+- Read-only deployments do not advertise mutation capability and cannot be made
+  writable through request fields.
+- Mutation tests cover cross-tenant inserts, RLS `WITH CHECK`, generated and
+  immutable fields, duplicate idempotency keys, partial batches, constraint and
+  trigger failures, timeout/cancel rollback, affected-row mismatch, and audit
+  failure. No denied mutation may be reported as successful.
 
 ## 12. Semantic Lineage and Audit
 
-### 12.1 Two Types of Lineage
+### 12.1 Three Types of Lineage
 
 1. **Design-time lineage**: metric → field → physical column, model → view/table, relationship → join columns.
 2. **Query-time lineage**: query → revision → metrics/dimensions → relationships → physical objects → policy context → SQL hash.
+3. **Mutation-time lineage**: mutation → revision → writable model/fields →
+   physical target columns → policy context → statement hash → affected-row
+   outcome.
 
 ### 12.2 Recorded Items
 
@@ -486,6 +598,13 @@ No database connections, MCP, logging, or execution reside in the core. This bou
 - Status, error code, row count, byte count, truncated/cancelled
 
 A `started` event is appended via a dedicated audit connection before execution; if recording fails, the query is not started. Upon completion, a terminal event/status is written to the same `query_id`. `started` records without a terminal event (e.g., due to process crash) are flagged for monitoring. This ensures that the read-only source transaction is not compromised and eliminates the possibility of a query being executed without an audit record.
+
+Mutation audit uses a separate record type and identifier. It records typed
+field names, row count, payload byte count, idempotency-key hash, statement
+hash, policy context, and terminal outcome, but not field values by default.
+The audit start must be durable before the source transaction and a terminal
+status must distinguish committed, rejected, rolled back, indeterminate, and
+reconciled outcomes.
 
 ### 12.3 Drift
 
@@ -510,7 +629,12 @@ Embeddings are not used for query correctness, permissions, join selection, or S
 
 ### 14.1 Local Prerequisites
 
-The actual command verified on this Mac Studio is `container-compose`. Documentation, Make targets, and CI wrappers use this name. Although the Apple Container system service is already running, the bootstrap process should work from an unstarted state as well.
+The maintainer reference command on the Mac Studio is
+`container-compose`. The macOS quickstart continues to use Apple Container,
+while Linux documentation and CI use a supported OCI/Compose runtime. The
+portable contract is the repository configuration and released artifacts, not
+one host runtime. Bootstrap must work from an unstarted state on each documented
+development path.
 
 ### 14.2 Compose Services
 
@@ -544,6 +668,21 @@ make clean-data   # Delete development volumes only, with explicit confirmation
 - Core features must work without extensions.
 - pgvector, pg_stat_statements, etc. are detected as optional capabilities.
 - Version-specific catalog differences are absorbed by adapters, and the support matrix is documented.
+
+### 14.5 Operating-System and Architecture Support
+
+- Required by M6: released binaries and OCI images execute on Linux amd64 and
+  Linux arm64.
+- Maintained development/archive targets: macOS amd64 and macOS arm64.
+- CI must execute the binary or image on both Linux architectures. Building a
+  manifest without starting it does not satisfy the support gate.
+- At least the CLI contract, TLS initialization, migration compatibility,
+  catalog loading, guarded query execution, governed mutation rejection/smoke,
+  and installer verification run on both Linux architectures.
+- PostgreSQL 16–18 behavior remains a separate matrix from CPU architecture;
+  the release gate documents any reduced cross-product and why it is safe.
+- Architecture-specific native dependencies, OpenSSL/TLS behavior, endianness,
+  filesystem assumptions, and archive naming are covered by release tests.
 
 ## 15. Repository Structure
 
@@ -602,10 +741,12 @@ Avoid over-splitting crates in the MVP. Only the compiler core is separated; eve
 | Golden compiler | LSQ → IR/SQL/params/lineage | Reviewable diffs |
 | Integration | Real PostgreSQL 16–18 | Catalog scan, migration, query results |
 | Security | GRANT/RLS/pool/timeout | No cross-tenant leakage |
+| Mutation security | writer role/RLS/idempotency/rollback | No unauthorized or partially reported write |
 | Contract | MCP/JSON Schema | Compatibility with client fixtures |
 | Migration | fresh + N-1 upgrade | Published revision preserved, rollback policy verified |
 | Known-answer eval | Semantic correctness | Expected values/expected rejections for representative questions |
 | Performance | compile/execute/catalog | Regression budget |
+| Platform | Linux amd64/arm64 binaries and images | Install, start, query, mutation smoke, TLS initialization |
 
 ### 16.2 Correctness Oracle
 
@@ -625,8 +766,8 @@ Avoid over-splitting crates in the MVP. Only the compiler core is separated; eve
 
 ### 17.1 Structured Logs
 
-- JSON format, UTC timestamp, severity, service version, request/query ID.
-- Stage, error code, semantic revision, compiler version, query/SQL hash, duration, row/byte count.
+- JSON format, UTC timestamp, severity, service version, request/query/mutation ID.
+- Stage, error code, semantic revision, compiler version, query/statement hash, duration, row/byte/affected-row count.
 - Literals, tokens, connection strings, result rows, and unpublished comments are not recorded by default.
 - Debug SQL logging is explicitly enabled in local or limited scopes, with a short retention period.
 
@@ -636,16 +777,19 @@ Avoid over-splitting crates in the MVP. Only the compiler core is separated; eve
 - Validation/compile/DB/serialization latency histogram
 - Active/queued queries, pool utilization, timeout/cancel, result truncation
 - Catalog scan time, object count, drift issue count, publish count
+- Mutation validation/commit/reject/rollback count, idempotent replay count, and
+  indeterminate/reconciliation count
 - Per-model/metric usage counts avoid high cardinality; detailed analysis is done in the audit DB if needed
 
 ### 17.3 Traces
 
-`mcp.request → auth → catalog.resolve → validate → plan → compile → db.acquire → db.query → serialize → audit` is captured as spans. OpenTelemetry export is optional, and the core remains vendor-neutral.
+`mcp.request → auth → catalog.resolve → validate → plan → compile → db.acquire → db.query → serialize → audit` is captured as spans. M6 mutation traces use a distinct `validate → compile_mutation → db.mutate → commit/rollback → audit` path. OpenTelemetry export is optional, and the core remains vendor-neutral.
 
 ### 17.4 SLO Candidates (Finalized at Beta)
 
 - Gateway-attributable validation + compile p95 < 50 ms (warm state at 100-model scale)
 - Audit event loss: 0
+- Mutation audit loss and success-shaped indeterminate outcomes: 0 after M6
 - Security test pass: 100%
 - Semantic correctness eval for supported LSQs: 100%; unsupported LSQs are explicitly rejected
 
@@ -667,6 +811,8 @@ DB execution time depends on data volume and indexes and is therefore separated 
 
 - SemVer is adopted; compatibility notes are generated for the LSQ schema, Semantic Schema migration, MCP contract, and compiler semantics.
 - Tags produce reproducible binaries and multi-arch OCI images (at minimum `linux/amd64` and `linux/arm64`).
+- Release CI executes architecture-specific smoke and contract tests for both
+  Linux amd64 and arm64; successful cross-build alone is insufficient.
 - SBOM, provenance, checksums, and signatures are attached to release artifacts.
 - Migrations are forward-only by default; pre-release backup, N-1 upgrade tests, and a compatibility period are defined.
 - Database migration and binary rollout ordering follows an expand/contract approach.
@@ -681,7 +827,11 @@ DB execution time depends on data volume and indexes and is therefore separated 
 
 ## 19. Milestones
 
-Timelines are not committed before staffing is confirmed; each gate's completion triggers the next phase.
+Timelines are not committed before staffing is confirmed. On 2026-09-01, the
+project owner authorized M6 implementation based on the demonstrated beta
+value. Outstanding M5 independent field/security evidence remains tracked and
+is not retroactively marked complete; unresolved P0/P1 findings still block a
+`0.4` release.
 
 ### M0: Project Foundation / RFC
 
@@ -736,14 +886,101 @@ Timelines are not committed before staffing is confirmed; each gate's completion
 
 **Exit gate**: 4 weeks of operation on 2+ non-fixture databases with no P0/P1 security/correctness defects.
 
-### M6: 1.0 — Official Project
+### M6: 0.4 — Governed Ingestion and Portable Linux
 
-- Stable LSQ v1, Semantic Schema migration policy, support matrix
-- Governance, maintainers, release cadence, deprecation policy
-- Resolution of external security review findings
-- Production readiness checklist and compatibility suite
+- Specify LSM v1 and a writable-model projection in the Semantic Schema.
+- Implement bounded typed `insert` and approved idempotent `upsert`; keep raw
+  SQL, arbitrary DML, physical identifiers, `UPDATE`, `DELETE`, `MERGE`,
+  `COPY`, and `CALL` outside the public contract.
+- Add separate writer credentials/roles, RLS `WITH CHECK` enforcement,
+  idempotency, atomic mutation audit, rollback/reconciliation behavior, and
+  safe rejection tests.
+- Add Linux amd64 and arm64 runtime jobs for released binaries and OCI images,
+  including installer, TLS, query, and mutation smoke coverage.
+- Publish `0.4` compatibility, migration, operations, incident, and threat-model
+  updates without claiming 1.0 stability.
 
-**Exit gate**: Correctness, security, migratability, operability, and differentiation gates are all met, and maintainers judge the project sustainable.
+**Exit gate**: On PostgreSQL 16–18, approved inserts/upserts succeed and denied,
+ambiguous, duplicate, cross-tenant, or partially failed mutations fail closed
+with complete audit evidence; Linux amd64 and arm64 artifacts both execute their
+required smoke/contract suites.
+
+### M7: 0.5 — Reference Comparison and Interoperability
+
+- Re-run a documented comparison against current Wren AI, Cube, Malloy, and
+  MetricFlow releases using common PostgreSQL datasets and tasks.
+- Publish a capability/gap matrix covering authoring, discovery, query
+  semantics, mutation, APIs/SDKs, lineage, governance, and operations.
+- Add import/export or model-conversion adapters only where they reduce
+  adoption cost without making an external model the runtime source of truth.
+- Prioritize subsequent work from measured user value rather than feature-count
+  parity.
+
+**Exit gate**: The comparison is reproducible, the selected gaps have PostgreSQL
+users and fixtures, and every accepted feature preserves PostgreSQL as the only
+execution engine and semantic authority.
+
+### M8: 0.6 — Semantic and Mutation Coverage
+
+- Implement the highest-value safe semantic gaps, such as explicitly modeled
+  time comparisons, cumulative metrics, or additional relationship patterns.
+- Extend mutations to typed `update`/`delete` only if an ADR defines bounded
+  semantic predicates, optimistic concurrency, affected-row expectations,
+  immutable fields, and recovery behavior.
+- Expand known-answer and rejection suites before expanding operators.
+
+**Exit gate**: New query and mutation semantics reach 100% correctness on their
+supported fixtures, with ambiguous or unsafe cases rejected and no weakening of
+GRANT/RLS.
+
+### M9: 0.7 — Application and Agent Integration
+
+- Add authenticated MCP Streamable HTTP if demand and threat-model gates are
+  met.
+- Provide generated client schemas/SDK guidance, capability negotiation,
+  cancellation, pagination/streaming, and stable idempotency behavior.
+- Keep stdio supported and keep remote mutation disabled unless explicit
+  authentication, authorization, origin, rate, and audit requirements pass.
+
+**Exit gate**: Multi-user remote deployments preserve the same visibility,
+role/RLS, privacy, query, and mutation invariants as local stdio deployments.
+
+### M10: 0.8 — PostgreSQL-native Scale and Operations
+
+- Address measured bottlenecks with PostgreSQL-native techniques such as
+  prepared plans, connection management, materialized views, or optional
+  pre-aggregation; do not add a second authoritative datastore by default.
+- Add large-catalog/model authoring workflows, operational dashboards, upgrade
+  automation, and architecture-specific performance baselines.
+- Re-run the reference comparison and document intentional non-parity.
+
+**Exit gate**: Supported scale targets and failure recovery are reproducible on
+Linux amd64/arm64 and do not compromise determinism, freshness, or database
+authorization.
+
+### M11: 0.9 — 1.0 Release Candidate
+
+- Freeze candidate LSQ, LSM, Semantic Schema, MCP, CLI, error, migration, and
+  audit contracts.
+- Complete independent security review, production pilot evidence, upgrade and
+  rollback rehearsals, support policy, governance, and deprecation policy.
+- Remove or explicitly defer experimental surfaces that cannot meet 1.0
+  compatibility guarantees.
+
+**Exit gate**: No unresolved P0/P1 correctness or security defects, required
+platforms pass, N-1 upgrades and recovery rehearsals pass, and release-candidate
+users can operate query and ingestion workflows.
+
+### M12: 1.0 — Stable PostgreSQL Semantic Gateway
+
+- Publish stable contracts and documented compatibility/support periods.
+- Establish maintainers, release cadence, vulnerability response, and
+  sustainability ownership.
+- Publish the final reference-comparison and differentiation statement.
+
+**Exit gate**: Correctness, mutation safety, security, migratability,
+operability, Linux portability, interoperability, differentiation, governance,
+and maintainer sustainability gates are all met.
 
 ## 20. Stages from MVP to Official Project
 
@@ -752,8 +989,14 @@ Timelines are not committed before staffing is confirmed; each gate's completion
 | Spike | End-to-end slice: catalog → simple model → LSQ → SQL | MCP remote, vector, complex joins | Confirm value and feasibility within a ~2-week scope |
 | MVP | Single DB, read-only, stdio MCP, basic metrics, RLS | UI, cache, multi-DB, free-form SQL | Eval/security/lineage criteria met |
 | Preview | Docs, packaging, real-DB pilot | Distribution, pre-aggregation | External users can self-onboard |
-| Beta | Migration, operations, HTTP candidate, SLO | Non-PostgreSQL support | 4-week production run and security review |
-| 1.0 | Stable contract, support, governance | Scope expansion driven solely by market demand | Ongoing maintainers and compatibility guarantees |
+| Beta / 0.3 | Migration, operations, HTTP decision, SLO | Writes and non-PostgreSQL support | 4-week production run and security review |
+| 0.4 | Governed insert/upsert and Linux amd64/arm64 runtime support | Arbitrary DML and non-PostgreSQL engines | Mutation security/correctness and dual-architecture runtime gates |
+| 0.5 | Reproducible reference comparison and targeted interoperability | Feature-count parity | Evidence-backed gap priorities |
+| 0.6 | Broader safe query/mutation semantics | Ambiguous automatic semantics | Correctness and rejection gates |
+| 0.7 | Authenticated application/agent integration | Anonymous or request-selected authority | Remote invariants match local invariants |
+| 0.8 | PostgreSQL-native scale and operations | Mandatory external cache/source of truth | Measured scale and recovery targets |
+| 0.9 | Frozen release-candidate contracts | New experimental surfaces | Production/security/platform evidence complete |
+| 1.0 | Stable contract, support, governance | Non-PostgreSQL execution | Ongoing maintainers and compatibility guarantees |
 
 Formal promotion is judged not by code volume but by the following evidence:
 
@@ -765,7 +1008,7 @@ Formal promotion is judged not by code volume but by the following evidence:
 
 ## 21. Differentiation from Existing OSS
 
-Comparison is framed not as superiority but as differences in scope and where the source of truth resides. Each OSS evolves rapidly, so official documentation is re-evaluated at M0 and before each major release.
+Comparison is framed not as superiority but as differences in scope and where the source of truth resides. Each OSS evolves rapidly, so official documentation is re-evaluated at M0, immediately after M6, at M10, and before 1.0.
 
 | Aspect | Wren AI | Cube | Malloy | MetricFlow | postgresem |
 |---|---|---|---|---|---|
@@ -773,7 +1016,8 @@ Comparison is framed not as superiority but as differences in scope and where th
 | Model source of truth | MDL/YAML etc. project files | YAML/JavaScript etc. code | `.malloy` files | dbt manifest/YAML | PostgreSQL `semantic` schema |
 | DB catalog/COMMENT/FK ingestion | Scaffold feature available | Schema generation available | Uses connection schema | dbt manifest centric | catalog/COMMENT/FK/CHECK/RLS as first-class evidence with revision management |
 | Compiler | Multi-data-source semantic engine | Multi-data-source semantic layer | Malloy → SQL compiler | Metric query → SQL compiler | PostgreSQL-only typed LSQ → SQL; determinism and safe rejection specified |
-| MCP/agent | Available | Available | Available via Publisher, etc. | Not the primary focus | No raw SQL; limited to LSQ discovery/validate/query/explain |
+| MCP/agent | Available | Available | Available via Publisher, etc. | Not the primary focus | No raw SQL; current LSQ discovery/validate/query/explain, with separately gated typed mutation planned |
+| Governed writes | Product/API dependent | API/pre-aggregation workflows | Not a primary semantic contract | Not a primary metric contract | PostgreSQL-only typed ingestion with GRANT/RLS/constraints as authority; starts in 0.4 |
 | Security source of truth | Semantic/product policy | Semantic access policy | Combined with connection-target permissions | Combined with dbt/platform | PostgreSQL GRANT/RLS as the ultimate authority; principal propagated to DB |
 | Lineage | Product/engine feature | Product/semantic feature | Compiler metadata | Semantic manifest/plan | Built per query from revision, compiler, policy, and source columns |
 | Target databases | Many | Many | Multiple | Multiple warehouses | PostgreSQL only |
@@ -791,7 +1035,10 @@ Comparison is framed not as superiority but as differences in scope and where th
 
 - No direct competition with Wren AI's GenBI experience, Cube's cache/pre-aggregation and diverse APIs, Malloy's expressiveness, or the MetricFlow/dbt ecosystem.
 - Future import/export adapters and compiler comparison fixtures may be provided to explore coexistence.
-- At M0, prototyping whether Wren/Malloy compilers or models can be reused; if the maintenance burden of an independent implementation outweighs the value, the approach will be changed.
+- M0 established the initial boundary. M7 and M10 repeat the comparison against
+  current releases and may adopt import/export or implementation techniques,
+  but not a non-PostgreSQL runtime abstraction or a second semantic source of
+  truth.
 
 ## 22. Key Risks and Decision Gates
 
@@ -800,6 +1047,7 @@ Comparison is framed not as superiority but as differences in scope and where th
 | Small gap from existing OSS | Insufficient value for an independent project | Comparative eval with 3 datasets / 30 questions, user interviews | M0: continue / fork / integrate / stop |
 | Join fan-out and metric semantics | Silent incorrect answers | v1 scope restriction, grain/additivity, known-answer/rejection eval | M2: if 100% correct not achieved, narrow scope further |
 | RLS principal propagation | Privilege escalation / leakage | Non-owner role, `SET LOCAL`, pool tests, external review | M3: if not met, do not expose remote execution |
+| Governed mutation bypass or partial success | Unauthorized/corrupt data or false success | Separate writer role, typed LSM, RLS `WITH CHECK`, constraints, idempotency, atomic audit, rollback/reconciliation tests | M6: if not met, do not expose mutation |
 | Semantic Schema pollutes the DB | Adoption refusal / migration accidents | Dedicated schema/role, forward migration, uninstall/export | Pre-Preview: evaluated via real-DB pilot |
 | Catalog version diffs / drift | Incorrect model / outage | PG 16–18 fixtures, fingerprinting, explicit scans | Support update decision per PG release |
 | COMMENT quality insufficient | Poor discovery accuracy | Explicit term/editor workflow, candidate confidence | Preview: measure operational effort |
@@ -807,6 +1055,7 @@ Comparison is framed not as superiority but as differences in scope and where th
 | Self-built compiler maintenance cost | Project unsustainable | Pure core, limited operators, evaluation of reusing existing compilers | M0/M4: re-evaluate build-vs-integrate |
 | DoS / high-cost queries | Database outage | Budget, EXPLAIN guard, timeout, concurrency | M3 load/security tests |
 | Apple Container / Compose differences | Poor local reproducibility | Compose intersection features, Mac smoke test, Linux CI | M1: confirm identical fixture results |
+| Linux architecture gap | Published artifact does not run on a supported CPU | Execute installer/binary/image tests on amd64 and arm64, track native dependencies | M6: both architectures are release blocking |
 | Metadata / audit confidentiality | Schema or usage pattern leakage | Metadata RLS, redaction, retention | M3 threat model review |
 | Premature pgvector adoption | Increased complexity, misplaced correctness dependency | Post-MVP, ranking only, baseline comparison | Independent ADR after Beta |
 
@@ -841,7 +1090,13 @@ If any of the following apply, halt feature additions and consider stopping, int
 - Packaging, signed releases, external security review
 - Large-catalog pagination/performance
 
-### P2: Decided After Measurement
+### P2: Required for 0.4
+
+- LSM v1, writable model metadata, insert/upsert compiler and executor
+- Separate writer roles, mutation audit/idempotency/reconciliation
+- Linux amd64/arm64 runtime and installer execution gates
+
+### P3: Comparison-Driven Before 1.0
 
 - pgvector discovery ranking
 - Approved example query retrieval
@@ -849,7 +1104,8 @@ If any of the following apply, halt feature additions and consider stopping, int
 - Many-to-many / symmetric aggregate
 - Cache / pre-aggregation
 - Import/export adapters (Wren / Cube / Malloy / MetricFlow)
-- UI, natural-language responses, non-PostgreSQL dialects
+- UI and natural-language responses
+- Non-PostgreSQL dialects remain out of scope through 1.0
 
 ## 24. ADRs to Create Before Implementation
 
@@ -862,6 +1118,10 @@ If any of the following apply, halt feature additions and consider stopping, int
 7. ADR-007: Audit/lineage retention period and sensitive information redaction
 8. ADR-008: Migration, backup, compatibility, uninstall/export
 9. ADR-009: Build vs. Wren/Malloy/other compiler integration evaluation
+10. ADR-010: LSM v1, writable model metadata, insert/upsert semantics, and
+    idempotency
+11. ADR-011: Writer role/RLS/audit/reconciliation security boundary
+12. ADR-012: Linux amd64/arm64 support evidence and release matrix
 
 ## 25. Initial Implementation Backlog
 
@@ -878,9 +1138,31 @@ If any of the following apply, halt feature additions and consider stopping, int
 11. Implement query-time lineage/audit and observability.
 12. Conduct the end-to-end eval and MVP exit review.
 
+### 25.1 M6 Implementation Backlog
+
+1. Write ADRs 010–012 and update the threat model before adding a write-capable
+   connection.
+2. Define LSM v1 JSON Schema and writable-model snapshot projection with
+   accepted and rejection fixtures.
+3. Implement a pure deterministic insert/upsert compiler without database,
+   transport, logging, or audit I/O.
+4. Add dedicated writer roles and migrations without granting write capability
+   to the existing runtime query role.
+5. Implement idempotency, audit lifecycle, transaction rollback, affected-row
+   checks, and reconciliation.
+6. Add CLI/MCP capability negotiation with mutation disabled by default.
+7. Add Linux amd64/arm64 installer, binary, OCI, TLS, query, and mutation smoke
+   jobs.
+8. Publish `0.4` migration, compatibility, security, operations, and incident
+   documentation.
+
 ## 26. Self-Review Results and Reflected Items
 
-**Review verdict: Conditional GO for promotion to M0 (Project Foundation / RFC).** Rather than immediately building a general-purpose Semantic Layer, first finalize the 3-dataset / 30-question comparative eval, LSQ/granularity semantics, and the RLS principal propagation ADRs. At the M0 exit gate, re-evaluate whether to continue with an independent compiler or pivot to integration with Wren AI / Malloy, etc.
+**Current review verdict: GO for M6 (`0.4`) with gated scope.** The original
+conditional M0 review led to a working read-only beta and is retained below as
+historical design rationale. The next justified expansion is governed
+ingestion and required Linux portability, not declaring 1.0 or becoming a
+general-purpose multi-database semantic layer.
 
 ### Technical Weaknesses
 
@@ -909,7 +1191,12 @@ If any of the following apply, halt feature additions and consider stopping, int
 
 ### Priority Review
 
-The top priority is not MCP or natural-language experience but fixture/eval, semantic contract, compiler correctness, and RLS boundaries. MCP is implemented at M3 as a thin adapter that exposes this safe core. pgvector is adopted only if the discovery baseline proves insufficient.
+The M6 priority is the mutation contract, writer/RLS boundary, rollback and
+audit correctness, and Linux amd64/arm64 execution evidence. After `0.4`, the
+priority is a reproducible reference comparison and user evidence. MCP or
+natural-language breadth, caching, and richer semantics are added only when
+their gates preserve the safe core. pgvector is adopted only if the discovery
+baseline proves insufficient.
 
 ## 27. Official References
 
@@ -917,6 +1204,8 @@ The top priority is not MCP or natural-language experience but fixture/eval, sem
 - PostgreSQL: [`COMMENT`](https://www.postgresql.org/docs/current/sql-comment.html)
 - PostgreSQL: [Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 - PostgreSQL: [Row Security Policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+- PostgreSQL: [`INSERT`](https://www.postgresql.org/docs/current/sql-insert.html)
+- PostgreSQL: [`CREATE POLICY`](https://www.postgresql.org/docs/current/sql-createpolicy.html)
 - Apple: [`container`](https://github.com/apple/container)
 - Wren AI: [What is Modeling Definition Language (MDL)?](https://docs.getwren.ai/oss/engine/concept/what_is_mdl)
 - Wren AI: [MDL schema reference](https://docs.getwren.ai/oss/reference/mdl)

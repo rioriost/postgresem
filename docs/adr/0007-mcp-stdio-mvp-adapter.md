@@ -107,3 +107,7 @@ names, connection data, SQL, result rows, and principal data.
   timeout is the cancellation boundary.
 - Clients must use line-delimited JSON for this MVP adapter.
 - Snapshot reloads favor correctness and simplicity over connection reuse.
+
+The five-tool surface described here remains the read-only contract. A future
+M6 mutation tool, if accepted, requires separate capability negotiation and
+versioned schemas and must not be advertised by a read-only deployment.

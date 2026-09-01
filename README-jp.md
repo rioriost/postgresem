@@ -58,6 +58,28 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 よりも、PostgreSQLの型、catalog metadata、role、RLS、transaction、backup手順との
 深い統合を優先します。
 
+## 1.0までのロードマップ
+
+現在の`0.3` betaは統制されたread-only systemです。M6は`1.0`ではなく`0.4`として
+releaseし、上限付きinsertと明示的にmodel化された冪等upsertのための独立した型付き
+mutation contractを追加する計画です。既存の`READ ONLY` query executorを弱めず、raw
+SQL、任意DML、物理identifier、request-selected database roleは公開しません。
+PostgreSQLのGRANT、RLS `WITH CHECK`、constraint、triggerを最終正本として維持します。
+
+`0.4`では、cross buildしたarchiveやmulti-architecture image manifestだけでなく、
+Linux amd64/arm64上で実際にruntime testを実行することをrelease要件にします。Mac
+StudioとApple Containerはmaintainerのlocal reference環境として残しますが、唯一の
+support targetではありません。
+
+`0.4`以降の`0.5`から`0.9`では、Wren AI、Cube、Malloy、MetricFlow等の現行reference
+implementationと再現可能な比較を行い、不足するauthoring、semantic、integration、
+operations機能を選びます。feature数のparityは目的とせず、`1.0`までPostgreSQLを唯一の
+execution engineかつsemantic source of truthとして維持します。
+
+M6〜M12のgateは
+[implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
+を参照してください。
+
 ## はじめに
 
 - [30分で試すApple Container quickstart](docs/quickstart.md)
@@ -80,7 +102,7 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## Previewで実装されているもの
+## Betaで実装されているもの
 
 - LSQ v1 validationと決定的compile
 - PostgreSQLをbacking storeとするSemantic Snapshot/Schema v1
@@ -117,7 +139,7 @@ MCP diagnosticはstructured JSONとしてstderrへ出力され、request value�
 data、SQL、result row、private name、principal dataを含みません。hiddenなsemantic
 objectと未知のsemantic objectには、同じ公開用「not available」errorを返します。
 
-## Previewの制限事項
+## Betaの制限事項
 
 - PostgreSQL connectionには明示的な`sslmode`が必要です。remote connectionでは
   `sslmode=require`を使用してください。`sslmode=disable`は、ローカルまたは別途
@@ -132,6 +154,9 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 - PostgreSQL 18が検証済みのローカル開発targetです。PostgreSQL 16、17、18はDocker
   CIのmigration、integration、recovery matrixを通過しています。正確な境界は
   [compatibility matrix](docs/compatibility.md)を参照してください。
+- 現在もLinux amd64 CIとmulti-architecture release artifactはありますが、M6でLinux
+  amd64/arm64両方の実行evidenceをrelease-blockingにします。
+- governed writeは`0.4`で計画しており、現在のreleaseはmutation requestを受け付けません。
 
 ## Packaging状況
 

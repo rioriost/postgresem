@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Redefine M6 as the `0.4` governed-ingestion and Linux portability milestone,
+  followed by comparison-driven `0.5`–`0.9` stages before `1.0`.
+- Plan a separate typed insert/upsert contract without weakening the existing
+  read-only query executor or PostgreSQL GRANT/RLS enforcement.
+- Make executed Linux amd64 and arm64 artifact coverage an M6 release gate.
+
 ### Security
 
 - Pin every GitHub Actions dependency to an immutable commit SHA, including
@@ -23,7 +31,7 @@ Beta release.
 - Privacy-safe `postgresem report beta` audit aggregation.
 - Loopback-only commerce Web demo over the existing MCP stdio boundary.
 - Beta incident, recovery, SLO/adoption, and release-verification guidance.
-- Keyless GitHub OIDC signing for future checksum and GHCR releases.
+- Keyless GitHub OIDC signing for checksum and GHCR release artifacts.
 
 All notable changes to PostgreSQL Semantic Gateway are documented here.
 

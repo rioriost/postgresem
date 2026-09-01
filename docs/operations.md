@@ -1,7 +1,12 @@
-# Developer-preview operations
+# Beta operations
 
-This guide describes the current local/process-oriented preview. It is not a
+This guide describes the current local/process-oriented beta. It is not a
 production runbook.
+
+The current source executor is read-only. Do not grant business-data write
+privileges to `postgresem_runtime` or its mapped query roles. M6 (`0.4`) plans
+governed ingestion through separate writer credentials, roles, compiler, and
+audit contracts; those controls are not implemented by this guide.
 
 ## Roles and credentials
 
@@ -230,7 +235,7 @@ current published semantic snapshot; it does not export audit history,
 catalog/import state, source data, roles, or grants.
 
 Any manual removal of the `semantic` schema, roles, or volume is destructive
-DBA work outside the developer-preview support boundary. Export and back up
+DBA work outside the beta support boundary. Export and back up
 first, inspect dependencies, and do not present manual deletion as a reversible
 uninstall.
 
@@ -301,4 +306,5 @@ path. Docker CI applies `compose.ci.yaml` through `COMPOSE_FILE` for its
 configured version matrix.
 
 MCP is stdio only. There is no HTTP endpoint, TLS termination, bearer-token
-authentication, streamable HTTP, or remote multi-user service in M4.
+authentication, streamable HTTP, or remote multi-user service in the current
+beta.

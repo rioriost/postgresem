@@ -2,18 +2,18 @@
 
 ## Supported versions and scope
 
-No production-ready version has been released. `0.2.0-alpha.1` is the published
-developer preview and `0.3.0-beta.1` is the active beta development line for
-local evaluation and read-only pilots. There is no long-term-support promise
-for 0.x prereleases.
+No production-ready version has been released. `0.3.0-beta.1` is the active
+published beta for local evaluation and governed read-only pilots. There is no
+long-term-support promise for 0.x prereleases.
 
-The implemented boundary is MCP stdio plus local/non-TLS PostgreSQL
-connections. There is no HTTP service, remote authentication protocol, TLS,
-published signed release, production backup/restore, or production hardening
-claim. The loopback Web demo is not a remotely supported transport.
-The `v0.2.0-alpha.1` release includes checksums and a container-image
-SBOM/provenance record. Checksums are integrity checks and are not signatures;
-future beta releases are configured for keyless GitHub OIDC signing.
+The implemented application boundary is MCP stdio and guarded read-only
+PostgreSQL execution. PostgreSQL connections require explicit
+`sslmode=require` or `sslmode=disable`; remote TLS uses the platform trust
+store and hostname verification. There is no HTTP service, remote
+authentication protocol, production RPO/RTO guarantee, or production
+hardening claim. The loopback Web demo is not a remotely supported transport.
+The `v0.3.0-beta.1` release publishes keyless GitHub OIDC signatures for its
+checksums and immutable container image digest, plus image SBOM/provenance.
 
 The Apple Container gateway service is configured with container user root
 solely so `container-compose` can perform its `/etc/hosts` fallback. Its
@@ -56,6 +56,13 @@ invariant:
 - protocol stdout contains only JSON-RPC messages;
 - MCP errors/logs omit credentials, SQL, rows, literals, principals, and
   private requested names.
+
+M6 (`0.4`) plans a separate governed mutation capability. It must not weaken
+the invariants above or reuse the read-only credential/executor as a writable
+path. Before mutation is exposed, the project requires a versioned typed
+contract, separate writer roles, PostgreSQL RLS `WITH CHECK` and constraints,
+idempotency, atomic audit lifecycle, rollback/reconciliation tests, and
+explicit capability negotiation. Raw SQL and arbitrary DML remain prohibited.
 
 ## Safe evaluation
 

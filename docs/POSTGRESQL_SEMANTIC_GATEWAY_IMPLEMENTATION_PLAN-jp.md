@@ -1,9 +1,11 @@
 # PostgreSQL Semantic Gateway 実装計画
 
 - プロジェクト名: `postgresem` / PostgreSQL Semantic Gateway
-- 文書ステータス: 正式プロジェクト昇格案
+- 文書ステータス: 継続更新する実装・リリース計画
 - 作成日: 2026-08-31
-- 対象環境: Apple silicon Mac Studio、Apple Container 1.0.0、`container-compose` 1.1.0、PostgreSQLコンテナ
+- 最終改訂日: 2026-09-01
+- 対象環境: 必須runtimeとしてLinux amd64/arm64、開発・native archiveとしてmacOS amd64/arm64、maintainer reference環境としてApple silicon Mac Studio + Apple Container、PostgreSQL 16–18
+- 翻訳: [English](POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
 ## 1. エグゼクティブサマリー
 
@@ -32,6 +34,13 @@ AI Agent / Application
 
 MVPはPostgreSQL専用、分析系の読み取り専用クエリ、単一Gateway、単一データベース、明示的に認証された利用者に限定する。多データソース、自然言語応答UI、キャッシュ、事前集計、pgvector、自由SQL、書き込み操作はMVPに含めない。
 
+Beta後も対象databaseはPostgreSQLだけに保ちつつ、統制contractをデータ抽出だけでなく
+投入へ拡張する。M6は`1.0`ではなく`0.4`とし、統制されたデータ投入用の独立した型付き
+mutation contractと、Linux amd64/arm64の必須runtime evidenceを導入する。`0.4`以降は、
+Wren AI、Cube、Malloy、MetricFlow等のreference implementationを各段階で再評価し、
+PostgreSQL-nativeというpositionに適合する不足機能だけをevidenceに基づいて選び、
+複数の互換性段階を経て`1.0`へ進む。
+
 ## 2. 目的と成功条件
 
 ### 2.1 目的
@@ -41,7 +50,9 @@ MVPはPostgreSQL専用、分析系の読み取り専用クエリ、単一Gateway
 3. LSQ v1を、同一入力・同一Semantic Revision・同一Compiler Versionから同一の正規化SQLとパラメータ列へ変換する。
 4. LLMに物理スキーマや自由SQLを直接操作させず、MCPで発見・検証・実行・説明を提供する。
 5. すべての実行結果を、利用したSemantic Revision、メトリクス、ソース列、ポリシー、生成SQLハッシュまで追跡可能にする。
-6. Apple Containerを使うMac Studio上のローカル開発と、Linux CIの双方で再現できる開発環境を提供する。
+6. Apple Containerを使うMac Studio上の開発環境と、Linux amd64/arm64で検証されたproduction/runtime pathを提供する。
+7. raw SQLや任意DMLを公開せず、PostgreSQLのGRANT、RLS `WITH CHECK`、constraint、trigger、transaction semanticsを最終正本として維持した統制データ投入を追加する。
+8. PostgreSQL以外のdialectへ広げるのではなく、維持されているreference implementationとの比較から不足機能の優先順位を決める。
 
 ### 2.2 MVP成功条件
 
@@ -54,15 +65,36 @@ MVPはPostgreSQL専用、分析系の読み取り専用クエリ、単一Gateway
 - PostgreSQL 16、17、18のCIマトリクスを通過する。
 - 初見の開発者がApple Container環境を30分以内に起動し、統合テストを実行できる。
 
-### 2.3 非目的
+### 2.3 0.4から1.0への方向
+
+- `0.4`では、上限付き`insert`と明示的にmodel化された冪等`upsert`のために、
+  versioned Logical Semantic Mutation（LSM）contractを追加する。callerからtable名、
+  column名、conflict SQL、predicate、expression、stored procedure名は受け取らない。
+- 書き込み可能model/fieldはquery visibilityとは独立して明示的にpublishする。
+  server管理column、generated column、immutable field、許可conflict key、batch上限、
+  返却可能fieldをpublished revisionへ含める。
+- read/write credential、mapped role、transaction mode、audit record、rate limit、MCP
+  capabilityを分離する。mutationを有効にしてもread-only query pathをwrite可能にしない。
+- PostgreSQLのpermission、`WITH CHECK`を含むRLS、constraint、triggerを最終正本とする。
+  Gatewayは許可mutationを狭められるが、databaseが拒否するmutationを成功させない。
+- Linux amd64/arm64をrelease-blockingなruntime targetにする。cross compileまたは
+  multi-architecture manifest生成だけではevidenceとせず、binary/imageを実際に起動し、
+  architecture別smoke/contract testを通す。
+- `0.5`から`0.9`は比較駆動の互換性段階とする。計測した利用者需要とreference
+  implementationとの差から機能を選び、PostgreSQL専用かつno-raw-SQLの境界を保てる
+  場合だけ採用する。
+
+### 2.4 非目的
 
 - 汎用Text-to-SQL製品、チャットUI、可視化ツール、BI製品を作ること。
 - PostgreSQL以外のwarehouseやfederated queryに対応すること。
 - dbt、ETL/ELT、データカタログ、MDMを置き換えること。
 - 任意SQL、DDL、DML、ストアドプロシージャ実行をMCPへ公開すること。
+- 統制mutation contractをbulk ETL/ELT、replication、CDC、database administrationの代替にすること。
 - PostgreSQLのGRANT/RLSをGateway独自の認可で置き換えること。
 - MVPでキャッシュ、事前集計、ベクトル検索、学習型join推論を実装すること。
 - 複雑なmany-to-manyや非加法メトリクスを、意味が不明なまま自動補正すること。
+- `1.0`以前または`1.0`でPostgreSQL以外のexecution engineへ対応すること。
 
 ## 3. 設計原則
 
@@ -246,7 +278,8 @@ MVPはネットワーク分散しないモジュール化モノリスとする�
 | Planner | anchor、join graph、grain、aggregate、policy binding、cost guard |
 | Compiler | typed relational IRからPostgreSQL AST/SQLとbind parametersを生成 |
 | Executor | read-only transaction、timeout、row/byte limit、cancel |
-| Lineage/Audit | design-time/query-time edge、hash、監査event |
+| Mutation compiler/executor | M6: typed insert/upsert plan、分離writer role、idempotency、rollback |
+| Lineage/Audit | design-time/query-time/mutation-time edge、hash、監査event |
 | Telemetry | structured logs、metrics、traces、health/readiness |
 | Admin CLI | migrate、scan、validate、publish、diff、doctor |
 
@@ -264,6 +297,24 @@ MVPはネットワーク分散しないモジュール化モノリスとする�
 - secretは環境変数または外部secret storeから受け取り、設定file、Semantic Schema、COMMENT、logへ保存しない。
 - principal mapping、statement timeout、result上限、許可revision、監査保持期間を設定可能にする。
 - 起動時にDB version、migration version、必須privilege、RLS安全条件を`doctor`相当で確認し、危険な実行roleならfailする。
+
+### 7.3 統制Mutation境界（M6 target）
+
+- queryとmutationのplanningはimmutable semantic snapshotとtyped scalar semanticsを
+  共有するが、request type、compiler entry point、credential、role、budget、audit
+  record、executorを分離する。
+- 現在のquery executorはtransaction-level `READ ONLY`のまま維持する。このinvariantを
+  弱めたりparameter化したりしてmutationを実装しない。
+- 専用loginは、明示的に許可された非owner・非superuser・非`BYPASSRLS` writer role
+  だけを引き受ける。requestからconnection、role、project、conflict policy、
+  transaction isolation levelを選択できない。
+- M6 compilerはpublished writable modelに対する単一のparameterized `INSERT`または
+  承認済み`INSERT ... ON CONFLICT`だけを生成する。任意`UPDATE`、`DELETE`、`MERGE`、
+  `COPY`、`CALL`、DDL、expression、multi-statement inputは`0.4`では拒否する。
+- idempotency key、最大row/byte、statement/lock timeout、atomicなaudit start/finish、
+  明示的affected-row expectationを必須にする。
+- compiler crateにはdatabase、transport、logging、audit I/Oを入れない。DBによる拒否を
+  stable mutation errorとして公開し、success-shaped responseへ変換しない。
 
 ## 8. MCP API
 
@@ -317,6 +368,19 @@ resourceもtoolと同じ認可filterを通す。prompt templateや自然言語�
 ```
 
 numeric、timestamp、date、intervalなどはJSONでの精度・timezone規約を明文化する。MVPではnumericを文字列、timestampをRFC 3339、dateをISO 8601として返す。
+
+### 8.5 Post-MVP Mutation API
+
+M6のmutationは独立してversion化されたcapabilityだけで追加する。CLI/MCP operationの
+候補は`validate_semantic_mutation`と`mutate_semantic_model`とし、最終的な名称とschemaは
+ADRで確定する。writer profileが設定されていないprocessはmutation toolをadvertiseも
+acceptもしない。mutation requestはpublished semantic model/field名だけを使い、生成SQLを
+返さず、物理identifierを受け取らない。requestからprincipal、role、project、credential、
+idempotency storage、conflict expressionを指定することを拒否する。
+
+既存の5つのread-only MCP toolの意味は維持する。mutation capability negotiation、
+audit taxonomy、response shape、replay semantics、compatibility ruleを独立version化し、
+read-only deploymentがclient requestだけでwrite可能にならないようにする。
 
 ## 9. Logical Semantic Query JSON Schema方針
 
@@ -428,6 +492,25 @@ compile(
 
 DB接続、MCP、logging、実行は外側に置く。この境界をproperty test、fuzz test、golden testの中心にする。
 
+### 10.6 決定的Mutation Compiler（M6 target）
+
+```text
+compile_mutation(
+  normalized_lsm,
+  immutable_semantic_snapshot,
+  principal_capabilities,
+  mutation_options
+) -> { statement, typed_parameters, affected_model, write_lineage, hash }
+```
+
+M6 mutation compilerは上限付きinsertと、明示的にmodel化された冪等upsertだけを扱う。
+writable visibility、required/default field、PostgreSQL scalar type、nullability、
+generated/identity column、immutable field、許可conflict key、batch上限、return
+visibilityを検証する。同じinput、revision、compiler semantic version、capability
+profileから同じstatement text、parameter順、lineage、hashを生成しなければならない。
+未知または曖昧なfield、client指定の物理名、不完全なconflict key、unsafe default、
+未対応expressionはfail closedにする。
+
 ## 11. Security
 
 ### 11.1 脅威モデル
@@ -435,6 +518,8 @@ DB接続、MCP、logging、実行は外側に置く。この境界をproperty te
 - prompt injectionにより、非公開modelの発見、raw SQL、制限回避を試みる。
 - SQL injectionまたはidentifier injection。
 - RLS/GRANTを迂回するconnection roleやpool context漏れ。
+- writable-field policy、RLS `WITH CHECK`、constraint、idempotency、affected-row
+  expectationを迂回するmutation。
 - 高cost query、巨大`IN`、Cartesian join、巨大resultによるDoS。
 - catalog/comment/error/logを通じた機密情報漏えい。
 - Semantic Modelの悪意ある変更またはsupply-chain混入。
@@ -450,6 +535,9 @@ DB接続、MCP、logging、実行は外側に置く。この境界をproperty te
 - errorをpublic codeと内部詳細に分離し、非公開object名やSQLを一般scopeへ返さない。
 - logはquery/resultの実値を既定で記録せず、hash、型、件数、timingを記録する。
 - source query用read-only pool、introspection、audit writerをcredentialとpool単位で分離する。audit writerは`semantic.query_audit`へのappend/update以外を許可しない。
+- mutationは専用writer credentialと分離されたallowlist済みmapped roleを使う。
+  read-only credentialには業務データwrite権限を与えず、writer credentialにはpublished
+  mutation contractに必要なmodel/table/column operationだけを与える。
 - migration/model publishは署名済みreleaseまたはreview必須のCI経由にする。
 - dependency audit、SBOM、container image scan、secret scanをrelease gateにする。
 
@@ -463,13 +551,21 @@ DB接続、MCP、logging、実行は外側に置く。この境界をproperty te
 - cancel/timeout後にtransactionがabort/rollbackされ、接続が安全な状態でpoolへ戻る。
 - stdioの固定principalとHTTPのrequest principalが同じauthorization fixtureで同じ可視性になる。
 - source execution roleからSemantic Schemaやaudit tableへ書き込めず、audit writerから業務データを読めない。
+- read-only deploymentはmutation capabilityをadvertiseせず、request fieldからwrite可能に
+  変更できない。
+- mutation testはcross-tenant insert、RLS `WITH CHECK`、generated/immutable field、
+  duplicate idempotency key、partial batch、constraint/trigger failure、timeout/cancel
+  rollback、affected-row mismatch、audit failureを含む。拒否されたmutationを成功として
+  報告してはならない。
 
 ## 12. Semantic Lineageと監査
 
-### 12.1 二種類のlineage
+### 12.1 三種類のlineage
 
 1. **Design-time lineage**: metric→field→physical column、model→view/table、relationship→join columns。
 2. **Query-time lineage**: query→revision→metrics/dimensions→relationships→physical objects→policy context→SQL hash。
+3. **Mutation-time lineage**: mutation→revision→writable model/field→physical target
+   column→policy context→statement hash→affected-row outcome。
 
 ### 12.2 記録項目
 
@@ -485,6 +581,11 @@ DB接続、MCP、logging、実行は外側に置く。この境界をproperty te
 - status、error code、row count、byte count、truncated/cancelled
 
 実行前に専用audit connectionで`started` eventをappendし、記録に失敗した場合はqueryを開始しない。完了時に同じ`query_id`へterminal event/statusを書き、process crash等でterminal eventがない`started` recordは監視対象にする。これにより、read-only source transactionを崩さず「実行された可能性のあるqueryに監査記録がない」状態を避ける。
+
+mutation auditは別record typeとidentifierを使う。typed field名、row数、payload byte数、
+idempotency-key hash、statement hash、policy context、terminal outcomeを記録し、field値は
+既定で記録しない。source transaction開始前にaudit startをdurableにし、terminal statusで
+committed、rejected、rolled back、indeterminate、reconciledを区別する。
 
 ### 12.3 drift
 
@@ -509,7 +610,10 @@ embeddingはqueryの正しさ、権限、join選択、SQL生成に使わない�
 
 ### 14.1 ローカル前提
 
-このMac Studioで確認済みの実コマンドは`container-compose`である。文書・Make target・CI wrapperではこの名前を使う。Apple Containerのsystem serviceは起動済みだが、bootstrapは未起動状態からも動くようにする。
+maintainer referenceのMac Studioでは`container-compose`を使う。macOS quickstartはApple
+Containerを継続利用し、Linux文書とCIは対応OCI/Compose runtimeを使う。portable contractは
+単一host runtimeではなくrepository設定とrelease artifactである。文書化された各開発pathで
+未起動状態からbootstrapできなければならない。
 
 ### 14.2 Composeサービス
 
@@ -543,6 +647,19 @@ make clean-data   # 明示確認付きで開発volumeだけを削除
 - extensionなしでcore機能が動くことを必須にする。
 - pgvector、pg_stat_statements等はoptional capabilityとして検出する。
 - version固有catalog差分はadapterで吸収し、support matrixを文書化する。
+
+### 14.5 OS・architecture対応
+
+- M6必須: release binaryとOCI imageがLinux amd64/arm64で実行できる。
+- 維持する開発/archive target: macOS amd64/arm64。
+- CIで両Linux architecture上のbinaryまたはimageを実行する。起動せずmanifestをbuild
+  しただけではsupport gateを満たさない。
+- 最低でもCLI contract、TLS初期化、migration互換、catalog load、guarded query実行、
+  governed mutationの拒否/smoke、installer検証を両architectureで実行する。
+- PostgreSQL 16–18のbehavior matrixとCPU architecture matrixを分け、cross-productを
+  縮小する場合は安全な理由をrelease gateへ記録する。
+- architecture固有native dependency、OpenSSL/TLS behavior、endianness、filesystem
+  assumption、archive namingをrelease testで扱う。
 
 ## 15. リポジトリ構成
 
@@ -600,10 +717,12 @@ MVPでcrateを細分化しすぎない。compiler coreだけを分離し、そ�
 | Golden compiler | LSQ→IR/SQL/params/lineage | review可能な差分 |
 | Integration | 実PostgreSQL 16–18 | catalog scan、migration、query result |
 | Security | GRANT/RLS/pool/timeout | cross-tenant漏えいなし |
+| Mutation security | writer role/RLS/idempotency/rollback | unauthorized writeまたは部分成功の誤報なし |
 | Contract | MCP/JSON Schema | client fixtureとの互換性 |
 | Migration | fresh + N-1 upgrade | published revision保持、rollback方針確認 |
 | Known-answer eval | semantic correctness | 代表質問の期待値・期待拒否 |
 | Performance | compile/execute/catalog | regression budget |
+| Platform | Linux amd64/arm64 binary/image | install、start、query、mutation smoke、TLS初期化 |
 
 ### 16.2 正しさのoracle
 
@@ -623,8 +742,8 @@ MVPでcrateを細分化しすぎない。compiler coreだけを分離し、そ�
 
 ### 17.1 Structured logs
 
-- JSON形式、UTC timestamp、severity、service version、request/query ID。
-- stage、error code、semantic revision、compiler version、query/SQL hash、duration、row/byte count。
+- JSON形式、UTC timestamp、severity、service version、request/query/mutation ID。
+- stage、error code、semantic revision、compiler version、query/statement hash、duration、row/byte/affected-row count。
 - literal、token、接続文字列、結果行、未公開commentは既定で記録しない。
 - debug SQLはlocalまたは限定scopeで明示的に有効化し、保持期間を短くする。
 
@@ -634,16 +753,19 @@ MVPでcrateを細分化しすぎない。compiler coreだけを分離し、そ�
 - validation/compile/DB/serialization latency histogram
 - active/queued query、pool使用率、timeout/cancel、result truncation
 - catalog scan時間、object数、drift issue数、publish数
+- mutation validation/commit/reject/rollback数、idempotent replay数、
+  indeterminate/reconciliation数
 - model/metric別の利用数は高cardinalityを避け、必要ならaudit DBで分析する
 
 ### 17.3 Traces
 
-`mcp.request → auth → catalog.resolve → validate → plan → compile → db.acquire → db.query → serialize → audit`をspan化する。OpenTelemetry exportはoptionalとし、coreはvendor-neutralにする。
+`mcp.request → auth → catalog.resolve → validate → plan → compile → db.acquire → db.query → serialize → audit`をspan化する。M6 mutation traceは独立した`validate → compile_mutation → db.mutate → commit/rollback → audit` pathを使う。OpenTelemetry exportはoptionalとし、coreはvendor-neutralにする。
 
 ### 17.4 SLO候補（betaで確定）
 
 - Gateway起因のvalidation+compile p95 < 50 ms（100 model規模のwarm状態）
 - 監査event欠落 0件
+- M6以降のmutation audit欠落とsuccess-shaped indeterminate outcome 0件
 - security test pass 100%
 - supported LSQのsemantic correctness eval 100%。unsupportedは明示拒否
 
@@ -665,6 +787,8 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 - SemVerを採用し、LSQ schema、Semantic Schema migration、MCP contract、compiler semanticsのcompatibility noteを生成する。
 - tagからreproducible binaryとmulti-arch OCI image（最低`linux/amd64`、`linux/arm64`）を作る。
+- release CIでLinux amd64/arm64それぞれのsmoke/contract testを実行する。cross build成功
+  だけでは不十分とする。
 - SBOM、provenance、checksum、署名を配布物に付与する。
 - migrationはforward-onlyを基本とし、release前backup、N-1 upgrade test、互換期間を定義する。
 - database migrationとbinary rolloutの順序をexpand/contract方式にする。
@@ -679,7 +803,9 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 ## 19. マイルストーン
 
-期間は人員確定前の約束にせず、各gateの完了で次へ進む。
+期間は人員確定前の約束にしない。2026-09-01にproject ownerは、betaで確認できた価値に
+基づいてM6実装開始を承認した。未完了のM5 independent field/security evidenceは追跡を
+継続し、遡って完了扱いにしない。未解決P0/P1 findingは引き続き`0.4` releaseをblockする。
 
 ### M0: Project foundation / RFC
 
@@ -734,14 +860,89 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 **Exit gate**: 2つ以上の非fixture DBで4週間運用し、P0/P1 security/correctness defectがない。
 
-### M6: 1.0正式プロジェクト
+### M6: 0.4 — Governed ingestionとportable Linux
 
-- stable LSQ v1、Semantic Schema migration policy、support matrix
-- governance、maintainer、release cadence、deprecation policy
-- external security review結果の解消
-- production readiness checklistと互換性suite
+- LSM v1とSemantic Schemaのwritable-model projectionを仕様化する。
+- 上限付きtyped `insert`と承認済み冪等`upsert`を実装し、raw SQL、任意DML、物理identifier、
+  `UPDATE`、`DELETE`、`MERGE`、`COPY`、`CALL`をpublic contract外に保つ。
+- 分離writer credential/role、RLS `WITH CHECK`、idempotency、atomic mutation audit、
+  rollback/reconciliation behavior、安全な拒否testを追加する。
+- release binary/OCI imageのLinux amd64/arm64 runtime jobを追加し、installer、TLS、query、
+  mutation smokeを含める。
+- `1.0`安定性を主張せず、`0.4`のcompatibility、migration、operations、incident、
+  threat-model更新を公開する。
 
-**Exit gate**: 正しさ、安全性、移行性、運用性、差別化の各gateを満たし、maintainerが継続可能と判断。
+**Exit gate**: PostgreSQL 16–18で承認済みinsert/upsertが成功し、拒否・曖昧・duplicate・
+cross-tenant・partial failure mutationが完全なaudit evidenceとともにfail closedになる。
+Linux amd64/arm64 artifactが両方で必須smoke/contract suiteを実行できる。
+
+### M7: 0.5 — Reference比較とinteroperability
+
+- 共通PostgreSQL dataset/taskを使い、現行Wren AI、Cube、Malloy、MetricFlow releaseとの
+  比較を再実行して文書化する。
+- authoring、discovery、query semantics、mutation、API/SDK、lineage、governance、
+  operationsのcapability/gap matrixを公開する。
+- 外部modelをruntime正本にせず導入負荷を減らせる場合だけ、import/exportまたはmodel
+  conversion adapterを追加する。
+- feature数のparityではなく計測した利用者価値から後続作業を優先する。
+
+**Exit gate**: 比較を再現でき、選択したgapにPostgreSQL利用者とfixtureが存在し、採用機能が
+PostgreSQLを唯一のexecution engineかつsemantic authorityとして維持する。
+
+### M8: 0.6 — Semantic・Mutation coverage
+
+- 明示的にmodel化されたtime comparison、cumulative metric、追加relationship pattern等、
+  価値が高く安全なsemantic gapを実装する。
+- bounded semantic predicate、optimistic concurrency、affected-row expectation、
+  immutable field、recovery behaviorをADRで定義できた場合だけtyped `update`/`delete`へ
+  mutationを拡張する。
+- operator追加前にknown-answer/rejection suiteを拡張する。
+
+**Exit gate**: 新query/mutation semanticsが対応fixtureで正答100%となり、曖昧・unsafe caseを
+拒否し、GRANT/RLSを弱めない。
+
+### M9: 0.7 — Application・Agent integration
+
+- demandとthreat-model gateを満たす場合、認証済みMCP Streamable HTTPを追加する。
+- generated client schema/SDK guidance、capability negotiation、cancellation、
+  pagination/streaming、stable idempotency behaviorを提供する。
+- stdioを維持し、明示的authn/authz、origin、rate、audit要件を満たさないremote mutationを
+  無効にする。
+
+**Exit gate**: multi-user remote deploymentがlocal stdioと同じvisibility、role/RLS、
+privacy、query、mutation invariantを維持する。
+
+### M10: 0.8 — PostgreSQL-native scale・operations
+
+- prepared plan、connection管理、materialized view、optional pre-aggregation等の
+  PostgreSQL-native手法で計測済みbottleneckを解消し、既定で第二のauthoritative datastoreを
+  追加しない。
+- large catalog/model authoring workflow、operational dashboard、upgrade automation、
+  architecture別performance baselineを追加する。
+- reference比較を再実行し、意図的な非parityを文書化する。
+
+**Exit gate**: Linux amd64/arm64でscale targetとfailure recoveryを再現でき、determinism、
+freshness、database authorizationを損なわない。
+
+### M11: 0.9 — 1.0 release candidate
+
+- candidate LSQ、LSM、Semantic Schema、MCP、CLI、error、migration、audit contractをfreezeする。
+- independent security review、production pilot evidence、upgrade/rollback rehearsal、
+  support policy、governance、deprecation policyを完了する。
+- 1.0互換性保証を満たせないexperimental surfaceを削除または明示延期する。
+
+**Exit gate**: 未解決P0/P1 correctness/security defectがなく、必須platform、N-1 upgrade、
+recovery rehearsalが通り、release-candidate利用者がquery/ingestion workflowを運用できる。
+
+### M12: 1.0 — Stable PostgreSQL Semantic Gateway
+
+- stable contractとcompatibility/support期間を公開する。
+- maintainer、release cadence、vulnerability response、sustainability ownershipを確立する。
+- 最終reference比較と差別化statementを公開する。
+
+**Exit gate**: correctness、mutation safety、security、migratability、operability、Linux
+portability、interoperability、differentiation、governance、maintainer sustainabilityの
+全gateを満たす。
 
 ## 20. MVPから正式プロジェクトへの段階
 
@@ -750,8 +951,14 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 | Spike | catalog→簡易model→LSQ→SQLの縦切り | MCP remote、vector、複雑join | 価値と実現性を2週間規模で確認 |
 | MVP | 単一DB、read-only、stdio MCP、基本metric、RLS | UI、cache、多DB、自由SQL | eval/security/lineage条件達成 |
 | Preview | docs、packaging、実DB pilot | 分散化、pre-aggregation | 外部利用者が自力導入可能 |
-| Beta | migration、運用、HTTP候補、SLO | PostgreSQL外対応 | 4週間の実運用とsecurity review |
-| 1.0 | 安定contract、support、governance | 市場要望だけのscope拡張 | 継続maintainerと互換性保証 |
+| Beta / 0.3 | migration、運用、HTTP判断、SLO | writeとPostgreSQL外対応 | 4週間の実運用とsecurity review |
+| 0.4 | governed insert/upsertとLinux amd64/arm64 runtime | 任意DMLとPostgreSQL外engine | mutation security/correctnessとdual-architecture runtime gate |
+| 0.5 | 再現可能なreference比較とtargeted interoperability | feature数parity | evidence-backedなgap優先順位 |
+| 0.6 | より広い安全なquery/mutation semantics | 曖昧な自動意味論 | correctness/rejection gate |
+| 0.7 | 認証済みapplication/agent integration | anonymousまたはrequest-selected authority | remote invariantがlocalと同等 |
+| 0.8 | PostgreSQL-native scale/operations | 必須外部cache/source of truth | 計測済みscale/recovery target |
+| 0.9 | freeze済みrelease-candidate contract | 新experimental surface | production/security/platform evidence完了 |
+| 1.0 | stable contract、support、governance | PostgreSQL外execution | 継続maintainerと互換性保証 |
 
 正式化はコード量ではなく、以下の証拠で判断する。
 
@@ -763,7 +970,8 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 ## 21. 既存OSSとの差別化
 
-比較は優劣ではなく、対象範囲と正本の置き場所の違いとして扱う。各OSSは進化が速いため、M0と各major release前に公式資料で再評価する。
+比較は優劣ではなく、対象範囲と正本の置き場所の違いとして扱う。各OSSは進化が速いため、
+M0、M6直後、M10、1.0前に公式資料で再評価する。
 
 | 観点 | Wren AI | Cube | Malloy | MetricFlow | postgresem |
 |---|---|---|---|---|---|
@@ -771,7 +979,8 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 | model正本 | MDL/YAML等のproject file | YAML/JavaScript等のcode | `.malloy` file | dbt manifest/YAML | PostgreSQL `semantic` schema |
 | DB catalog/COMMENT/FK取込 | scaffold機能あり | schema generationあり | connection schemaを利用 | dbt manifest中心 | catalog/COMMENT/FK/CHECK/RLSを第一級のevidenceとしてrevision管理 |
 | compiler | 多data source semantic engine | 多data source semantic layer | Malloy→SQL compiler | metric query→SQL compiler | PostgreSQL限定typed LSQ→SQL、決定性と安全な拒否を仕様化 |
-| MCP/agent | あり | あり | Publisher等であり | 主眼ではない | raw SQLなし、LSQ discovery/validate/query/explainに限定 |
+| MCP/agent | あり | あり | Publisher等であり | 主眼ではない | raw SQLなし。現在はLSQ discovery/validate/query/explain、将来は独立gate付きtyped mutation |
+| governed write | product/API依存 | API/pre-aggregation workflow | 主たるsemantic contractではない | 主たるmetric contractではない | PostgreSQL専用typed ingestion、GRANT/RLS/constraintが正本。0.4から開始 |
 | security正本 | semantic/product policy | semantic access policy | 接続先権限との組合せ | dbt/platformとの組合せ | PostgreSQL GRANT/RLSを最終正本にしprincipalをDBまで伝播 |
 | lineage | 製品/engine機能 | 製品/semantic機能 | compiler metadata | semantic manifest/plan | revision、compiler、policy、source columnをqueryごとに構築 |
 | 対象DB | 多数 | 多数 | 複数 | 複数warehouse | PostgreSQL専用 |
@@ -789,7 +998,9 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 - Wren AIのGenBI体験、Cubeのcache/pre-aggregationと多様なAPI、Malloyの表現力、MetricFlow/dbt ecosystemとは正面競合しない。
 - 将来はimport/export adapterやcompiler比較fixtureを提供し、共存を検討する。
-- M0でWren/Malloyのcompilerやmodelを再利用できるかprototypeし、独自実装の保守負担が価値を上回るなら方針を変更する。
+- M0で初期境界を確立した。M7とM10で現行releaseとの比較を繰り返し、import/exportや
+  実装技法を採用し得るが、PostgreSQL以外のruntime抽象化や第二のsemantic source of
+  truthは採用しない。
 
 ## 22. 主要リスクと判断ゲート
 
@@ -798,6 +1009,7 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 | 既存OSSとの差が小さい | 独自projectの価値不足 | 3 dataset/30問で比較、利用者interview | M0で継続/fork/integration/中止 |
 | join fan-outとmetric意味論 | 静かに誤答する | v1範囲制限、grain/additivity、既知回答・拒否eval | M2で正答100%未達ならscopeをさらに削る |
 | RLS principal伝播 | 越権・漏えい | 非owner role、`SET LOCAL`、pool test、外部review | M3未達ならremote executionを公開しない |
+| governed mutation迂回または部分成功 | unauthorized/corrupt dataまたは偽success | 分離writer role、typed LSM、RLS `WITH CHECK`、constraint、idempotency、atomic audit、rollback/reconciliation test | M6未達ならmutationを公開しない |
 | Semantic SchemaがDBを汚す | 導入拒否・migration事故 | 専用schema/role、forward migration、uninstall/export | Preview前に実DB pilot評価 |
 | catalogのversion差・drift | 誤ったmodel/停止 | PG 16–18 fixture、fingerprint、明示scan | 各PG releaseでsupport更新判断 |
 | COMMENTの品質不足 | discovery精度不足 | explicit term/editor workflow、候補confidence | Previewで運用工数を計測 |
@@ -805,6 +1017,7 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 | compiler自作の保守費 | project持続不能 | pure core、限定operator、既存compiler再利用評価 | M0/M4でbuild-vs-integrate再判定 |
 | DoS/high-cost query | DB障害 | budget、EXPLAIN guard、timeout、concurrency | M3 load/security test |
 | Apple Container Compose差 | ローカル再現性低下 | Compose交差機能、Mac smoke test、Linux CI | M1で同一fixture結果を確認 |
+| Linux architecture gap | 対応CPUでrelease artifactが動かない | amd64/arm64でinstaller/binary/image実行test、native dependency追跡 | M6で両architectureをrelease blockingにする |
 | metadata/監査の機密性 | schemaや利用傾向漏えい | metadata RLS、redaction、retention | M3 threat model review |
 | pgvector先行導入 | 複雑化、誤った正しさ依存 | post-MVP、ranking限定、baseline比較 | Beta以降の独立ADR |
 
@@ -839,7 +1052,13 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 - packaging、signed release、external security review
 - 大規模catalogのpagination/performance
 
-### P2: 計測後に判断
+### P2: 0.4に必要
+
+- LSM v1、writable model metadata、insert/upsert compiler/executor
+- 分離writer role、mutation audit/idempotency/reconciliation
+- Linux amd64/arm64 runtime・installer execution gate
+
+### P3: 1.0まで比較駆動で判断
 
 - pgvector discovery ranking
 - approved example query retrieval
@@ -847,7 +1066,8 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 - many-to-many/symmetric aggregate
 - cache/pre-aggregation
 - import/export adapter（Wren/Cube/Malloy/MetricFlow）
-- UI、自然言語回答、PostgreSQL外dialect
+- UI、自然言語回答
+- PostgreSQL外dialectは1.0まで対象外
 
 ## 24. 実装前に作成するADR
 
@@ -860,6 +1080,9 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 7. ADR-007: audit/lineage保持期間と機密情報redaction
 8. ADR-008: migration、backup、compatibility、uninstall/export
 9. ADR-009: build vs Wren/Malloy/他compiler integration評価
+10. ADR-010: LSM v1、writable model metadata、insert/upsert semantics、idempotency
+11. ADR-011: writer role/RLS/audit/reconciliation security boundary
+12. ADR-012: Linux amd64/arm64 support evidenceとrelease matrix
 
 ## 25. 最初の実装バックログ
 
@@ -876,9 +1099,26 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 11. query-time lineage/auditとobservabilityを実装する。
 12. end-to-end evalとMVP exit reviewを実施する。
 
+### 25.1 M6実装バックログ
+
+1. write-capable connection追加前にADR 010–012とthreat model更新を完了する。
+2. LSM v1 JSON Schemaとwritable-model snapshot projectionをaccepted/rejection fixture付きで
+   定義する。
+3. database、transport、logging、audit I/Oを含まないpure deterministic insert/upsert
+   compilerを実装する。
+4. 既存runtime query roleへwrite capabilityを付与せず、専用writer roleとmigrationを追加する。
+5. idempotency、audit lifecycle、transaction rollback、affected-row check、reconciliationを
+   実装する。
+6. mutationを既定無効にしたCLI/MCP capability negotiationを追加する。
+7. Linux amd64/arm64のinstaller、binary、OCI、TLS、query、mutation smoke jobを追加する。
+8. `0.4` migration、compatibility、security、operations、incident文書を公開する。
+
 ## 26. セルフレビュー結果と反映事項
 
-**レビュー判定: M0（Project foundation / RFC）への昇格は条件付きGO。** 直ちに汎用Semantic Layerを作り始めるのではなく、最初に3 dataset/30問の比較eval、LSQ/粒度意味論、RLS principal伝播のADRを確定する。M0のexit gateで、独自compilerを継続するか、Wren AI/Malloy等との統合へ切り替えるかを再判断する。
+**現在のレビュー判定: scope gate付きでM6（`0.4`）へGO。** 当初のM0条件付きreviewは
+動作するread-only betaへつながった歴史的設計根拠として以下に残す。次に正当化される拡張は
+governed ingestionと必須Linux portabilityであり、1.0宣言や汎用multi-database semantic
+layer化ではない。
 
 ### 技術的な弱点
 
@@ -907,7 +1147,10 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 ### 優先順位レビュー
 
-最優先はMCPや自然言語体験ではなく、fixture/eval、semantic contract、compiler correctness、RLS境界である。MCPはその安全なcoreを公開する薄いadapterとしてM3で実装する。pgvectorは発見のbaselineが不足した場合だけ導入する。
+M6の最優先はmutation contract、writer/RLS境界、rollback/audit correctness、Linux
+amd64/arm64実行evidenceである。`0.4`以降は再現可能なreference比較と利用者evidenceを
+優先する。MCPや自然言語の幅、cache、より豊富なsemanticsは、安全なcoreを維持できるgateを
+満たす場合だけ追加する。pgvectorは発見baselineが不足した場合だけ導入する。
 
 ## 27. 公式参考資料
 
@@ -915,6 +1158,8 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 - PostgreSQL: [`COMMENT`](https://www.postgresql.org/docs/current/sql-comment.html)
 - PostgreSQL: [Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 - PostgreSQL: [Row Security Policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+- PostgreSQL: [`INSERT`](https://www.postgresql.org/docs/current/sql-insert.html)
+- PostgreSQL: [`CREATE POLICY`](https://www.postgresql.org/docs/current/sql-createpolicy.html)
 - Apple: [`container`](https://github.com/apple/container)
 - Wren AI: [What is Modeling Definition Language (MDL)?](https://docs.getwren.ai/oss/engine/concept/what_is_mdl)
 - Wren AI: [MDL schema reference](https://docs.getwren.ai/oss/reference/mdl)

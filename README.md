@@ -62,6 +62,29 @@ This approach is intentionally PostgreSQL-specific. It favors deep integration
 with PostgreSQL types, catalog metadata, roles, RLS, transactions, and backup
 procedures over a broad abstraction across many database dialects.
 
+## Roadmap to 1.0
+
+The current `0.3` beta is a governed read-only system. M6 will be released as
+`0.4`, not `1.0`, and is planned to add a separate typed mutation contract for
+bounded inserts and explicitly modeled idempotent upserts. It will not weaken
+the existing `READ ONLY` query executor or expose raw SQL, arbitrary DML,
+physical identifiers, or request-selected database roles. PostgreSQL GRANT,
+RLS `WITH CHECK`, constraints, and triggers remain authoritative.
+
+`0.4` also makes executed Linux amd64 and arm64 runtime tests a release
+requirement rather than relying only on cross-built archives or a
+multi-architecture image manifest. The Mac Studio and Apple Container remain
+the maintainer's local reference environment, not the only supported target.
+
+After `0.4`, versions `0.5` through `0.9` will use reproducible comparisons
+with current reference implementations such as Wren AI, Cube, Malloy, and
+MetricFlow to select missing authoring, semantic, integration, and operational
+features. Feature-count parity is not the objective: PostgreSQL remains the
+only execution engine and semantic source of truth through `1.0`.
+
+See the [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
+for the M6–M12 gates.
+
 ## Start here
 
 - [30-minute Apple Container quickstart](docs/quickstart.md)
@@ -84,7 +107,7 @@ procedures over a broad abstraction across many database dialects.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What the preview implements
+## What the beta implements
 
 - LSQ v1 validation and deterministic compilation
 - Semantic Snapshot/Schema v1 backed by PostgreSQL
@@ -122,7 +145,7 @@ MCP diagnostics go to stderr as structured JSON and omit request values,
 connection data, SQL, result rows, private names, and principal data. Hidden
 and unknown semantic objects receive the same public “not available” errors.
 
-## Preview limitations
+## Beta limitations
 
 - PostgreSQL connections require an explicit `sslmode`. Use
   `sslmode=require` for remote connections; `sslmode=disable` is accepted only
@@ -137,6 +160,10 @@ and unknown semantic objects receive the same public “not available” errors.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
   and 18 pass the Docker CI migration, integration, and recovery matrix. See the
   [compatibility matrix](docs/compatibility.md) for the exact boundary.
+- Linux amd64 CI and multi-architecture release artifacts exist today, but M6
+  adds release-blocking execution evidence for both Linux amd64 and arm64.
+- Governed writes are planned for `0.4`; no released version currently accepts
+  mutation requests.
 
 ## Packaging status
 

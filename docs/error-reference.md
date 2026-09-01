@@ -151,5 +151,5 @@ Direct CLI and Rust-library errors are an operator/developer interface and can
 contain semantic object names or environment-variable names. Do not expose
 their stderr verbatim to untrusted users.
 
-No additional reserved error-code ranges are promised in M4. New categories
-must be documented before clients rely on them.
+No additional reserved error-code ranges are promised during the current beta.
+New categories must be documented before clients rely on them.
