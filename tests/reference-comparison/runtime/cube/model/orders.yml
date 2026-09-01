@@ -1,0 +1,19 @@
+cubes:
+  - name: orders
+    sql_table: commerce.orders
+    data_source: default
+
+    measures:
+      - name: total_revenue
+        sql: amount
+        type: sum
+
+    dimensions:
+      - name: order_id
+        sql: order_id
+        type: number
+        primary_key: true
+
+      - name: status
+        sql: status
+        type: string

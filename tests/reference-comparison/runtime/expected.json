@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "task": "commerce-total-revenue",
+  "database": "PostgreSQL 18",
+  "expected": {
+    "total_revenue": "545.50"
+  }
+}
