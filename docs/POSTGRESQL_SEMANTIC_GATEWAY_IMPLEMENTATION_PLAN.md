@@ -1,22 +1,23 @@
-# PostgreSQL Semantic Gateway 実装計画
+# PostgreSQL Semantic Gateway Implementation Plan
 
-- プロジェクト名: `postgresem` / PostgreSQL Semantic Gateway
-- 文書ステータス: 正式プロジェクト昇格案
-- 作成日: 2026-08-31
-- 対象環境: Apple silicon Mac Studio、Apple Container 1.0.0、`container-compose` 1.1.0、PostgreSQLコンテナ
+- Project name: `postgresem` / PostgreSQL Semantic Gateway
+- Document status: Formal project promotion proposal
+- Created: 2026-08-31
+- Target environment: Apple silicon Mac Studio, Apple Container 1.0.0, `container-compose` 1.1.0, PostgreSQL containers
+- Translations: [Japanese](POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## 1. エグゼクティブサマリー
+## 1. Executive Summary
 
-PostgreSQL Semantic Gatewayは、PostgreSQL自身を業務データだけでなく「データの意味の正本（Semantic Source of Truth）」として扱い、AIエージェントやアプリケーションに、統制された意味・指標・関係・権限・来歴をMCP経由で公開するOSSを目指す。
+PostgreSQL Semantic Gateway aims to be an OSS that treats PostgreSQL itself not only as a store for business data but also as the Semantic Source of Truth for data meaning, exposing governed semantics, metrics, relationships, permissions, and lineage to AI agents and applications via MCP.
 
-中心となる価値はText-to-SQLではない。LLMにはSQLを書かせず、バージョン化されたLogical Semantic Query（LSQ）を組み立てさせる。GatewayはLSQを厳格に検証し、承認済みのSemantic ModelとPostgreSQLの権限を使って、決定的かつパラメータ化されたSQLへコンパイルする。
+The core value proposition is not Text-to-SQL. Instead of having an LLM write SQL directly, it assembles versioned Logical Semantic Queries (LSQs). The Gateway rigorously validates LSQs and compiles them into deterministic, parameterized SQL using approved Semantic Models and PostgreSQL permissions.
 
 ```text
 AI Agent / Application
         │ MCP: discovery / validate / query / explain
         ▼
 ┌────────────────────────────────────────────────────┐
-│ PostgreSQL Semantic Gateway（単一プロセス）       │
+│ PostgreSQL Semantic Gateway (single process)       │
 │ MCP Adapter → AuthN/AuthZ → Semantic Catalog       │
 │ → LSQ Validator → Planner → SQL Compiler           │
 │ → Guarded Executor → Lineage / Audit / Telemetry   │
@@ -30,116 +31,116 @@ AI Agent / Application
 └────────────────────────────────────────────────────┘
 ```
 
-MVPはPostgreSQL専用、分析系の読み取り専用クエリ、単一Gateway、単一データベース、明示的に認証された利用者に限定する。多データソース、自然言語応答UI、キャッシュ、事前集計、pgvector、自由SQL、書き込み操作はMVPに含めない。
+The MVP is limited to PostgreSQL only, analytical read-only queries, a single Gateway, a single database, and explicitly authenticated users. Multi-data-source support, natural-language response UIs, caching, pre-aggregation, pgvector, free-form SQL, and write operations are excluded from the MVP.
 
-## 2. 目的と成功条件
+## 2. Goals and Success Criteria
 
-### 2.1 目的
+### 2.1 Goals
 
-1. PostgreSQL内に、概念・ディメンション・メトリクス・関係・同義語・ポリシー参照・来歴を保持できる、明示的で移行可能なSemantic Schemaを提供する。
-2. `pg_catalog`、`COMMENT`、PK/UNIQUE/FK、`CHECK`、GRANT、RLSから、有用な構造と意味の候補を安全に取り込む。
-3. LSQ v1を、同一入力・同一Semantic Revision・同一Compiler Versionから同一の正規化SQLとパラメータ列へ変換する。
-4. LLMに物理スキーマや自由SQLを直接操作させず、MCPで発見・検証・実行・説明を提供する。
-5. すべての実行結果を、利用したSemantic Revision、メトリクス、ソース列、ポリシー、生成SQLハッシュまで追跡可能にする。
-6. Apple Containerを使うMac Studio上のローカル開発と、Linux CIの双方で再現できる開発環境を提供する。
+1. Provide an explicit, migratable Semantic Schema within PostgreSQL that can hold concepts, dimensions, metrics, relationships, synonyms, policy references, and lineage.
+2. Safely ingest useful structural and semantic candidates from `pg_catalog`, `COMMENT`, PK/UNIQUE/FK, `CHECK`, GRANT, and RLS.
+3. Compile LSQ v1 into identical normalized SQL and parameter lists given the same input, the same Semantic Revision, and the same Compiler Version.
+4. Prevent LLMs from directly manipulating physical schemas or free-form SQL, providing discovery, validation, execution, and explanation through MCP instead.
+5. Make every query result traceable down to the Semantic Revision used, the metrics, source columns, policies, and the generated SQL hash.
+6. Provide a development environment reproducible both on a Mac Studio with Apple Container for local development and in Linux CI.
 
-### 2.2 MVP成功条件
+### 2.2 MVP Success Criteria
 
-- 既存PostgreSQLのサンプルスキーマを取り込み、候補モデルを生成できる。
-- 人がレビューして公開したモデルに対して、20件以上の代表LSQを正しいパラメータ化SQLへコンパイルできる。
-- 主要な粒度・join fan-out・曖昧なjoin pathを検出し、誤答せず明示的に拒否できる。
-- RLSを有効にしたテナント分離テストで、別テナントの行を取得できない。
-- MCPクライアントがモデル発見、検証、実行、説明を完結でき、自由SQL入力口が存在しない。
-- 全クエリについて、semantic revision、query hash、SQL hash、source lineage、policy context、実行時間、行数を監査できる。
-- PostgreSQL 16、17、18のCIマトリクスを通過する。
-- 初見の開発者がApple Container環境を30分以内に起動し、統合テストを実行できる。
+- Ingest an existing PostgreSQL sample schema and generate candidate models.
+- Compile 20 or more representative LSQs into correct parameterized SQL against a human-reviewed and published model.
+- Detect key granularity issues, join fan-out, and ambiguous join paths, and explicitly reject them rather than producing incorrect results.
+- In tenant-isolation tests with RLS enabled, never retrieve rows belonging to another tenant.
+- Allow an MCP client to complete model discovery, validation, execution, and explanation, with no free-form SQL entry point.
+- Audit every query for semantic revision, query hash, SQL hash, source lineage, policy context, execution time, and row count.
+- Pass the CI matrix for PostgreSQL 16, 17, and 18.
+- Enable a first-time developer to start the Apple Container environment within 30 minutes and run integration tests.
 
-### 2.3 非目的
+### 2.3 Non-Goals
 
-- 汎用Text-to-SQL製品、チャットUI、可視化ツール、BI製品を作ること。
-- PostgreSQL以外のwarehouseやfederated queryに対応すること。
-- dbt、ETL/ELT、データカタログ、MDMを置き換えること。
-- 任意SQL、DDL、DML、ストアドプロシージャ実行をMCPへ公開すること。
-- PostgreSQLのGRANT/RLSをGateway独自の認可で置き換えること。
-- MVPでキャッシュ、事前集計、ベクトル検索、学習型join推論を実装すること。
-- 複雑なmany-to-manyや非加法メトリクスを、意味が不明なまま自動補正すること。
+- Building a general-purpose Text-to-SQL product, chat UI, visualization tool, or BI product.
+- Supporting warehouses or federated queries outside PostgreSQL.
+- Replacing dbt, ETL/ELT, data catalogs, or MDM.
+- Exposing arbitrary SQL, DDL, DML, or stored-procedure execution through MCP.
+- Replacing PostgreSQL's GRANT/RLS with Gateway-proprietary authorization.
+- Implementing caching, pre-aggregation, vector search, or learned join inference in the MVP.
+- Automatically correcting complex many-to-many or non-additive metrics when their semantics are unclear.
 
-## 3. 設計原則
+## 3. Design Principles
 
-1. **PostgreSQL-native**: 正式なSemantic Metadataは対象PostgreSQL内に置き、同じバックアップ、トランザクション、権限、移行手順で管理する。
-2. **Database security is authoritative**: GatewayはGRANT/RLSを弱めない。実行ロールは非owner・非superuser・非`BYPASSRLS`とする。
-3. **LLM proposes; deterministic code decides**: LLMはLSQ候補を作るだけで、解決、認可、計画、SQL生成、制限適用は決定的コードが担う。
-4. **Fail closed**: 未知のフィールド、曖昧な関係、未承認のメトリクス、型不一致、過大コストは推測せず拒否する。
-5. **Semantic contract is versioned**: Semantic ModelとLSQ Schemaをバージョン化し、実行時には公開済みrevisionを固定する。
-6. **No raw SQL in the public contract**: 公開APIの式は型付きASTまたは承認済みシンボル参照とし、任意SQL文字列を受け付けない。
-7. **Lineage by construction**: SQLを後から解析して推測するのではなく、名前解決と計画中にlineage edgeを構築する。
-8. **Small modular monolith first**: MVPは単一バイナリと単一DBで始め、コンパイラの純粋ライブラリ境界だけを先に分離する。
-9. **Explicit beats inferred**: catalogからの推論は候補であり、公開には人の承認を必要とする。
-10. **Correctness before coverage**: サポート範囲を限定して正答または安全な拒否を保証し、曖昧な自動対応を増やさない。
+1. **PostgreSQL-native**: Store authoritative Semantic Metadata within the target PostgreSQL instance, managed under the same backup, transaction, permission, and migration procedures.
+2. **Database security is authoritative**: The Gateway must not weaken GRANT/RLS. Execution roles must not be owners, superusers, or `BYPASSRLS`.
+3. **LLM proposes; deterministic code decides**: The LLM only constructs LSQ candidates; resolution, authorization, planning, SQL generation, and limit enforcement are handled by deterministic code.
+4. **Fail closed**: Unknown fields, ambiguous relationships, unapproved metrics, type mismatches, and excessive costs are rejected rather than guessed.
+5. **Semantic contract is versioned**: Version the Semantic Model and LSQ Schema, pinning to a published revision at execution time.
+6. **No raw SQL in the public contract**: Expressions in the public API are typed ASTs or approved symbol references; arbitrary SQL strings are not accepted.
+7. **Lineage by construction**: Build lineage edges during name resolution and planning rather than analyzing SQL after the fact.
+8. **Small modular monolith first**: Begin the MVP with a single binary and single database, separating only the compiler's pure library boundary upfront.
+9. **Explicit beats inferred**: Inferences drawn from the catalog are candidates only; publishing requires human approval.
+10. **Correctness before coverage**: Limit the supported scope to guarantee correct answers or safe rejections, rather than expanding ambiguous automatic handling.
 
-## 4. スコープと主要ユースケース
+## 4. Scope and Key Use Cases
 
-### 4.1 MVPユースケース
+### 4.1 MVP Use Cases
 
-- データエンジニアが既存DBをscanし、物理テーブル、列、コメント、制約、関係、RLSの候補を確認する。
-- データオーナーが概念名、説明、公開列、メトリクス、許可join、粒度を登録してrevisionを公開する。
-- AIエージェントがMCPで利用可能なモデルとフィールドを発見する。
-- AIエージェントがLSQを検証し、読み取り専用クエリを実行する。
-- 監査担当者が、結果がどの定義、列、関係、ポリシーに依存したか確認する。
-- CIがSemantic Modelのmigration、golden SQL、既知回答、RLS境界、後方互換性を検証する。
+- A data engineer scans an existing database and reviews candidate physical tables, columns, comments, constraints, relationships, and RLS policies.
+- A data owner registers concept names, descriptions, published columns, metrics, permitted joins, and granularity, then publishes a revision.
+- An AI agent discovers available models and fields via MCP.
+- An AI agent validates an LSQ and executes a read-only query.
+- An auditor reviews which definitions, columns, relationships, and policies a result depended on.
+- CI verifies Semantic Model migrations, golden SQL, known answers, RLS boundaries, and backward compatibility.
 
-### 4.2 MVPの意味論上の制約
+### 4.2 Semantic Constraints for the MVP
 
-- 1クエリのanchorは1つのfact modelとする。
-- factからdimensionへのjoinは、原則many-to-oneまたはone-to-oneだけを許可する。
-- many-to-many、bridge、複数factの同時集計、symmetric aggregateはv1では拒否する。
-- メトリクスは`count`、`count_distinct`、`sum`、`min`、`max`、`avg`と、それらの安全な算術合成から始める。
-- window function、任意subquery、user-defined functionはMVP対象外とする。
-- dimension filterとmetric post-aggregate filter（HAVING相当）を区別する。
-- 時間粒度は`day`、`week`、`month`、`quarter`、`year`。timezoneはmodelまたはrequestで許可済み値から選ぶ。
+- Each query anchors on exactly one fact model.
+- Joins from a fact to dimensions allow only many-to-one or one-to-one in principle.
+- Many-to-many, bridge, simultaneous multi-fact aggregation, and symmetric aggregates are rejected in v1.
+- Metrics start with `count`, `count_distinct`, `sum`, `min`, `max`, `avg`, and safe arithmetic compositions thereof.
+- Window functions, arbitrary subqueries, and user-defined functions are out of scope for the MVP.
+- Dimension filters and metric post-aggregate filters (the equivalent of HAVING) are distinguished.
+- Time granularity levels are `day`, `week`, `month`, `quarter`, and `year`. Timezone is chosen from values permitted in the model or request.
 
 ## 5. PostgreSQL-native Semantic Schema
 
-### 5.1 配置と所有権
+### 5.1 Placement and Ownership
 
-- 専用schema名は既定で`semantic`とし、設定で変更可能にする。
-- schema ownerはmigration専用ロール`postgresem_owner`とする。
-- Gateway接続ロール`postgresem_runtime`は`LOGIN NOINHERIT`を基本とし、直接の業務データ権限を持たせない。許可された`NOLOGIN`実行roleへtransaction内だけで切り替える。
-- catalog scanは管理用`postgresem_introspector`、監査書き込みは`postgresem_auditor`へ分離する。通常queryのconnectionをread-writeにしない。
-- モデル編集は`postgresem_editor`、公開は`postgresem_publisher`へ分離する。
-- 業務テーブル所有者とGateway実行ロールを同一にしない。
-- metadata tableにもRLSを適用し、利用者から見えない物理オブジェクトや説明をcatalog APIに出さない。
+- The dedicated schema name defaults to `semantic` and is configurable.
+- The schema owner is the migration-only role `postgresem_owner`.
+- The Gateway connection role `postgresem_runtime` defaults to `LOGIN NOINHERIT` and holds no direct business-data privileges. It switches to a permitted `NOLOGIN` execution role only within a transaction.
+- Catalog scanning is separated to the administrative role `postgresem_introspector`, and audit writes to `postgresem_auditor`. Connections for normal queries are not made read-write.
+- Model editing is separated to `postgresem_editor` and publishing to `postgresem_publisher`.
+- Business table owners and Gateway execution roles must never be the same.
+- RLS is also applied to metadata tables so that physical objects and descriptions invisible to a given user are not exposed through the catalog API.
 
-### 5.2 中核テーブル案
+### 5.2 Core Table Design
 
-| テーブル | 役割 | MVP |
+| Table | Purpose | MVP |
 |---|---|---:|
-| `semantic.project` | 対象DB内のSemantic Project | 必須 |
-| `semantic.revision` | draft/published/retired状態、親revision、canonical hash | 必須 |
-| `semantic.model` | business model、anchor relation、grain、公開状態 | 必須 |
-| `semantic.field` | dimension/entity key/time dimension、型、物理列参照 | 必須 |
-| `semantic.relationship` | join cardinality、列対応、許可方向、優先度 | 必須 |
-| `semantic.metric` | aggregation、型付きexpression AST、filter、additivity | 必須 |
-| `semantic.term` | 表示名、同義語、説明、locale | 必須 |
-| `semantic.policy_binding` | DB role/RLS/semantic visibilityへの参照。RLS式の複製ではない | 必須 |
-| `semantic.source_snapshot` | catalog scan時の物理object fingerprint | 必須 |
-| `semantic.import_run` / `import_issue` | import履歴、候補、警告、drift | 必須 |
-| `semantic.lineage_edge` | model/field/metric/source間の設計時lineage | 必須 |
-| `semantic.query_audit` | 実行時lineage、hash、所要時間、結果サイズ | 必須 |
-| `semantic.example_query` | 承認済みLSQと既知結果条件 | Phase 2 |
-| `semantic.embedding` | term/exampleのembedding | pgvector導入後 |
+| `semantic.project` | Semantic Project within the target database | Required |
+| `semantic.revision` | draft/published/retired status, parent revision, canonical hash | Required |
+| `semantic.model` | Business model, anchor relation, grain, publication status | Required |
+| `semantic.field` | dimension/entity key/time dimension, type, physical column reference | Required |
+| `semantic.relationship` | Join cardinality, column mapping, permitted direction, priority | Required |
+| `semantic.metric` | Aggregation, typed expression AST, filter, additivity | Required |
+| `semantic.term` | Display name, synonyms, description, locale | Required |
+| `semantic.policy_binding` | References to DB role/RLS/semantic visibility; not a copy of RLS expressions | Required |
+| `semantic.source_snapshot` | Physical object fingerprint at catalog scan time | Required |
+| `semantic.import_run` / `import_issue` | Import history, candidates, warnings, drift | Required |
+| `semantic.lineage_edge` | Design-time lineage between model/field/metric/source | Required |
+| `semantic.query_audit` | Runtime lineage, hash, elapsed time, result size | Required |
+| `semantic.example_query` | Approved LSQs and known-result conditions | Phase 2 |
+| `semantic.embedding` | Embeddings for terms/examples | After pgvector adoption |
 
-### 5.3 モデルの識別と参照
+### 5.3 Model Identification and References
 
-- 公開APIでは連番IDではなく、revision内で一意な安定`semantic_name`とUUIDを使う。
-- 物理参照は`database/schema/relation/column`の正規化名を正本とし、OIDはscan時の補助値に限定する。OIDはdump/restoreや再作成で変わり得るため永続IDにしない。
-- identifierはGatewayがcatalogから取得した値だけを適切にquoteする。requestから受け取った文字列をSQL identifierへ直接挿入しない。
-- draftの更新はimmutable revisionの新規作成として扱い、published revisionを上書きしない。
-- `canonical_hash`は、順序を正規化したモデルJSON、schema version、compiler semantic versionから算出する。
+- The public API uses a stable `semantic_name` unique within a revision and a UUID, rather than sequential IDs.
+- Physical references use the canonical name `database/schema/relation/column` as the source of truth; OIDs are limited to auxiliary values at scan time. OIDs are not used as persistent IDs because they can change across dump/restore or recreation.
+- Identifiers are quoted appropriately using only values the Gateway obtained from the catalog. Strings received from requests are never inserted directly into SQL identifiers.
+- Draft updates are treated as new immutable revision creations; published revisions are never overwritten.
+- `canonical_hash` is computed from the order-normalized model JSON, schema version, and compiler semantic version.
 
 ### 5.4 Expression AST
 
-`metric.expression`と計算fieldはversion付きJSONB ASTで保持する。SQL断片は保持しない。
+`metric.expression` and computed fields are stored as versioned JSONB ASTs. SQL fragments are not stored.
 
 ```json
 {
@@ -155,21 +156,21 @@ MVPはPostgreSQL専用、分析系の読み取り専用クエリ、単一Gateway
 }
 ```
 
-- JSONBの外形はDBの`CHECK`で最低限検証し、完全なJSON Schemaと型検証はGatewayおよびCIで行う。
-- 使用可能な演算子・関数をallowlist化する。
-- 関数のvolatility、入出力型、NULL意味論をcompiler側のregistryで固定する。
-- ASTの新versionはmigrationとcompiler capabilityで明示し、未知versionは拒否する。
+- The JSONB shape is minimally validated with database `CHECK` constraints; full JSON Schema and type validation is performed by the Gateway and CI.
+- Permitted operators and functions are allowlisted.
+- Function volatility, input/output types, and NULL semantics are fixed in the compiler-side registry.
+- New AST versions are introduced explicitly through migrations and compiler capabilities; unknown versions are rejected.
 
-### 5.5 Semantic Schemaの整合性
+### 5.5 Semantic Schema Integrity
 
-- 同一revision内の名前一意性、参照整合性、状態遷移はPK/UNIQUE/FK/CHECKで保証する。
-- `published`への遷移はGateway/CLIのtransaction内で全検証に合格した場合だけ許可する。
-- `relationship.cardinality`、`metric.aggregation`、`revision.status`はenum相当のCHECKを使う。PostgreSQL enum型は追加変更が重いためMVPでは使わない。
-- 任意のJSONBへ重要な意味を詰め込むEAV設計は避ける。JSONBはversioned AST、互換性のある補助属性、監査payloadに限定する。
+- Name uniqueness, referential integrity, and state transitions within the same revision are enforced by PK/UNIQUE/FK/CHECK.
+- Transition to `published` is only permitted when all validations pass within a Gateway/CLI transaction.
+- `relationship.cardinality`, `metric.aggregation`, and `revision.status` use CHECK constraints equivalent to enums. PostgreSQL enum types are avoided in the MVP because they are difficult to alter.
+- Avoid EAV designs that pack critical semantics into arbitrary JSONB. JSONB is limited to versioned ASTs, compatible auxiliary attributes, and audit payloads.
 
-## 6. `pg_catalog` / `COMMENT` / FK / CHECK / RLSの取り込み
+## 6. Ingestion of `pg_catalog` / `COMMENT` / FK / CHECK / RLS
 
-### 6.1 取り込みパイプライン
+### 6.1 Ingestion Pipeline
 
 ```text
 catalog scan (read-only, repeatable read)
@@ -183,111 +184,111 @@ catalog scan (read-only, repeatable read)
   → validate and publish
 ```
 
-scanは冪等とし、自動的にpublished modelを書き換えない。明示的な`postgresem catalog scan`と管理APIから、専用introspector credentialで起動し、MVPではevent triggerを要求しない。通常のGateway runtimeにscan権限を与えない。
+Scans are idempotent and never automatically rewrite published models. They are invoked explicitly via `postgresem catalog scan` and the admin API using dedicated introspector credentials; the MVP does not require event triggers. The regular Gateway runtime is not granted scan privileges.
 
-### 6.2 読み取る主なcatalog
+### 6.2 Primary Catalog Sources
 
 - relation/schema: `pg_class`, `pg_namespace`
 - column/type/default: `pg_attribute`, `pg_type`, `pg_attrdef`
 - key/constraint: `pg_constraint`, `pg_index`
-- comments: `pg_description`、`obj_description`、`col_description`
-- functions used by views/expressions: `pg_proc`、`pg_get_functiondef`は必要最小限
-- views: `pg_rewrite`を直接解釈せず、`pg_get_viewdef`
-- privilege: `has_schema_privilege`、`has_table_privilege`、`has_column_privilege`等
-- RLS: `pg_policy`、`pg_class.relrowsecurity`、`relforcerowsecurity`、`pg_get_expr`
-- dependencies/lineage補助: `pg_depend`、`pg_rewrite`
+- comments: `pg_description`, `obj_description`, `col_description`
+- functions used by views/expressions: `pg_proc`, `pg_get_functiondef` (minimal use)
+- views: do not interpret `pg_rewrite` directly; use `pg_get_viewdef`
+- privilege: `has_schema_privilege`, `has_table_privilege`, `has_column_privilege`, etc.
+- RLS: `pg_policy`, `pg_class.relrowsecurity`, `relforcerowsecurity`, `pg_get_expr`
+- dependency/lineage auxiliary: `pg_depend`, `pg_rewrite`
 
-catalogへ直接更新は行わない。対応PostgreSQLバージョンごとにfixtureを持ち、公開されたcatalog列への依存差分をCIで検出する。
+No direct updates are made to the catalog. Fixtures are maintained for each supported PostgreSQL version, and dependency diffs on published catalog columns are detected in CI.
 
-### 6.3 取り込みルール
+### 6.3 Ingestion Rules
 
-| 入力 | 生成候補 | 扱い |
+| Input | Generated Candidate | Handling |
 |---|---|---|
-| table/view名 | model名・用語 | 命名規約で正規化、必ずレビュー |
-| table/column `COMMENT` | description・business term | plain text。構造化DSLとして解釈しない |
-| PK/UNIQUE | entity key・grain候補 | 高confidence。ただし業務粒度は要承認 |
-| FK | relationship・join列・cardinality候補 | 高confidence。複合FKを順序保持して扱う |
-| NOT NULL | nullable情報 | そのまま取り込む |
-| CHECK | domain/value range/enum候補 | parserで安全に理解できる形だけhint化 |
-| view definition | source lineage候補 | PostgreSQL parser/依存情報を利用。文字列正規表現でSQL解析しない |
-| GRANT | model/field visibility候補 | 実行時のDB権限確認が正本 |
-| RLS policy | policy存在・対象role・command・mode | 発見/説明用。Gateway独自式へ翻訳しない |
+| table/view name | model name, term | Normalized by naming convention; always requires review |
+| table/column `COMMENT` | description, business term | Plain text; not interpreted as a structured DSL |
+| PK/UNIQUE | entity key, grain candidate | High confidence; however, business granularity requires approval |
+| FK | relationship, join columns, cardinality candidate | High confidence; composite FKs are handled with preserved column order |
+| NOT NULL | nullability information | Ingested as-is |
+| CHECK | domain/value range/enum candidate | Only forms that the parser can safely understand are converted to hints |
+| view definition | source lineage candidate | Uses the PostgreSQL parser/dependency information; does not analyze SQL via string regex |
+| GRANT | model/field visibility candidate | Runtime DB privilege checks are authoritative |
+| RLS policy | policy presence, target role, command, mode | For discovery/explanation only; not translated into a Gateway-proprietary expression |
 
-`COMMENT`は接続ユーザーから閲覧可能で、機密情報の保管場所ではない。Gatewayもコメントを監査ログへ無制限に複製せず、Semantic Catalogで公開許可された説明だけをMCPへ返す。
+`COMMENT` is visible to the connected user and is not a suitable storage location for sensitive information. Accordingly, the Gateway does not indiscriminately copy comments into audit logs; only descriptions explicitly approved for publication in the Semantic Catalog are returned via MCP.
 
-### 6.4 CHECKの扱い
+### 6.4 CHECK Handling
 
-- `col IN (...)`、range、単純比較、NULL条件など、parserが型付きASTへ安全に変換できるものだけ候補化する。
-- 他行や外部関数に依存するCHECKを意味定義として信用しない。
-- CHECKは「許容値のヒント」であり、メトリクス定義や認可条件には昇格させない。
-- parser未対応の式はraw SQLをsemantic schemaにコピーせず、hashと人向け警告だけを記録する。
+- Only forms that the parser can safely convert into a typed AST are promoted to candidates, such as `col IN (...)`, range, simple comparison, and NULL conditions.
+- CHECKs that depend on other rows or external functions are not trusted as semantic definitions.
+- CHECKs are treated as "allowed-value hints" and are not promoted to metric definitions or authorization conditions.
+- Expressions not supported by the parser are not copied as raw SQL into the semantic schema; only a hash and a human-readable warning are recorded.
 
-### 6.5 RLSとprincipal伝播
+### 6.5 RLS and Principal Propagation
 
-- Gatewayの認証済みprincipalから、事前登録された`NOLOGIN` DB roleまたは承認済みsession contextへの静的mappingを行う。request指定のrole名やGUC値は受け入れない。
-- connection poolから取得後、transactionを開始し、`SET LOCAL ROLE <mapped_role>`および必要な`set_config(..., true)`を設定してからqueryを実行する。roleはcatalog由来allowlistからquoteし、任意文字列を連結しない。
-- `postgresem_runtime`には、必要なmapped roleだけを`NOINHERIT`かつ`SET ROLE`可能なmembershipとして付与する。principal数がrole運用上限を超える場合は、固定role + RLS用session context方式をADR-005で選ぶ。
-- 実行roleはtable owner、superuser、`BYPASSRLS`にしない。必要なtableでは`FORCE ROW LEVEL SECURITY`を推奨する。
-- transaction終了時にcontextが確実に破棄されることをintegration testで検証する。
-- RLS式をcompilerが再実装しない。DBでRLSを強制し、Gatewayはmodel/field visibilityとクエリ能力の縮小を追加する。
-- referential integrityがRLSを迂回することや、RLS subqueryの競合による情報漏えいをsecurity review項目に含める。
+- A static mapping is performed from the Gateway's authenticated principal to a pre-registered `NOLOGIN` DB role or an approved session context. Role names or GUC values specified in the request are not accepted.
+- After obtaining a connection from the pool, a transaction is started, `SET LOCAL ROLE <mapped_role>` and any required `set_config(..., true)` are applied, and then the query is executed. Roles are quoted from a catalog-derived allowlist; arbitrary strings are never concatenated.
+- `postgresem_runtime` is granted membership only to the necessary mapped roles, with `NOINHERIT` and `SET ROLE` capability. If the number of principals exceeds operational role limits, ADR-005 selects a fixed-role plus RLS session-context approach.
+- The execution role must not be a table owner, superuser, or `BYPASSRLS`. Enabling `FORCE ROW LEVEL SECURITY` on necessary tables is recommended.
+- Integration tests verify that the context is reliably destroyed when the transaction ends.
+- The compiler does not re-implement RLS expressions. RLS is enforced at the database level; the Gateway additionally reduces model/field visibility and query capabilities.
+- Security review items include referential integrity bypassing RLS and information leakage caused by conflicting RLS subqueries.
 
-## 7. Semantic Gateway構成
+## 7. Semantic Gateway Architecture
 
-MVPはネットワーク分散しないモジュール化モノリスとする。
+The MVP is a modularized monolith without network distribution.
 
-| モジュール | 責務 |
+| Module | Responsibility |
 |---|---|
-| MCP transport | stdio、後段でstreamable HTTP。protocol framingとpagination |
-| Identity | token検証、principal→DB role mapping、request context |
-| Catalog | 公開revisionのload/cache、権限でfilterした発見API |
-| Importer | catalog scan、candidate生成、drift検出 |
-| LSQ validator | JSON Schema、semantic name/type/capability検証 |
-| Planner | anchor、join graph、grain、aggregate、policy binding、cost guard |
-| Compiler | typed relational IRからPostgreSQL AST/SQLとbind parametersを生成 |
-| Executor | read-only transaction、timeout、row/byte limit、cancel |
-| Lineage/Audit | design-time/query-time edge、hash、監査event |
-| Telemetry | structured logs、metrics、traces、health/readiness |
-| Admin CLI | migrate、scan、validate、publish、diff、doctor |
+| MCP transport | stdio; later streamable HTTP. Protocol framing and pagination |
+| Identity | Token verification, principal-to-DB-role mapping, request context |
+| Catalog | Loading/caching published revisions, discovery API filtered by permissions |
+| Importer | Catalog scan, candidate generation, drift detection |
+| LSQ validator | JSON Schema, semantic name/type/capability validation |
+| Planner | Anchor, join graph, grain, aggregate, policy binding, cost guard |
+| Compiler | Generates PostgreSQL AST/SQL and bind parameters from a typed relational IR |
+| Executor | Read-only transaction, timeout, row/byte limit, cancel |
+| Lineage/Audit | Design-time/query-time edges, hashes, audit events |
+| Telemetry | Structured logs, metrics, traces, health/readiness |
+| Admin CLI | migrate, scan, validate, publish, diff, doctor |
 
-### 7.1 技術スタック方針
+### 7.1 Technology Stack Policy
 
-- 第一候補はRustの単一workspaceとする。理由は、型付きIR、決定的compiler、低い配布依存、単一バイナリ、非同期PostgreSQL接続を一貫して実装しやすいため。
-- Web/MCP transport、PostgreSQL driver、JSON Schema validator、SQL parser/AST rendererは、採用前にlicense、maintenance、PostgreSQL 16–18対応、fuzz実績をADRで評価する。
-- SQL parserは入力SQLの許可に使わず、生成後の構文再parse、view lineage補助、golden testに使う。
-- MCP SDKの成熟度に依存しすぎないよう、内部application serviceとMCP adapterを分離する。
-- 別サービス化は負荷、独立release、権限境界の必要性が計測されてから判断する。
+- The primary candidate is a single Rust workspace. The rationale is that typed IR, a deterministic compiler, low distribution dependencies, a single binary, and async PostgreSQL connections can be implemented coherently.
+- Web/MCP transport, PostgreSQL driver, JSON Schema validator, and SQL parser/AST renderer are evaluated via ADR before adoption for license, maintenance, PostgreSQL 16–18 support, and fuzz track record.
+- The SQL parser is not used to permit input SQL; it is used for post-generation syntax re-parse, view lineage assistance, and golden tests.
+- To avoid over-reliance on MCP SDK maturity, the internal application service is separated from the MCP adapter.
+- Splitting into separate services is deferred until the need is measured in terms of load, independent release, or privilege boundaries.
 
-### 7.2 設定
+### 7.2 Configuration
 
-- 設定優先順位はCLI flag > environment > TOML file > default。
-- secretは環境変数または外部secret storeから受け取り、設定file、Semantic Schema、COMMENT、logへ保存しない。
-- principal mapping、statement timeout、result上限、許可revision、監査保持期間を設定可能にする。
-- 起動時にDB version、migration version、必須privilege、RLS安全条件を`doctor`相当で確認し、危険な実行roleならfailする。
+- Configuration precedence: CLI flag > environment > TOML file > default.
+- Secrets are sourced from environment variables or an external secret store; they are never stored in config files, the Semantic Schema, COMMENTs, or logs.
+- Principal mapping, statement timeout, result limits, permitted revisions, and audit retention period are configurable.
+- At startup, the database version, migration version, required privileges, and RLS safety conditions are verified via a `doctor`-equivalent check; the process fails if a dangerous execution role is detected.
 
 ## 8. MCP API
 
-### 8.1 API原則
+### 8.1 API Principles
 
-- MCPはsemantic objectを操作する。raw SQL toolは提供しない。
-- discovery結果は、認証principalが利用可能な公開modelだけにfilterする。
-- tool input/outputはversion付きJSON Schemaで定義し、`additionalProperties: false`を基本とする。
-- 大きなcatalog/resultはcursor paginationを使い、行数・bytes・execution timeに上限を設ける。
-- validation errorは機械可読なcode、JSON Pointer、候補名を返すが、非公開objectの存在を漏らさない。
+- MCP operates on semantic objects. No raw SQL tool is provided.
+- Discovery results are filtered to only the published models available to the authenticated principal.
+- Tool inputs/outputs are defined with versioned JSON Schemas, with `additionalProperties: false` as the default.
+- Large catalogs/results use cursor pagination, with upper bounds on row count, bytes, and execution time.
+- Validation errors return machine-readable codes, JSON Pointers, and candidate names, but do not reveal the existence of non-public objects.
 
-MVPのstdio transportでは、principalとscopeはGatewayの起動設定から固定し、MCP requestの自己申告値を信用しない。後段のHTTP transportでは、reverse proxyまたはGatewayでOIDC/JWTを検証し、requestごとにprincipalを確立する。stdioとHTTPで同じ内部authorization contextを使う。
+For the MVP stdio transport, the principal and scope are fixed from the Gateway's startup configuration; self-declared values in MCP requests are not trusted. For the later HTTP transport, OIDC/JWT is verified by a reverse proxy or the Gateway itself, establishing the principal per request. Both stdio and HTTP share the same internal authorization context.
 
-### 8.2 MVP tools
+### 8.2 MVP Tools
 
-| tool | 用途 | 実行 |
+| Tool | Purpose | Execution |
 |---|---|---:|
-| `list_semantic_models` | 利用可能なmodelをページング取得 | なし |
-| `describe_semantic_model` | field、metric、relationship、grain、制限を取得 | なし |
-| `validate_semantic_query` | LSQのschema/semantic/security/cost前検証 | なし |
-| `query_semantic_model` | validate→compile→execute→lineage付き結果 | あり |
-| `explain_semantic_query` | 正規化LSQ、join plan、source lineage、制限を説明 | 原則なし |
+| `list_semantic_models` | Paginated retrieval of available models | None |
+| `describe_semantic_model` | Retrieve fields, metrics, relationships, grain, and constraints | None |
+| `validate_semantic_query` | Pre-validate LSQ for schema/semantic/security/cost | None |
+| `query_semantic_model` | validate → compile → execute → result with lineage | Yes |
+| `explain_semantic_query` | Explain normalized LSQ, join plan, source lineage, and constraints | Typically none |
 
-管理用scan/publishはMCPの一般利用者へ公開せず、CLIまたは別の管理scopeに限定する。`compile`で完全な物理SQLを返す機能も、MVPの一般scopeでは無効にし、開発者向けdebug scopeだけで提供する。
+Administrative scan/publish operations are not exposed to general MCP consumers; they are limited to the CLI or a separate administrative scope. The `compile` feature that returns full physical SQL is also disabled in the MVP's general scope and provided only under a developer debug scope.
 
 ### 8.3 Resources
 
@@ -295,9 +296,9 @@ MVPのstdio transportでは、principalとscopeはGatewayの起動設定から�
 - `semantic://projects/{project}/models/{model}`
 - `semantic://schemas/lsq/v1`
 
-resourceもtoolと同じ認可filterを通す。prompt templateや自然言語回答生成はcore scopeに含めない。
+Resources pass through the same authorization filter as tools. Prompt templates and natural-language response generation are not part of the core scope.
 
-### 8.4 Query response
+### 8.4 Query Response
 
 ```json
 {
@@ -316,11 +317,11 @@ resourceもtoolと同じ認可filterを通す。prompt templateや自然言語�
 }
 ```
 
-numeric、timestamp、date、intervalなどはJSONでの精度・timezone規約を明文化する。MVPではnumericを文字列、timestampをRFC 3339、dateをISO 8601として返す。
+numeric, timestamp, date, interval, and similar types follow documented precision and timezone conventions for JSON. In the MVP, numeric is returned as a string, timestamp as RFC 3339, and date as ISO 8601.
 
-## 9. Logical Semantic Query JSON Schema方針
+## 9. Logical Semantic Query JSON Schema Policy
 
-### 9.1 LSQ v1の外形
+### 9.1 LSQ v1 Shape
 
 ```json
 {
@@ -344,28 +345,28 @@ numeric、timestamp、date、intervalなどはJSONでの精度・timezone規約�
 }
 ```
 
-### 9.2 Schema設計規約
+### 9.2 Schema Design Conventions
 
-- JSON Schema draft 2020-12を採用し、`schema_version`を必須にする。
-- top-levelおよび各nodeは`additionalProperties: false`。
-- SQL、table名、column名、expression文字列、function名の自由入力を禁止し、公開semantic symbolだけを参照する。
-- literalは`type`付きとし、compilerの型体系で検証してbind parameter化する。
-- filterは深さ、node数、`in`要素数に上限を置く。
-- `limit`は必須またはserver defaultを適用し、hard maximumを超えられない。
-- dimensionとmetric output aliasはserverが決定し、任意identifierを受け付けない。
-- join pathはplannerが宣言済みrelationshipから一意に選ぶ。複数候補が同順位ならエラーにする。
-- JSON Schemaは構文検証だけを担う。参照存在、型、権限、grain、aggregate compatibility、costはsemantic validationで担う。
+- JSON Schema draft 2020-12 is adopted; `schema_version` is required.
+- The top level and each node use `additionalProperties: false`.
+- Free-form SQL, table names, column names, expression strings, and function names are prohibited; only published semantic symbols may be referenced.
+- Literals are typed and validated against the compiler's type system before being converted to bind parameters.
+- Filters have upper bounds on depth, node count, and `in` element count.
+- `limit` is either required or has a server default, and cannot exceed a hard maximum.
+- Dimension and metric output aliases are determined by the server; arbitrary identifiers are not accepted.
+- Join paths are chosen uniquely from declared relationships by the planner. If multiple candidates have equal priority, an error is raised.
+- JSON Schema handles syntactic validation only. Reference existence, types, permissions, grain, aggregate compatibility, and cost are handled by semantic validation.
 
-### 9.3 互換性
+### 9.3 Compatibility
 
-- patch: error messageやdescriptionの変更。入力意味論は不変。
-- minor: optional field/operator追加。既存queryは同じ意味。
-- major: 意味論が変わる場合に新`schema_version`を追加し、並行サポート期間を置く。
-- golden LSQごとにnormalized IR、SQL、parameter、lineageを固定し、compiler更新時の意味差分をreviewする。
+- patch: Changes to error messages or descriptions. Input semantics are unchanged.
+- minor: Addition of optional fields/operators. Existing queries retain the same meaning.
+- major: When semantics change, a new `schema_version` is added with a parallel support period.
+- For each golden LSQ, the normalized IR, SQL, parameters, and lineage are pinned, and semantic diffs are reviewed on compiler updates.
 
 ## 10. Deterministic SQL Compiler
 
-### 10.1 パイプライン
+### 10.1 Pipeline
 
 ```text
 LSQ JSON
@@ -382,40 +383,40 @@ LSQ JSON
  11. read-only execution
 ```
 
-### 10.2 決定性の定義
+### 10.2 Definition of Determinism
 
-次が同じなら、normalized IR、SQL text、parameter type/order、lineage、query hashが同じであることを保証する。
+Given the same inputs below, the normalized IR, SQL text, parameter type/order, lineage, and query hash are guaranteed to be identical:
 
-- LSQの意味（object keyの並び順は無視）
-- published Semantic Revision
-- compiler semantic version
-- capability/config profile
-- principalの権限集合とpolicy context
+- LSQ semantics (object key ordering is ignored)
+- Published Semantic Revision
+- Compiler semantic version
+- Capability/config profile
+- Principal's permission set and policy context
 
-安定alias、join順序、projection順序、parameter番号、predicate正規化規則を仕様化する。PostgreSQL plannerの実行計画そのものは統計やversionで変わるため、決定性の対象外とする。
+Stable alias, join order, projection order, parameter numbering, and predicate normalization rules are specified. The PostgreSQL planner's execution plan itself may vary with statistics and version and is therefore excluded from the determinism guarantee.
 
-### 10.3 SQL生成の安全条件
+### 10.3 SQL Generation Safety Requirements
 
-- 値はすべてbind parameter。文字列連結でliteralを生成しない。
-- identifierはcatalog由来の検証済み値をquoteする。
-- 単一の`SELECT`または読み取り専用CTEだけを生成する。
-- semicolonによる複数statement、DDL/DML、copy、call、volatile function、unapproved UDFを生成しない。
-- `SET TRANSACTION READ ONLY`、`statement_timeout`、`lock_timeout`、`idle_in_transaction_session_timeout`をtransaction localで設定する。
-- hard row limitに加え、結果byte上限とcancelを実装する。
-- optional `EXPLAIN (FORMAT JSON)`で推定cost/rowsを検査するが、EXPLAIN結果は正しさの根拠にしない。
+- All values use bind parameters. Literals are never produced via string concatenation.
+- Identifiers are quoted using verified values from the catalog.
+- Only a single `SELECT` or read-only CTE is generated.
+- Multiple statements via semicolons, DDL/DML, COPY, CALL, volatile functions, and unapproved UDFs are never generated.
+- `SET TRANSACTION READ ONLY`, `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` are set transaction-locally.
+- In addition to a hard row limit, result byte limits and cancel are implemented.
+- An optional `EXPLAIN (FORMAT JSON)` inspects estimated cost/rows, but EXPLAIN results are not treated as proof of correctness.
 
-### 10.4 joinと集計の正しさ
+### 10.4 Join and Aggregation Correctness
 
-- relationshipに`one_to_one`、`many_to_one`、`one_to_many`、`many_to_many`とjoin keyを明示する。
-- MVP compilerはfact→many-to-one/one-to-oneだけを自動選択する。
-- one-to-many先のdimensionや複数factを要求された場合は、fan-out riskとして拒否する。
-- metricごとにadditivity（時間、entity、全dimension）を保持し、非加法軸での集計を拒否または警告する。
-- `count_distinct`は明示されたentity keyだけで許可する。
-- NULL join semantics、timezone、week start、currency/unitをmodel contractに含める。
+- Relationships explicitly declare `one_to_one`, `many_to_one`, `one_to_many`, `many_to_many`, and join keys.
+- The MVP compiler auto-selects only fact-to-many-to-one/one-to-one paths.
+- Requests for dimensions on the one-to-many side or multiple facts are rejected as fan-out risks.
+- Additivity (across time, entity, all dimensions) is maintained per metric; aggregation along non-additive axes is rejected or warned.
+- `count_distinct` is permitted only on explicitly declared entity keys.
+- NULL join semantics, timezone, week start, and currency/unit are included in the model contract.
 
-### 10.5 compiler API境界
+### 10.5 Compiler API Boundary
 
-compiler coreはI/Oを持たない純粋関数に近づける。
+The compiler core is kept as close to a pure function with no I/O as possible.
 
 ```text
 compile(
@@ -426,125 +427,125 @@ compile(
 ) -> { sql, typed_parameters, output_schema, lineage, warnings, hash }
 ```
 
-DB接続、MCP、logging、実行は外側に置く。この境界をproperty test、fuzz test、golden testの中心にする。
+No database connections, MCP, logging, or execution reside in the core. This boundary is the focal point for property tests, fuzz tests, and golden tests.
 
 ## 11. Security
 
-### 11.1 脅威モデル
+### 11.1 Threat Model
 
-- prompt injectionにより、非公開modelの発見、raw SQL、制限回避を試みる。
-- SQL injectionまたはidentifier injection。
-- RLS/GRANTを迂回するconnection roleやpool context漏れ。
-- 高cost query、巨大`IN`、Cartesian join、巨大resultによるDoS。
-- catalog/comment/error/logを通じた機密情報漏えい。
-- Semantic Modelの悪意ある変更またはsupply-chain混入。
-- 古いrevisionやcompiler差分による監査不能。
+- Prompt injection attempting to discover non-public models, execute raw SQL, or bypass limits.
+- SQL injection or identifier injection.
+- Connection role or pool context leaks that bypass RLS/GRANT.
+- DoS via high-cost queries, massive `IN` lists, Cartesian joins, or enormous result sets.
+- Sensitive information leakage through catalog/comment/error/log channels.
+- Malicious modification of the Semantic Model or supply-chain contamination.
+- Inability to audit due to stale revisions or compiler diffs.
 
-### 11.2 防御策
+### 11.2 Defenses
 
-- stdioでは起動主体と固定設定からprincipal/scopeを確立する。HTTPではOIDC/JWTの署名、issuer、audience、expiry、scopeを検証する。いずれもrequest body内のprincipal自己申告を信用せず、anonymous remote accessを許可しない。
-- least privilegeの分離role、RLS強制、principal mapping allowlist。
-- LSQ schema、semantic validation、typed IR、parameterized SQLの多層防御。
-- model/field/metric単位のvisibilityとcapability。DB権限は最終防衛線。
-- query complexity、join数、filter node、time range、limit、timeout、concurrency、result bytesのbudget。
-- errorをpublic codeと内部詳細に分離し、非公開object名やSQLを一般scopeへ返さない。
-- logはquery/resultの実値を既定で記録せず、hash、型、件数、timingを記録する。
-- source query用read-only pool、introspection、audit writerをcredentialとpool単位で分離する。audit writerは`semantic.query_audit`へのappend/update以外を許可しない。
-- migration/model publishは署名済みreleaseまたはreview必須のCI経由にする。
-- dependency audit、SBOM、container image scan、secret scanをrelease gateにする。
+- In stdio mode, the principal/scope is established from the launch context and fixed configuration. In HTTP mode, the Gateway or reverse proxy verifies OIDC/JWT signatures, issuers, audiences, expiry, and scopes. In neither mode is a self-declared principal in the request body trusted, and anonymous remote access is never permitted.
+- Least-privilege separated roles, enforced RLS, and principal mapping allowlists.
+- Multi-layered defense: LSQ schema, semantic validation, typed IR, and parameterized SQL.
+- Visibility and capabilities at the model/field/metric level. DB permissions serve as the last line of defense.
+- Budgets for query complexity, join count, filter nodes, time range, limit, timeout, concurrency, and result bytes.
+- Errors are separated into public codes and internal details; non-public object names and SQL are never returned to the general scope.
+- Logs do not record actual query/result values by default; instead, hashes, types, counts, and timings are recorded.
+- Source query read-only pool, introspection, and audit writer are separated by credential and pool. The audit writer is permitted only to append/update `semantic.query_audit`.
+- Migration/model publishing goes through signed releases or review-required CI.
+- Dependency audit, SBOM, container image scanning, and secret scanning are release gates.
 
-### 11.3 必須security test
+### 11.3 Required Security Tests
 
-- tenant Aのprincipalでtenant Bの行が0件または権限errorになる。
-- pool reuse後に前requestの`SET LOCAL ROLE`/GUCが残らない。
-- table owner、superuser、`BYPASSRLS`接続を起動時に拒否する。
-- hidden model/field名をguessしても存在有無を区別できない。
-- malicious literal、Unicode identifier、深いfilter、巨大IN、NaN/Infinity、timezone edgeを拒否または安全に処理する。
-- cancel/timeout後にtransactionがabort/rollbackされ、接続が安全な状態でpoolへ戻る。
-- stdioの固定principalとHTTPのrequest principalが同じauthorization fixtureで同じ可視性になる。
-- source execution roleからSemantic Schemaやaudit tableへ書き込めず、audit writerから業務データを読めない。
+- With tenant A's principal, rows from tenant B return zero results or a permission error.
+- After pool reuse, no `SET LOCAL ROLE`/GUC from the previous request persists.
+- Connections as table owner, superuser, or `BYPASSRLS` are rejected at startup.
+- Guessing hidden model/field names does not reveal whether they exist.
+- Malicious literals, Unicode identifiers, deeply nested filters, massive IN lists, NaN/Infinity, and timezone edge cases are rejected or handled safely.
+- After cancel/timeout, the transaction is aborted/rolled back, and the connection is returned to the pool in a safe state.
+- The stdio fixed principal and the HTTP request principal produce the same visibility under the same authorization fixtures.
+- The source execution role cannot write to the Semantic Schema or audit tables, and the audit writer cannot read business data.
 
-## 12. Semantic Lineageと監査
+## 12. Semantic Lineage and Audit
 
-### 12.1 二種類のlineage
+### 12.1 Two Types of Lineage
 
-1. **Design-time lineage**: metric→field→physical column、model→view/table、relationship→join columns。
-2. **Query-time lineage**: query→revision→metrics/dimensions→relationships→physical objects→policy context→SQL hash。
+1. **Design-time lineage**: metric → field → physical column, model → view/table, relationship → join columns.
+2. **Query-time lineage**: query → revision → metrics/dimensions → relationships → physical objects → policy context → SQL hash.
 
-### 12.2 記録項目
+### 12.2 Recorded Items
 
-- `query_id`、request/correlation ID、timestamp
-- principalの不可逆IDまたは監査用subject ID。tokenやsecretは保存しない
-- LSQ schema version、canonical LSQ hash
-- semantic revision/hash、compiler version、config profile
-- resolved model/field/metric/relationship IDとdefinition hash
-- source relation/column、policy binding ID、DB role ID
-- generated SQL hash。SQL本文の保存はdebug/監査scopeで明示opt-in
-- parameter typeと個数。値は既定で保存しない
-- validation/compile/queue/DB/result serializationの各時間
-- status、error code、row count、byte count、truncated/cancelled
+- `query_id`, request/correlation ID, timestamp
+- Irreversible ID or audit subject ID of the principal. Tokens and secrets are not stored
+- LSQ schema version, canonical LSQ hash
+- Semantic revision/hash, compiler version, config profile
+- Resolved model/field/metric/relationship IDs and definition hashes
+- Source relation/column, policy binding ID, DB role ID
+- Generated SQL hash. Storing the SQL text itself is explicit opt-in under a debug/audit scope
+- Parameter types and count. Values are not stored by default
+- Elapsed time for each stage: validation/compile/queue/DB/result serialization
+- Status, error code, row count, byte count, truncated/cancelled
 
-実行前に専用audit connectionで`started` eventをappendし、記録に失敗した場合はqueryを開始しない。完了時に同じ`query_id`へterminal event/statusを書き、process crash等でterminal eventがない`started` recordは監視対象にする。これにより、read-only source transactionを崩さず「実行された可能性のあるqueryに監査記録がない」状態を避ける。
+A `started` event is appended via a dedicated audit connection before execution; if recording fails, the query is not started. Upon completion, a terminal event/status is written to the same `query_id`. `started` records without a terminal event (e.g., due to process crash) are flagged for monitoring. This ensures that the read-only source transaction is not compromised and eliminates the possibility of a query being executed without an audit record.
 
-### 12.3 drift
+### 12.3 Drift
 
-- physical schema fingerprintとpublished revisionのsource snapshotを比較する。
-- column drop/type change、constraint/FK/RLS変更はseverity付きissueにする。
-- breaking driftがあるmodelは新規queryをfail closedにできる設定を設ける。
-- event triggerやlogical decodingによる即時検知は、必要権限と運用負荷が大きいため後段。MVPは明示scanと定期CIで十分とする。
+- The physical schema fingerprint is compared against the source snapshot of the published revision.
+- Column drops/type changes, constraint/FK/RLS changes are surfaced as issues with severity levels.
+- A configuration option is provided to fail-closed on new queries for models with breaking drift.
+- Immediate detection via event triggers or logical decoding is deferred due to the required privileges and operational overhead. Explicit scans and periodic CI are sufficient for the MVP.
 
-## 13. pgvectorは後段
+## 13. pgvector Is Deferred
 
-pgvectorはMVP依存にしない。semantic nameと明示的なdescription/synonymで十分な発見精度をまず計測する。
+pgvector is not an MVP dependency. Discovery accuracy using semantic names and explicit descriptions/synonyms is measured first.
 
-導入候補は次に限定する。
+Adoption candidates are limited to:
 
-- business term、description、承認済みexample queryの類似検索
-- 大規模catalogでMCPへ返す候補のranking
-- 用語の重複・semantic drift候補の検出
+- Similarity search for business terms, descriptions, and approved example queries
+- Ranking candidates returned to MCP in large catalogs
+- Detection of term duplication and semantic drift candidates
 
-embeddingはqueryの正しさ、権限、join選択、SQL生成に使わない。embedding model/version、source text hash、localeを保存し、再生成可能にする。導入判断は、非vector baselineに対してdiscovery recallが明確に改善し、運用コストと漏えいリスクを上回ることを計測して行う。
+Embeddings are not used for query correctness, permissions, join selection, or SQL generation. Embedding model/version, source text hash, and locale are stored to ensure reproducibility. The adoption decision requires measured evidence that discovery recall clearly improves over a non-vector baseline and that the improvement outweighs operational cost and leakage risk.
 
-## 14. コンテナ開発環境
+## 14. Container Development Environment
 
-### 14.1 ローカル前提
+### 14.1 Local Prerequisites
 
-このMac Studioで確認済みの実コマンドは`container-compose`である。文書・Make target・CI wrapperではこの名前を使う。Apple Containerのsystem serviceは起動済みだが、bootstrapは未起動状態からも動くようにする。
+The actual command verified on this Mac Studio is `container-compose`. Documentation, Make targets, and CI wrappers use this name. Although the Apple Container system service is already running, the bootstrap process should work from an unstarted state as well.
 
-### 14.2 Composeサービス
+### 14.2 Compose Services
 
-| service | 内容 | 常時 |
+| Service | Description | Always |
 |---|---|---:|
-| `postgres` | PostgreSQL 18既定、named volume、healthcheck、fixture | 必須 |
-| `gateway` | postgresem binary、read-only source mountまたはbuild image | 必須 |
-| `migrate` | one-shot migration | 必須 |
-| `test` | unit/integration/contract test runner | profile |
-| `otel-collector` | local trace/metric確認 | observability profile |
-| `prometheus` / `grafana` | dashboard開発 | observability profile、後段 |
+| `postgres` | PostgreSQL 18 default, named volume, healthcheck, fixtures | Required |
+| `gateway` | postgresem binary, read-only source mount or build image | Required |
+| `migrate` | One-shot migration | Required |
+| `test` | Unit/integration/contract test runner | Profile |
+| `otel-collector` | Local trace/metric inspection | Observability profile |
+| `prometheus` / `grafana` | Dashboard development | Observability profile; deferred |
 
-Compose fileはApple ContainerとLinux CIで共通利用できる機能の交差部分に限定する。特殊なDocker socket、privileged container、暗黙host networkには依存しない。PostgreSQLデータはbind mountではなくnamed volumeを既定とし、権限差を避ける。
+The Compose file is limited to the intersection of features that work with both Apple Container and Linux CI. It does not depend on special Docker sockets, privileged containers, or implicit host networking. PostgreSQL data defaults to a named volume rather than a bind mount to avoid permission discrepancies.
 
-### 14.3 開発コマンドの目標
+### 14.3 Development Command Goals
 
 ```text
-make doctor       # Apple Container、container-compose、version、portを確認
-make dev-up       # migrate後にPostgreSQLとGatewayを起動
+make doctor       # Verify Apple Container, container-compose, versions, ports
+make dev-up       # Start PostgreSQL and Gateway after migration
 make test         # unit + fast integration
-make test-all     # PG 16–18、security、golden、migration
-make dev-down     # container停止。volumeは保持
-make clean-data   # 明示確認付きで開発volumeだけを削除
+make test-all     # PG 16–18, security, golden, migration
+make dev-down     # Stop containers; volumes are preserved
+make clean-data   # Delete development volumes only, with explicit confirmation
 ```
 
-`.env.example`は非secretだけを含める。fixtureは架空データに限定し、実データdumpをrepositoryへ入れない。
+`.env.example` contains only non-secret values. Fixtures use fictional data exclusively; real data dumps are never committed to the repository.
 
-### 14.4 PostgreSQL対応
+### 14.4 PostgreSQL Support
 
-- 初期対応: PostgreSQL 16、17、18。開発defaultは18。
-- extensionなしでcore機能が動くことを必須にする。
-- pgvector、pg_stat_statements等はoptional capabilityとして検出する。
-- version固有catalog差分はadapterで吸収し、support matrixを文書化する。
+- Initial support: PostgreSQL 16, 17, 18. The development default is 18.
+- Core features must work without extensions.
+- pgvector, pg_stat_statements, etc. are detected as optional capabilities.
+- Version-specific catalog differences are absorbed by adapters, and the support matrix is documented.
 
-## 15. リポジトリ構成
+## 15. Repository Structure
 
 ```text
 postgresem/
@@ -560,9 +561,9 @@ postgresem/
 ├── compose.yaml
 ├── Containerfile
 ├── crates/
-│   ├── postgresem/              # gateway binary、CLI、wiring
+│   ├── postgresem/              # gateway binary, CLI, wiring
 │   └── postgresem-compiler/     # pure LSQ/IR/planner/compiler core
-├── migrations/                  # semantic schema、forward-only
+├── migrations/                  # semantic schema, forward-only
 ├── schemas/
 │   ├── lsq/v1.schema.json
 │   ├── mcp/
@@ -579,337 +580,338 @@ postgresem/
 │   └── evals/
 ├── docs/
 │   ├── POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md
+│   ├── POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md
 │   ├── architecture/
 │   ├── adr/
 │   ├── threat-model.md
 │   ├── lsq-v1.md
 │   └── operations/
-└── .github/workflows/           # 選定CIに合わせて変更可
+└── .github/workflows/           # Adjusted for the chosen CI system
 ```
 
-MVPでcrateを細分化しすぎない。compiler coreだけを分離し、それ以外は`postgresem`内のRust moduleとする。独立releaseや明確な依存逆転が必要になった時点でcrateを増やす。
+Avoid over-splitting crates in the MVP. Only the compiler core is separated; everything else remains as Rust modules within `postgresem`. Add crates when independent releases or clear dependency inversions become necessary.
 
-## 16. テスト戦略
+## 16. Test Strategy
 
-### 16.1 Test pyramid
+### 16.1 Test Pyramid
 
-| 層 | 対象 | 例 |
+| Layer | Target | Example |
 |---|---|---|
-| Unit | AST、型、名前解決、正規化、budget | 同じ意味のJSON key順で同hash |
-| Property/Fuzz | LSQ parser、filter AST、renderer | panicなし、未知node拒否、literal非混入 |
-| Golden compiler | LSQ→IR/SQL/params/lineage | review可能な差分 |
-| Integration | 実PostgreSQL 16–18 | catalog scan、migration、query result |
-| Security | GRANT/RLS/pool/timeout | cross-tenant漏えいなし |
-| Contract | MCP/JSON Schema | client fixtureとの互換性 |
-| Migration | fresh + N-1 upgrade | published revision保持、rollback方針確認 |
-| Known-answer eval | semantic correctness | 代表質問の期待値・期待拒否 |
-| Performance | compile/execute/catalog | regression budget |
+| Unit | AST, types, name resolution, normalization, budget | Same hash for semantically identical JSON key orders |
+| Property/Fuzz | LSQ parser, filter AST, renderer | No panics, unknown nodes rejected, no literal leaks |
+| Golden compiler | LSQ → IR/SQL/params/lineage | Reviewable diffs |
+| Integration | Real PostgreSQL 16–18 | Catalog scan, migration, query results |
+| Security | GRANT/RLS/pool/timeout | No cross-tenant leakage |
+| Contract | MCP/JSON Schema | Compatibility with client fixtures |
+| Migration | fresh + N-1 upgrade | Published revision preserved, rollback policy verified |
+| Known-answer eval | Semantic correctness | Expected values/expected rejections for representative questions |
+| Performance | compile/execute/catalog | Regression budget |
 
-### 16.2 正しさのoracle
+### 16.2 Correctness Oracle
 
-- 各fixtureに、手書きの信頼できるSQLと期待結果を保持する。
-- LSQ結果とoracleを比較し、SQL文字列の一致だけで正しさを判断しない。
-- 正答ケースと同数程度の「拒否すべきquery」を用意する。
-- join fan-out、NULL、empty set、timezone、DST、numeric precision、duplicate key、RLSを必須fixtureにする。
+- Each fixture maintains hand-written, trusted SQL and expected results.
+- LSQ results are compared against the oracle; correctness is not judged by SQL string matching alone.
+- Approximately the same number of "queries that should be rejected" are prepared as correct cases.
+- Join fan-out, NULL, empty set, timezone, DST, numeric precision, duplicate key, and RLS are mandatory fixtures.
 
-### 16.3 品質gate
+### 16.3 Quality Gates
 
-- compiler coreの新operatorはunit、golden、property、integration testを必須とする。
-- security-critical moduleはcode owner reviewを必須とする。
-- flaky testは放置せず隔離期限を持つ。
-- coverage率だけをgateにせず、仕様の分岐、脅威、既知回答のcoverage表を管理する。
+- New operators in the compiler core require unit, golden, property, and integration tests.
+- Security-critical modules require code-owner review.
+- Flaky tests are not ignored; they are quarantined with an expiration date.
+- Coverage percentage alone is not a gate; a coverage matrix of specification branches, threats, and known answers is maintained.
 
 ## 17. Observability
 
-### 17.1 Structured logs
+### 17.1 Structured Logs
 
-- JSON形式、UTC timestamp、severity、service version、request/query ID。
-- stage、error code、semantic revision、compiler version、query/SQL hash、duration、row/byte count。
-- literal、token、接続文字列、結果行、未公開commentは既定で記録しない。
-- debug SQLはlocalまたは限定scopeで明示的に有効化し、保持期間を短くする。
+- JSON format, UTC timestamp, severity, service version, request/query ID.
+- Stage, error code, semantic revision, compiler version, query/SQL hash, duration, row/byte count.
+- Literals, tokens, connection strings, result rows, and unpublished comments are not recorded by default.
+- Debug SQL logging is explicitly enabled in local or limited scopes, with a short retention period.
 
 ### 17.2 Metrics
 
-- request数、validation/compile/execute error数、error code別rate
-- validation/compile/DB/serialization latency histogram
-- active/queued query、pool使用率、timeout/cancel、result truncation
-- catalog scan時間、object数、drift issue数、publish数
-- model/metric別の利用数は高cardinalityを避け、必要ならaudit DBで分析する
+- Request count, validation/compile/execute error count, rate by error code
+- Validation/compile/DB/serialization latency histogram
+- Active/queued queries, pool utilization, timeout/cancel, result truncation
+- Catalog scan time, object count, drift issue count, publish count
+- Per-model/metric usage counts avoid high cardinality; detailed analysis is done in the audit DB if needed
 
 ### 17.3 Traces
 
-`mcp.request → auth → catalog.resolve → validate → plan → compile → db.acquire → db.query → serialize → audit`をspan化する。OpenTelemetry exportはoptionalとし、coreはvendor-neutralにする。
+`mcp.request → auth → catalog.resolve → validate → plan → compile → db.acquire → db.query → serialize → audit` is captured as spans. OpenTelemetry export is optional, and the core remains vendor-neutral.
 
-### 17.4 SLO候補（betaで確定）
+### 17.4 SLO Candidates (Finalized at Beta)
 
-- Gateway起因のvalidation+compile p95 < 50 ms（100 model規模のwarm状態）
-- 監査event欠落 0件
-- security test pass 100%
-- supported LSQのsemantic correctness eval 100%。unsupportedは明示拒否
+- Gateway-attributable validation + compile p95 < 50 ms (warm state at 100-model scale)
+- Audit event loss: 0
+- Security test pass: 100%
+- Semantic correctness eval for supported LSQs: 100%; unsupported LSQs are explicitly rejected
 
-DB実行時間はデータ量とindexに依存するため、Gateway SLOと分離する。
+DB execution time depends on data volume and indexes and is therefore separated from the Gateway SLO.
 
-## 18. CI/CDとリリース
+## 18. CI/CD and Release
 
 ### 18.1 Pull Request CI
 
-1. format、lint、license header、JSON Schema lint
-2. unit、property test、compiler golden diff
+1. Format, lint, license header, JSON Schema lint
+2. Unit, property tests, compiler golden diff
 3. PostgreSQL 16–18 integration matrix
-4. RLS/security、MCP contract、migration test
-5. dependency/secret/license scan
-6. container image buildとsmoke test
-7. documentation link/check、migration checksum確認
+4. RLS/security, MCP contract, migration tests
+5. Dependency/secret/license scan
+6. Container image build and smoke test
+7. Documentation link check, migration checksum verification
 
-### 18.2 Release pipeline
+### 18.2 Release Pipeline
 
-- SemVerを採用し、LSQ schema、Semantic Schema migration、MCP contract、compiler semanticsのcompatibility noteを生成する。
-- tagからreproducible binaryとmulti-arch OCI image（最低`linux/amd64`、`linux/arm64`）を作る。
-- SBOM、provenance、checksum、署名を配布物に付与する。
-- migrationはforward-onlyを基本とし、release前backup、N-1 upgrade test、互換期間を定義する。
-- database migrationとbinary rolloutの順序をexpand/contract方式にする。
-- release candidateをMac StudioのApple Containerでsmoke testし、CIだけでは見えない互換差を確認する。
+- SemVer is adopted; compatibility notes are generated for the LSQ schema, Semantic Schema migration, MCP contract, and compiler semantics.
+- Tags produce reproducible binaries and multi-arch OCI images (at minimum `linux/amd64` and `linux/arm64`).
+- SBOM, provenance, checksums, and signatures are attached to release artifacts.
+- Migrations are forward-only by default; pre-release backup, N-1 upgrade tests, and a compatibility period are defined.
+- Database migration and binary rollout ordering follows an expand/contract approach.
+- Release candidates are smoke-tested on the Mac Studio with Apple Container to catch compatibility differences not visible in CI alone.
 
-### 18.3 Branch/release policy
+### 18.3 Branch/Release Policy
 
-- `main`は常にrelease可能にする。
-- 大きな意味論変更はADR、threat model差分、golden diffを伴う。
-- 1.0まではminorで破壊変更を許し得るが、migration guideを必須にする。
-- 1.0以降はLSQ major versionの並行サポート期間を設ける。
+- `main` is always releasable.
+- Major semantic changes are accompanied by an ADR, threat model diff, and golden diff.
+- Before 1.0, minor versions may include breaking changes, but a migration guide is required.
+- After 1.0, parallel support periods are established for each LSQ major version.
 
-## 19. マイルストーン
+## 19. Milestones
 
-期間は人員確定前の約束にせず、各gateの完了で次へ進む。
+Timelines are not committed before staffing is confirmed; each gate's completion triggers the next phase.
 
-### M0: Project foundation / RFC
+### M0: Project Foundation / RFC
 
-- repository基盤、license、governance、ADR template、threat model
-- Apple Container/`container-compose` bootstrap、PG 16–18 matrix
-- LSQ v1、Semantic Schema v1、compiler意味論のRFC
-- Wren AI/Cube/Malloy/MetricFlowとの実証比較
+- Repository infrastructure, license, governance, ADR template, threat model
+- Apple Container / `container-compose` bootstrap, PG 16–18 matrix
+- LSQ v1, Semantic Schema v1, compiler semantics RFC
+- Comparative evaluation against Wren AI / Cube / Malloy / MetricFlow
 
-**Exit gate**: 3つの代表datasetと30問のevalで、PostgreSQL-nativeの価値仮説とMVP境界を承認。
+**Exit gate**: Using 3 representative datasets and a 30-question eval, approve the PostgreSQL-native value hypothesis and MVP boundary.
 
-### M1: Semantic Catalog alpha
+### M1: Semantic Catalog Alpha
 
-- migration、revision、model、field、relationship、metric、term
-- `pg_catalog`/COMMENT/constraint/RLS scanとdrift report
-- CLI: `migrate`、`doctor`、`catalog scan`、`model validate`、`model publish`
+- Migration, revision, model, field, relationship, metric, term
+- `pg_catalog` / COMMENT / constraint / RLS scan and drift report
+- CLI: `migrate`, `doctor`, `catalog scan`, `model validate`, `model publish`
 
-**Exit gate**: scanが冪等、published revision不変、PG 16–18で同等のnormalized snapshot。
+**Exit gate**: Scans are idempotent, published revisions are immutable, and normalized snapshots are equivalent across PG 16–18.
 
-### M2: LSQ compiler alpha
+### M2: LSQ Compiler Alpha
 
-- LSQ JSON Schema、typed IR、symbol/type/grain validation
-- single-fact + many-to-one join、基本aggregate/filter/time grain
-- parameterized PostgreSQL SQL、golden/property/fuzz test
-- design-time/query-time lineage生成
+- LSQ JSON Schema, typed IR, symbol/type/grain validation
+- Single-fact + many-to-one join, basic aggregate/filter/time grain
+- Parameterized PostgreSQL SQL, golden/property/fuzz tests
+- Design-time / query-time lineage generation
 
-**Exit gate**: 対応evalで正答100%、unsafe/ambiguous queryは誤生成せず拒否。
+**Exit gate**: 100% correct answers on the covered eval set; unsafe/ambiguous queries are rejected without incorrect generation.
 
-### M3: Secure execution + MCP MVP
+### M3: Secure Execution + MCP MVP
 
 - MCP stdio tools/resources
-- auth scope、principal→role、GRANT/RLS、read-only executor
-- budget/timeout/cancel/pagination、audit、structured log/metrics
-- end-to-end agent demo
+- Auth scope, principal-to-role mapping, GRANT/RLS, read-only executor
+- Budget/timeout/cancel/pagination, audit, structured logs/metrics
+- End-to-end agent demo
 
-**Exit gate**: security suite 100%、cross-tenant漏えい0、監査event欠落0。
+**Exit gate**: Security suite 100%, cross-tenant leakage 0, audit event loss 0.
 
-### M4: Developer preview
+### M4: Developer Preview
 
-- installer/container image、quickstart、sample project、operations docs
-- public API polish、error taxonomy、compatibility policy
-- performance baseline、100 model規模のcatalog test
-- 外部利用者2組以上の設計フィードバック
+- Installer/container image, quickstart, sample project, operations docs
+- Public API polish, error taxonomy, compatibility policy
+- Performance baseline, catalog test at 100-model scale
+- Design feedback from 2+ external users
 
-**Exit gate**: 新規利用者が30分以内に起動し、実DBのread-only pilotを完了。
+**Exit gate**: A new user can start up within 30 minutes and complete a read-only pilot on a real database.
 
 ### M5: Beta
 
-- N-1 migration、backup/restore、failure recovery、SLO/dashboard
-- MCP streamable HTTPの必要性を評価し、採用時は認証込みで実装
-- hardening、SBOM/signing、security review、incident runbook
-- adoption/価値指標の計測
+- N-1 migration, backup/restore, failure recovery, SLO/dashboard
+- Evaluate the need for MCP streamable HTTP; if adopted, implement with authentication
+- Hardening, SBOM/signing, security review, incident runbook
+- Adoption/value metrics measurement
 
-**Exit gate**: 2つ以上の非fixture DBで4週間運用し、P0/P1 security/correctness defectがない。
+**Exit gate**: 4 weeks of operation on 2+ non-fixture databases with no P0/P1 security/correctness defects.
 
-### M6: 1.0正式プロジェクト
+### M6: 1.0 — Official Project
 
-- stable LSQ v1、Semantic Schema migration policy、support matrix
-- governance、maintainer、release cadence、deprecation policy
-- external security review結果の解消
-- production readiness checklistと互換性suite
+- Stable LSQ v1, Semantic Schema migration policy, support matrix
+- Governance, maintainers, release cadence, deprecation policy
+- Resolution of external security review findings
+- Production readiness checklist and compatibility suite
 
-**Exit gate**: 正しさ、安全性、移行性、運用性、差別化の各gateを満たし、maintainerが継続可能と判断。
+**Exit gate**: Correctness, security, migratability, operability, and differentiation gates are all met, and maintainers judge the project sustainable.
 
-## 20. MVPから正式プロジェクトへの段階
+## 20. Stages from MVP to Official Project
 
-| 段階 | 提供価値 | 増やさないもの | 昇格基準 |
+| Stage | Delivered Value | Not Expanded | Promotion Criteria |
 |---|---|---|---|
-| Spike | catalog→簡易model→LSQ→SQLの縦切り | MCP remote、vector、複雑join | 価値と実現性を2週間規模で確認 |
-| MVP | 単一DB、read-only、stdio MCP、基本metric、RLS | UI、cache、多DB、自由SQL | eval/security/lineage条件達成 |
-| Preview | docs、packaging、実DB pilot | 分散化、pre-aggregation | 外部利用者が自力導入可能 |
-| Beta | migration、運用、HTTP候補、SLO | PostgreSQL外対応 | 4週間の実運用とsecurity review |
-| 1.0 | 安定contract、support、governance | 市場要望だけのscope拡張 | 継続maintainerと互換性保証 |
+| Spike | End-to-end slice: catalog → simple model → LSQ → SQL | MCP remote, vector, complex joins | Confirm value and feasibility within a ~2-week scope |
+| MVP | Single DB, read-only, stdio MCP, basic metrics, RLS | UI, cache, multi-DB, free-form SQL | Eval/security/lineage criteria met |
+| Preview | Docs, packaging, real-DB pilot | Distribution, pre-aggregation | External users can self-onboard |
+| Beta | Migration, operations, HTTP candidate, SLO | Non-PostgreSQL support | 4-week production run and security review |
+| 1.0 | Stable contract, support, governance | Scope expansion driven solely by market demand | Ongoing maintainers and compatibility guarantees |
 
-正式化はコード量ではなく、以下の証拠で判断する。
+Formal promotion is judged not by code volume but by the following evidence:
 
-- raw SQL/MCPサーバーより正答率・安全な拒否率・監査可能性が改善する。
-- PostgreSQL内に意味を置く運用が、外部YAMLの二重管理より有利な利用者が存在する。
-- RLS principal伝播を安全に運用できる。
-- schema driftとmigrationを現実的に扱える。
-- 既存OSSをfork/integrateするより独立coreを維持する合理性がある。
+- Correctness, safe rejection rate, and auditability improve over raw SQL / MCP servers.
+- Users exist for whom placing semantics in PostgreSQL is more advantageous than dual-maintaining external YAML.
+- RLS principal propagation can be operated safely.
+- Schema drift and migration can be handled realistically.
+- There is a rational basis for maintaining an independent core rather than forking/integrating existing OSS.
 
-## 21. 既存OSSとの差別化
+## 21. Differentiation from Existing OSS
 
-比較は優劣ではなく、対象範囲と正本の置き場所の違いとして扱う。各OSSは進化が速いため、M0と各major release前に公式資料で再評価する。
+Comparison is framed not as superiority but as differences in scope and where the source of truth resides. Each OSS evolves rapidly, so official documentation is re-evaluated at M0 and before each major release.
 
-| 観点 | Wren AI | Cube | Malloy | MetricFlow | postgresem |
+| Aspect | Wren AI | Cube | Malloy | MetricFlow | postgresem |
 |---|---|---|---|---|---|
-| 主眼 | AI/GenBI向けcontext + semantic engine | 汎用semantic/analytics layer | semantic modeling/query language | dbt中心のmetrics compiler | PostgreSQL-native semantic contract + guarded agent gateway |
-| model正本 | MDL/YAML等のproject file | YAML/JavaScript等のcode | `.malloy` file | dbt manifest/YAML | PostgreSQL `semantic` schema |
-| DB catalog/COMMENT/FK取込 | scaffold機能あり | schema generationあり | connection schemaを利用 | dbt manifest中心 | catalog/COMMENT/FK/CHECK/RLSを第一級のevidenceとしてrevision管理 |
-| compiler | 多data source semantic engine | 多data source semantic layer | Malloy→SQL compiler | metric query→SQL compiler | PostgreSQL限定typed LSQ→SQL、決定性と安全な拒否を仕様化 |
-| MCP/agent | あり | あり | Publisher等であり | 主眼ではない | raw SQLなし、LSQ discovery/validate/query/explainに限定 |
-| security正本 | semantic/product policy | semantic access policy | 接続先権限との組合せ | dbt/platformとの組合せ | PostgreSQL GRANT/RLSを最終正本にしprincipalをDBまで伝播 |
-| lineage | 製品/engine機能 | 製品/semantic機能 | compiler metadata | semantic manifest/plan | revision、compiler、policy、source columnをqueryごとに構築 |
-| 対象DB | 多数 | 多数 | 複数 | 複数warehouse | PostgreSQL専用 |
+| Focus | AI/GenBI context + semantic engine | General-purpose semantic/analytics layer | Semantic modeling/query language | dbt-centric metrics compiler | PostgreSQL-native semantic contract + guarded agent gateway |
+| Model source of truth | MDL/YAML etc. project files | YAML/JavaScript etc. code | `.malloy` files | dbt manifest/YAML | PostgreSQL `semantic` schema |
+| DB catalog/COMMENT/FK ingestion | Scaffold feature available | Schema generation available | Uses connection schema | dbt manifest centric | catalog/COMMENT/FK/CHECK/RLS as first-class evidence with revision management |
+| Compiler | Multi-data-source semantic engine | Multi-data-source semantic layer | Malloy → SQL compiler | Metric query → SQL compiler | PostgreSQL-only typed LSQ → SQL; determinism and safe rejection specified |
+| MCP/agent | Available | Available | Available via Publisher, etc. | Not the primary focus | No raw SQL; limited to LSQ discovery/validate/query/explain |
+| Security source of truth | Semantic/product policy | Semantic access policy | Combined with connection-target permissions | Combined with dbt/platform | PostgreSQL GRANT/RLS as the ultimate authority; principal propagated to DB |
+| Lineage | Product/engine feature | Product/semantic feature | Compiler metadata | Semantic manifest/plan | Built per query from revision, compiler, policy, and source columns |
+| Target databases | Many | Many | Multiple | Multiple warehouses | PostgreSQL only |
 
-### 21.1 独自性
+### 21.1 Unique Differentiators
 
-1. **Meaning lives with data**: 意味モデルがPostgreSQLのtransaction、backup、role、migrationの対象になる。
-2. **Native evidence ingestion**: PostgreSQL固有のcatalog、COMMENT、制約、RLS、依存関係を補助情報ではなく管理対象として扱う。
-3. **Database-enforced identity**: Gateway policyだけに依存せず、principalを非`BYPASSRLS` role/contextとしてDBへ伝える。
-4. **Narrow deterministic contract**: 自由SQLや自然言語をcompiler入力にせず、versioned LSQとtyped IRを公開境界にする。
-5. **Lineage by compilation**: Semantic Revisionから実行source/policyまでを同一pipelineで追跡する。
-6. **PostgreSQL-only depth**: 多dialect抽象化より、PostgreSQLの型、RLS、catalog、EXPLAIN、timezone意味論を深く扱う。
+1. **Meaning lives with data**: The semantic model is subject to PostgreSQL transactions, backups, roles, and migrations.
+2. **Native evidence ingestion**: PostgreSQL-specific catalog, COMMENT, constraints, RLS, and dependencies are treated not as auxiliary information but as managed artifacts.
+3. **Database-enforced identity**: Rather than relying solely on Gateway policy, the principal is conveyed to the database as a non-`BYPASSRLS` role/context.
+4. **Narrow deterministic contract**: Free-form SQL and natural language are not compiler inputs; versioned LSQ and typed IR are the public boundaries.
+5. **Lineage by compilation**: Tracks from Semantic Revision to execution source/policy within the same pipeline.
+6. **PostgreSQL-only depth**: Rather than abstracting across multiple dialects, deeply leverages PostgreSQL types, RLS, catalog, EXPLAIN, and timezone semantics.
 
-### 21.2 差別化しない領域
+### 21.2 Areas Not Differentiated
 
-- Wren AIのGenBI体験、Cubeのcache/pre-aggregationと多様なAPI、Malloyの表現力、MetricFlow/dbt ecosystemとは正面競合しない。
-- 将来はimport/export adapterやcompiler比較fixtureを提供し、共存を検討する。
-- M0でWren/Malloyのcompilerやmodelを再利用できるかprototypeし、独自実装の保守負担が価値を上回るなら方針を変更する。
+- No direct competition with Wren AI's GenBI experience, Cube's cache/pre-aggregation and diverse APIs, Malloy's expressiveness, or the MetricFlow/dbt ecosystem.
+- Future import/export adapters and compiler comparison fixtures may be provided to explore coexistence.
+- At M0, prototyping whether Wren/Malloy compilers or models can be reused; if the maintenance burden of an independent implementation outweighs the value, the approach will be changed.
 
-## 22. 主要リスクと判断ゲート
+## 22. Key Risks and Decision Gates
 
-| リスク | 影響 | 緩和策 | 判断ゲート |
+| Risk | Impact | Mitigation | Decision Gate |
 |---|---|---|---|
-| 既存OSSとの差が小さい | 独自projectの価値不足 | 3 dataset/30問で比較、利用者interview | M0で継続/fork/integration/中止 |
-| join fan-outとmetric意味論 | 静かに誤答する | v1範囲制限、grain/additivity、既知回答・拒否eval | M2で正答100%未達ならscopeをさらに削る |
-| RLS principal伝播 | 越権・漏えい | 非owner role、`SET LOCAL`、pool test、外部review | M3未達ならremote executionを公開しない |
-| Semantic SchemaがDBを汚す | 導入拒否・migration事故 | 専用schema/role、forward migration、uninstall/export | Preview前に実DB pilot評価 |
-| catalogのversion差・drift | 誤ったmodel/停止 | PG 16–18 fixture、fingerprint、明示scan | 各PG releaseでsupport更新判断 |
-| COMMENTの品質不足 | discovery精度不足 | explicit term/editor workflow、候補confidence | Previewで運用工数を計測 |
-| Rust/MCP ecosystem依存 | 実装遅延・protocol追随 | adapter分離、protocol contract test | M0 ADRでstack確定 |
-| compiler自作の保守費 | project持続不能 | pure core、限定operator、既存compiler再利用評価 | M0/M4でbuild-vs-integrate再判定 |
-| DoS/high-cost query | DB障害 | budget、EXPLAIN guard、timeout、concurrency | M3 load/security test |
-| Apple Container Compose差 | ローカル再現性低下 | Compose交差機能、Mac smoke test、Linux CI | M1で同一fixture結果を確認 |
-| metadata/監査の機密性 | schemaや利用傾向漏えい | metadata RLS、redaction、retention | M3 threat model review |
-| pgvector先行導入 | 複雑化、誤った正しさ依存 | post-MVP、ranking限定、baseline比較 | Beta以降の独立ADR |
+| Small gap from existing OSS | Insufficient value for an independent project | Comparative eval with 3 datasets / 30 questions, user interviews | M0: continue / fork / integrate / stop |
+| Join fan-out and metric semantics | Silent incorrect answers | v1 scope restriction, grain/additivity, known-answer/rejection eval | M2: if 100% correct not achieved, narrow scope further |
+| RLS principal propagation | Privilege escalation / leakage | Non-owner role, `SET LOCAL`, pool tests, external review | M3: if not met, do not expose remote execution |
+| Semantic Schema pollutes the DB | Adoption refusal / migration accidents | Dedicated schema/role, forward migration, uninstall/export | Pre-Preview: evaluated via real-DB pilot |
+| Catalog version diffs / drift | Incorrect model / outage | PG 16–18 fixtures, fingerprinting, explicit scans | Support update decision per PG release |
+| COMMENT quality insufficient | Poor discovery accuracy | Explicit term/editor workflow, candidate confidence | Preview: measure operational effort |
+| Rust / MCP ecosystem dependencies | Implementation delays / protocol chasing | Adapter separation, protocol contract tests | M0 ADR: finalize stack |
+| Self-built compiler maintenance cost | Project unsustainable | Pure core, limited operators, evaluation of reusing existing compilers | M0/M4: re-evaluate build-vs-integrate |
+| DoS / high-cost queries | Database outage | Budget, EXPLAIN guard, timeout, concurrency | M3 load/security tests |
+| Apple Container / Compose differences | Poor local reproducibility | Compose intersection features, Mac smoke test, Linux CI | M1: confirm identical fixture results |
+| Metadata / audit confidentiality | Schema or usage pattern leakage | Metadata RLS, redaction, retention | M3 threat model review |
+| Premature pgvector adoption | Increased complexity, misplaced correctness dependency | Post-MVP, ranking only, baseline comparison | Independent ADR after Beta |
 
-### 22.1 Stop条件
+### 22.1 Stop Conditions
 
-次のいずれかに該当する場合、機能追加ではなく中止・統合・方向転換を検討する。
+If any of the following apply, halt feature additions and consider stopping, integrating, or pivoting:
 
-- PostgreSQL内Semantic Schemaの運用上の利点を示すpilot利用者が得られない。
-- 既存OSSの薄いadapterで同じ要件を満たせる。
-- 対応範囲を限定しても、metricの正しさを安定して保証できない。
-- RLS/role mappingを安全かつ理解可能に運用できない。
-- 独立compilerとschema migrationを維持できるmaintainer体制がない。
+- No pilot users can demonstrate the operational advantages of a PostgreSQL-internal Semantic Schema.
+- A thin adapter on existing OSS can satisfy the same requirements.
+- Even with a narrowed scope, metric correctness cannot be reliably guaranteed.
+- RLS/role mapping cannot be operated safely and understandably.
+- No maintainer organization can sustain the independent compiler and schema migrations.
 
-## 23. 優先順位
+## 23. Priorities
 
-### P0: MVPを成立させるもの
+### P0: What Makes the MVP Viable
 
-- LSQ v1とSemantic Schema v1の仕様
-- immutable revision/publish
-- catalog/COMMENT/FK/CHECK/RLS scanとdrift
-- typed IRと限定的deterministic compiler
-- read-only/RLS-aware executor
+- LSQ v1 and Semantic Schema v1 specifications
+- Immutable revision/publish
+- catalog/COMMENT/FK/CHECK/RLS scan and drift
+- Typed IR and limited deterministic compiler
+- Read-only / RLS-aware executor
 - MCP discovery/validate/query/explain
-- lineage/audit、security/golden/integration tests
-- Apple Container + Linux CIの再現環境
+- Lineage/audit, security/golden/integration tests
+- Reproducible environment with Apple Container + Linux CI
 
-### P1: Preview/Betaに必要
+### P1: Required for Preview/Beta
 
-- model diff、error UX、sample/eval拡充
-- HTTP transportと本格認証（需要確認後）
-- backup/restore、N-1 migration、SLO/dashboard
-- packaging、signed release、external security review
-- 大規模catalogのpagination/performance
+- Model diff, error UX, expanded samples/evals
+- HTTP transport and full authentication (after demand is confirmed)
+- Backup/restore, N-1 migration, SLO/dashboard
+- Packaging, signed releases, external security review
+- Large-catalog pagination/performance
 
-### P2: 計測後に判断
+### P2: Decided After Measurement
 
 - pgvector discovery ranking
-- approved example query retrieval
-- event trigger/CDC drift detection
-- many-to-many/symmetric aggregate
-- cache/pre-aggregation
-- import/export adapter（Wren/Cube/Malloy/MetricFlow）
-- UI、自然言語回答、PostgreSQL外dialect
+- Approved example query retrieval
+- Event trigger / CDC drift detection
+- Many-to-many / symmetric aggregate
+- Cache / pre-aggregation
+- Import/export adapters (Wren / Cube / Malloy / MetricFlow)
+- UI, natural-language responses, non-PostgreSQL dialects
 
-## 24. 実装前に作成するADR
+## 24. ADRs to Create Before Implementation
 
-1. ADR-001: Rust採用とdependency選定
-2. ADR-002: Semantic Schema v1とrevision/publish model
-3. ADR-003: LSQ v1、型体系、NULL/timezone/numeric意味論
-4. ADR-004: join cardinality、grain、additivity、拒否規則
-5. ADR-005: principal→PostgreSQL role/session contextとRLS
-6. ADR-006: MCP transport、認証境界、tool/resource contract
-7. ADR-007: audit/lineage保持期間と機密情報redaction
-8. ADR-008: migration、backup、compatibility、uninstall/export
-9. ADR-009: build vs Wren/Malloy/他compiler integration評価
+1. ADR-001: Rust adoption and dependency selection
+2. ADR-002: Semantic Schema v1 and revision/publish model
+3. ADR-003: LSQ v1, type system, NULL/timezone/numeric semantics
+4. ADR-004: Join cardinality, grain, additivity, rejection rules
+5. ADR-005: Principal-to-PostgreSQL role/session context and RLS
+6. ADR-006: MCP transport, authentication boundary, tool/resource contract
+7. ADR-007: Audit/lineage retention period and sensitive information redaction
+8. ADR-008: Migration, backup, compatibility, uninstall/export
+9. ADR-009: Build vs. Wren/Malloy/other compiler integration evaluation
 
-## 25. 最初の実装バックログ
+## 25. Initial Implementation Backlog
 
-1. repository metadata、license、contribution/security文書を確定する。
-2. `compose.yaml`、Containerfile、PG 16–18 fixtures、`make doctor/dev-up/test`を作る。
-3. commerceとRLS multi-tenant fixture、30問の正答/拒否evalを先に作る。
-4. LSQ v1とSemantic Expression v1のJSON SchemaをRFC化する。
-5. Semantic Schema migration v1とrole/privilege設計を実装する。
-6. catalog snapshot/import/driftを実装し、PG 16–18 golden snapshotを固定する。
-7. compiler coreのsymbol/type/grain validatorとtyped IRを実装する。
-8. single-fact、many-to-one、基本aggregate/filter/time grainを実装する。
-9. guarded executor、RLS principal mapping、timeout/limit/cancelを実装する。
-10. MCP stdio adapterと5 tools、query response、error taxonomyを実装する。
-11. query-time lineage/auditとobservabilityを実装する。
-12. end-to-end evalとMVP exit reviewを実施する。
+1. Finalize repository metadata, license, and contribution/security documentation.
+2. Create `compose.yaml`, Containerfile, PG 16–18 fixtures, and `make doctor/dev-up/test`.
+3. Build the commerce and RLS multi-tenant fixture and the 30-question correct/rejection eval first.
+4. Draft the LSQ v1 and Semantic Expression v1 JSON Schemas as RFCs.
+5. Implement Semantic Schema migration v1 and role/privilege design.
+6. Implement catalog snapshot/import/drift and pin PG 16–18 golden snapshots.
+7. Implement the compiler core's symbol/type/grain validator and typed IR.
+8. Implement single-fact, many-to-one, basic aggregate/filter/time grain.
+9. Implement the guarded executor, RLS principal mapping, and timeout/limit/cancel.
+10. Implement the MCP stdio adapter with 5 tools, query response, and error taxonomy.
+11. Implement query-time lineage/audit and observability.
+12. Conduct the end-to-end eval and MVP exit review.
 
-## 26. セルフレビュー結果と反映事項
+## 26. Self-Review Results and Reflected Items
 
-**レビュー判定: M0（Project foundation / RFC）への昇格は条件付きGO。** 直ちに汎用Semantic Layerを作り始めるのではなく、最初に3 dataset/30問の比較eval、LSQ/粒度意味論、RLS principal伝播のADRを確定する。M0のexit gateで、独自compilerを継続するか、Wren AI/Malloy等との統合へ切り替えるかを再判断する。
+**Review verdict: Conditional GO for promotion to M0 (Project Foundation / RFC).** Rather than immediately building a general-purpose Semantic Layer, first finalize the 3-dataset / 30-question comparative eval, LSQ/granularity semantics, and the RLS principal propagation ADRs. At the M0 exit gate, re-evaluate whether to continue with an independent compiler or pivot to integration with Wren AI / Malloy, etc.
 
-### 技術的な弱点
+### Technical Weaknesses
 
-- **join/aggregateの正しさが最大の難所**: 当初想定しがちな汎用join graphは危険なため、MVPをsingle-fact + many-to-one/one-to-oneへ制限した。
-- **RLSをGatewayで再現すると二重の認可正本になる**: RLS式は取り込み・説明対象に留め、DBで強制しprincipalをtransaction localに伝播する設計へした。
-- **JSON Schemaだけでは意味を保証できない**: schema validationとsemantic/type/grain/cost validationを明確に分離した。
-- **OIDは安定IDにならない**: canonical物理名とfingerprintを正本にし、OIDはsnapshot補助に限定した。
-- **生成SQLの決定性とDB実行計画の決定性を混同しやすい**: 保証対象をIR/SQL/parameter/lineageに限定した。
+- **Join/aggregate correctness is the hardest challenge**: A general-purpose join graph—an easy initial assumption—is dangerous, so the MVP was restricted to single-fact + many-to-one / one-to-one.
+- **Re-implementing RLS in the Gateway creates dual sources of authorization**: RLS expressions are treated as ingestion/explanation targets only; enforcement is at the database, with principal propagated transaction-locally.
+- **JSON Schema alone cannot guarantee semantics**: Schema validation and semantic/type/grain/cost validation were clearly separated.
+- **OIDs are not stable IDs**: Canonical physical names and fingerprints are the source of truth; OIDs are limited to snapshot auxiliaries.
+- **Generated SQL determinism and DB execution plan determinism are easily conflated**: The guarantee scope was limited to IR/SQL/parameter/lineage.
 
-### 過剰設計の削減
+### Over-Engineering Reductions
 
-- microservice、message queue、独立policy serviceを採用せず、単一Gatewayにした。
-- crate分割をcompiler coreとbinaryの2つに留めた。
-- event trigger、logical decoding、cache、pre-aggregation、UI、vector searchをMVPから外した。
-- many-to-many、複数fact、window function、任意UDFを先送りした。
-- management APIを一般MCP toolにせず、CLI中心にした。
+- Microservices, message queues, and an independent policy service were not adopted; a single Gateway was chosen.
+- Crate splitting was limited to two: compiler core and binary.
+- Event triggers, logical decoding, cache, pre-aggregation, UI, and vector search were excluded from the MVP.
+- Many-to-many, multiple facts, window functions, and arbitrary UDFs were deferred.
+- The management API was kept CLI-centric rather than exposed as a general MCP tool.
 
-### 不足を補った項目
+### Gaps Addressed
 
-- principal mappingとconnection poolのcontext漏れ対策。
-- COMMENTが機密情報の保管に不適切であることと、metadata自体のRLS。
-- numeric/timezone/NULL、join grain/additivity、result byte上限。
-- schema drift、migration、backup/restore、uninstall/exportの検討。
-- 正答だけでなく「安全に拒否すべきquery」を品質指標に追加。
-- stop条件とbuild-vs-integrateの再判断gate。
+- Principal mapping and connection pool context-leak countermeasures.
+- The unsuitability of COMMENT for storing sensitive information, and RLS on metadata itself.
+- numeric/timezone/NULL, join grain/additivity, and result byte limits.
+- Schema drift, migration, backup/restore, and uninstall/export considerations.
+- "Queries that should be safely rejected" added as a quality metric alongside correct answers.
+- Stop conditions and build-vs-integrate re-evaluation gates.
 
-### 優先順位レビュー
+### Priority Review
 
-最優先はMCPや自然言語体験ではなく、fixture/eval、semantic contract、compiler correctness、RLS境界である。MCPはその安全なcoreを公開する薄いadapterとしてM3で実装する。pgvectorは発見のbaselineが不足した場合だけ導入する。
+The top priority is not MCP or natural-language experience but fixture/eval, semantic contract, compiler correctness, and RLS boundaries. MCP is implemented at M3 as a thin adapter that exposes this safe core. pgvector is adopted only if the discovery baseline proves insufficient.
 
-## 27. 公式参考資料
+## 27. Official References
 
 - PostgreSQL: [System Catalogs](https://www.postgresql.org/docs/current/catalogs.html)
 - PostgreSQL: [`COMMENT`](https://www.postgresql.org/docs/current/sql-comment.html)
