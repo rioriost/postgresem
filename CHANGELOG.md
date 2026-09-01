@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-01
+
+### Added
+
+- Deterministic PostgreSQL catalog drift comparison with canonical fingerprint
+  verification, role/database binding, and compatible, review-required, and
+  breaking classifications.
+- One-way Apache Ossie `0.1.1` import into a reviewable query-only candidate,
+  with PostgreSQL-authoritative type, nullability, key, relationship, and
+  visibility checks.
+- Rejection coverage for unsupported expressions, lossy key semantics,
+  aggregate/type mismatches, unsafe time roles, and tampered catalog evidence.
+- Pinned Wren AI, Cube, Malloy, and MetricFlow runtime harnesses over one
+  PostgreSQL 18 task, plus machine-readable GitHub Actions evidence.
+- Maintainer acceptance evidence for catalog-bound import and
+  authorization-aware drift as the selected M7 user-value gaps.
+
+### Changed
+
+- Make PostgreSQL-native authority, governed mutation, immutable publication,
+  no-raw-SQL requests, and authorization drift the primary reference
+  differentiators instead of pursuing feature-count parity.
+- Defer fan-out-safe aggregation anchors, cumulative/time-spine metrics,
+  PostgreSQL wire serving, and pre-aggregation to later milestones behind
+  separate design decisions.
+
+### Security
+
+- Fail closed when imported semantics are ambiguous, computed, multi-dialect,
+  cross-dataset, type-incompatible, composite, or insufficiently
+  timezone-qualified.
+- Keep external models and reference runtimes outside the postgresem runtime,
+  publication, credential, GRANT, RLS, and audit authority.
+
 ## [0.4.0] - 2026-09-01
 
 ### Added

@@ -8,9 +8,10 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-最新の公開リリースと現在のsource versionは**0.4.0**です。このpreviewではgoverned
-mutationとLinux amd64/arm64でのnative runtime evidenceを追加しましたが、production
-readinessやlong-term supportを保証するものではありません。
+最新の公開リリースは**0.4.0**、現在のsource versionは**0.5.0**です。current preview
+ではcatalog-boundなApache Ossie import、authorization-awareなcatalog drift、
+再現可能なreference runtime evidenceを追加しました。production readinessや
+long-term supportを保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -62,21 +63,25 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 
 ## 1.0までのロードマップ
 
-現在のsourceはM6を`1.0`ではなく`0.4`として実装しています。上限付きinsertと明示的に
-model化された冪等upsertのための独立した型付きmutation contractです。既存の`READ ONLY`
-query executorを弱めず、raw
-SQL、任意DML、物理identifier、request-selected database roleは公開しません。
-PostgreSQLのGRANT、RLS `WITH CHECK`、constraint、triggerを最終正本として維持します。
+現在のsourceはM7を`1.0`ではなく`0.5`として完了しています。M6の独立した型付き
+mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
+です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
+authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` query executor
+を弱めず、raw SQL、任意DML、物理identifier、request-selected database roleは公開
+しません。PostgreSQLのGRANT、RLS `WITH CHECK`、constraint、triggerを最終正本として
+維持します。
 
 `0.4`では、cross buildしたarchiveやmulti-architecture image manifestを実行evidence
 とはせず、packaged binaryとruntime imageをLinux amd64/arm64上でnative実行するgateを
 追加しました。Mac StudioとApple Containerはmaintainerのlocal reference環境として
 残しますが、唯一のsupport targetではありません。
 
-`0.4`以降の`0.5`から`0.9`では、Wren AI、Cube、Malloy、MetricFlow等の現行reference
-implementationと再現可能な比較を行い、不足するauthoring、semantic、integration、
-operations機能を選びます。feature数のparityは目的とせず、`1.0`までPostgreSQLを唯一の
-execution engineかつsemantic source of truthとして維持します。
+M7では、固定したWren AI、Cube、Malloy、MetricFlowのOSS runtimeを同一PostgreSQL 18
+datasetに対して実行しました。全referenceが同じ期待aggregateを返すことを確認しつつ、
+異なるtrust boundaryを明示しています。`0.6`から`0.9`では、このevidenceを基に不足する
+semantic、integration、operations機能を選びます。feature数のparityは目的とせず、
+`1.0`までPostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持
+します。
 
 M6〜M12のgateは
 [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
@@ -105,7 +110,7 @@ M6〜M12のgateは
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## 0.4で実装されているもの
+## 0.5で実装されているもの
 
 - LSQ v1 validationと決定的compile
 - PostgreSQLをbacking storeとするSemantic Snapshot/Schema v1
@@ -119,6 +124,12 @@ M6〜M12のgateは
 - 改行区切りJSON-RPC stdio上のMCP `2024-11-05`
 - semantic操作に限定した7つのtoolと4形式のresource URI
 - breaking-change gateを持つ決定的Semantic Model互換性diff
+- fingerprint付きPostgreSQL catalog drift。GRANT、RLS、constraint、型の変更を
+  breaking evidenceとして扱う
+- PostgreSQL catalog evidenceと照合する、review可能かつquery-onlyなcandidateへの
+  Apache Ossie `0.1.1`一方向import
+- 同一PostgreSQL 18 taskに対するWren AI、Cube、Malloy、MetricFlowの固定runtime比較と
+  machine-readable evidence
 - 100 modelのcompiler baselineと決定的な100 relation catalog check
 - PostgreSQL 18を使用するローカルApple Container Compose開発stack
 
@@ -171,6 +182,9 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 - governed writeは公開済みinsert/upsert projectionに限定されます。update、delete、
   merge、copy、call、DDL、raw SQL、caller-selected conflict target/returning fieldは
   未対応です。
+- Ossie importは意図的に一方向で、direct ANSI field、single-column key-backed
+  relationship、承認済みsingle-field aggregateだけを扱います。未対応またはlossyな
+  semanticsはfail closedします。
 
 ## Packaging状況
 
@@ -188,6 +202,7 @@ digestはGitHub OIDCでkeyless署名されています。検証時には、想�
 identityとissuerを制約する必要があります。
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix)も参照して
 ください。
+`0.5.0` sourceは、同じtag-triggered artifact/signature gateの実行待ちです。
 
 ## 開発
 

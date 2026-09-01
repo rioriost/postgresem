@@ -911,10 +911,13 @@ required smoke/contract suites.
 
 ### M7: 0.5 — Reference Comparison and Interoperability
 
-**Implementation status:** in progress after `0.4.0`. The 2026-09-01
-comparison, fail-closed catalog drift gate, and one-way Apache Ossie `0.1.1`
-candidate importer are implemented in the current source. External reference
-runtime execution and user-value evidence remain before promotion to `0.5`.
+**Implementation status:** complete in the `0.5.0` source tree. The 2026-09-01
+comparison, fail-closed catalog drift gate, one-way Apache Ossie `0.1.1`
+candidate importer, PostgreSQL user-value acceptance, and pinned OSS runtime
+execution are recorded. Reference workflow run
+[`33515921966`](https://github.com/rioriost/postgresem/actions/runs/33515921966)
+executed Wren AI, Cube, Malloy, and MetricFlow against the same PostgreSQL 18
+dataset; all four returned the expected `total_revenue` value.
 
 - Re-run a documented comparison against current Wren AI, Cube, Malloy, and
   MetricFlow releases using common PostgreSQL datasets and tasks.

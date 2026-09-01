@@ -8,9 +8,10 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The latest published release and current source version are **0.4.0**. This
-preview adds governed mutation and native Linux amd64/arm64 runtime evidence,
-but it is not a production-readiness or long-term-support promise.
+The latest published release is **0.4.0** and the current source version is
+**0.5.0**. The current preview adds catalog-bound Apache Ossie import,
+authorization-aware catalog drift, and reproducible reference-runtime
+evidence. It is not a production-readiness or long-term-support promise.
 
 ## What problem does postgresem solve?
 
@@ -65,12 +66,13 @@ procedures over a broad abstraction across many database dialects.
 
 ## Roadmap to 1.0
 
-The current source implements M6 as `0.4`, not `1.0`: a separate typed mutation
-contract for bounded inserts and explicitly modeled idempotent upserts. It does
-not weaken
-the existing `READ ONLY` query executor or expose raw SQL, arbitrary DML,
-physical identifiers, or request-selected database roles. PostgreSQL GRANT,
-RLS `WITH CHECK`, constraints, and triggers remain authoritative.
+The current source completes M7 as `0.5`, not `1.0`. M6's separate typed
+mutation contract remains limited to bounded inserts and explicitly modeled
+idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
+and authorization-aware catalog drift without weakening the existing
+`READ ONLY` query executor or exposing raw SQL, arbitrary DML, physical
+identifiers, or request-selected database roles. PostgreSQL GRANT, RLS
+`WITH CHECK`, constraints, and triggers remain authoritative.
 
 `0.4` also adds native Linux amd64 and arm64 runtime gates for both packaged
 binaries and runtime images instead of treating cross-built archives or a
@@ -78,11 +80,13 @@ multi-architecture manifest as execution evidence. The Mac Studio and Apple
 Container remain the maintainer's local reference environment, not the only
 supported target.
 
-After `0.4`, versions `0.5` through `0.9` will use reproducible comparisons
-with current reference implementations such as Wren AI, Cube, Malloy, and
-MetricFlow to select missing authoring, semantic, integration, and operational
-features. Feature-count parity is not the objective: PostgreSQL remains the
-only execution engine and semantic source of truth through `1.0`.
+M7 ran pinned Wren AI, Cube, Malloy, and MetricFlow OSS runtimes against one
+PostgreSQL 18 dataset. Every reference produced the same expected aggregate,
+while the comparison kept their materially different trust boundaries
+explicit. Versions `0.6` through `0.9` will use that evidence to select missing
+semantic, integration, and operational features. Feature-count parity is not
+the objective: PostgreSQL remains the only execution engine and semantic
+source of truth through `1.0`.
 
 See the [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 for the M6–M12 gates.
@@ -110,7 +114,7 @@ for the M6–M12 gates.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What 0.4 implements
+## What 0.5 implements
 
 - LSQ v1 validation and deterministic compilation
 - Semantic Snapshot/Schema v1 backed by PostgreSQL
@@ -124,6 +128,12 @@ for the M6–M12 gates.
 - MCP `2024-11-05` over line-delimited JSON-RPC stdio
 - seven semantic-only tools and four resource URI forms
 - deterministic semantic model compatibility diffs with a breaking-change gate
+- fingerprinted PostgreSQL catalog drift with GRANT, RLS, constraint, and type
+  changes treated as breaking evidence
+- one-way Apache Ossie `0.1.1` import into a reviewable, query-only candidate
+  that is cross-checked against PostgreSQL catalog evidence
+- pinned Wren AI, Cube, Malloy, and MetricFlow runtime comparisons against one
+  PostgreSQL 18 task, with machine-readable evidence
 - a 100-model compiler baseline and deterministic 100-relation catalog check
 - local Apple Container Compose development stack using PostgreSQL 18
 
@@ -180,6 +190,9 @@ and unknown semantic objects receive the same public “not available” errors.
 - Governed writes are limited to published insert/upsert projections. Update,
   delete, merge, copy, calls, DDL, raw SQL, caller-selected conflict targets,
   and caller-selected returning fields remain unsupported.
+- Ossie import is intentionally one-way and supports only direct ANSI fields,
+  single-column key-backed relationships, and approved single-field
+  aggregates. Unsupported or lossy semantics fail closed.
 
 ## Packaging status
 
@@ -197,6 +210,8 @@ certificate. The public image is `ghcr.io/rioriost/postgresem:0.4.0`. The
 checksum and immutable image digest are GitHub OIDC keyless-signed;
 verification must constrain the expected workflow identity and issuer. See the
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
+The `0.5.0` source is awaiting the same tag-triggered artifact and signature
+gates.
 
 ## Development
 

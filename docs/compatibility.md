@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The latest published release and current
-source package are `0.4.0`. Before 1.0:
+The project uses Semantic Versioning. The latest published release is `0.4.0`
+and the current source package is `0.5.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -33,7 +33,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
 | database migrations | `0001`–`0005` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
-| source package | `0.4.0` | M6 governed-mutation and Linux portability package |
+| source package | `0.5.0` | M7 catalog drift, catalog-bound Ossie import, and reference evidence |
 | latest published package | `0.4.0` | signed preview release; governed query and mutation contracts |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
@@ -172,6 +172,17 @@ rejected. Time-dimension roles require PostgreSQL `date` or
 timestamp-without-time-zone evidence; the importer does not invent a timezone
 for timestamp-with-time-zone fields.
 
+M7 reference execution is independently reproducible through
+[`tests/reference-comparison/runtime`](../tests/reference-comparison/runtime/)
+and the dedicated
+[`reference-comparison.yml`](../.github/workflows/reference-comparison.yml)
+workflow. Run
+[`33515921966`](https://github.com/rioriost/postgresem/actions/runs/33515921966)
+executed Wren AI, Cube, Malloy, and MetricFlow against one PostgreSQL 18
+dataset; every engine returned the expected `545.50`. This is query-result
+evidence, not a claim that the engines share postgresem's no-raw-SQL,
+immutable-publication, mutation, or PostgreSQL-authorization boundary.
+
 ## PostgreSQL support
 
 | PostgreSQL | Preview status | Evidence/boundary |
@@ -255,8 +266,8 @@ supply-chain artifact.
 - query row limit and result-byte truncation, with no result pagination;
 - no down migrations, production backup retention, RPO/RTO guarantee, disaster
   recovery service, or uninstall;
-- a tagged `0.4.0` release has not yet published the configured Linux runtime
-  evidence artifacts;
+- `0.5.0` release artifacts and signatures are pending the tag-triggered
+  release gates;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist

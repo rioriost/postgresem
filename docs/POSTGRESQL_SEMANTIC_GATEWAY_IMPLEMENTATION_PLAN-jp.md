@@ -882,10 +882,13 @@ Linux amd64/arm64 artifactが両方で必須smoke/contract suiteを実行でき�
 
 ### M7: 0.5 — Reference比較とinteroperability
 
-**実装status:** `0.4.0`後の作業として進行中。2026-09-01時点の比較、fail-closedな
-catalog drift gate、Apache Ossie `0.1.1`からreview用candidateを生成する一方向importを
-current sourceへ実装済み。`0.5`へpromotionする前に、external reference runtimeでの
-実行evidenceとuser-value evidenceが残る。
+**実装status:** `0.5.0` source treeで完了。2026-09-01時点の比較、fail-closedな
+catalog drift gate、Apache Ossie `0.1.1`からreview用candidateを生成する一方向import、
+PostgreSQL利用者価値のacceptance、固定したOSS runtimeの実行evidenceを記録した。
+reference workflow
+[`33515921966`](https://github.com/rioriost/postgresem/actions/runs/33515921966)
+ではWren AI、Cube、Malloy、MetricFlowを同一PostgreSQL 18 datasetに対して実行し、
+4実装すべてが期待する`total_revenue`を返した。
 
 - 共通PostgreSQL dataset/taskを使い、現行Wren AI、Cube、Malloy、MetricFlow releaseとの
   比較を再実行して文書化する。

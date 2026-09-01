@@ -2,9 +2,10 @@
 
 ## Supported versions and scope
 
-No production-ready version has been released. `0.3.0-beta.1` is the active
-published beta; the current `0.4.0` source adds governed mutations and native
-Linux runtime gates. There is no long-term-support promise for 0.x releases.
+No production-ready version has been released. `0.4.0` is the active published
+preview; the current `0.5.0` source adds catalog-bound Ossie import,
+authorization-aware catalog drift, and reproducible reference-runtime
+evidence. There is no long-term-support promise for 0.x releases.
 
 The implemented application boundary is MCP stdio, guarded read-only query
 execution, and a separate guarded mutation path for published bounded
@@ -13,7 +14,7 @@ insert/upsert projections. PostgreSQL connections require explicit
 store and hostname verification. There is no HTTP service, remote
 authentication protocol, production RPO/RTO guarantee, or production
 hardening claim. The loopback Web demo is not a remotely supported transport.
-The `v0.3.0-beta.1` release publishes keyless GitHub OIDC signatures for its
+The `v0.4.0` release publishes keyless GitHub OIDC signatures for its
 checksums and immutable container image digest, plus image SBOM/provenance.
 
 The Apple Container gateway service is configured with container user root

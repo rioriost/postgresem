@@ -1,6 +1,6 @@
 # Error reference
 
-This is the public/stored taxonomy implemented through the current `0.4.0`
+This is the public/stored taxonomy implemented through the current `0.5.0`
 source. Codes are stable within this pre-1.0 contract but remain
 subject to the pre-1.0 compatibility policy.
 
