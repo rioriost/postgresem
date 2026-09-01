@@ -12,6 +12,9 @@ database_password="${REFERENCE_DATABASE_PASSWORD:-semantic-runtime}"
 project_source="$repo_root/tests/reference-comparison/runtime/metricflow/project"
 expected_file="$repo_root/tests/reference-comparison/runtime/expected.json"
 bundle='dbt-metricflow[dbt-postgres]==0.14.0'
+metricflow_version='0.212.0'
+dbt_core_version='1.12.3'
+dbt_postgres_version='1.11.0'
 
 mkdir -p "$output_dir"
 profiles_file="$output_dir/profiles.yml"
@@ -33,6 +36,9 @@ jq -n \
   --arg password "$database_password" \
   --arg database "$database_name" \
   '{
+    config: {
+      send_anonymous_usage_stats: false
+    },
     postgresem_reference: {
       target: "local",
       outputs: {
@@ -56,11 +62,25 @@ export DBT_PROFILES_DIR="$output_dir"
 export DBT_LOG_PATH="$output_dir/metricflow-logs"
 
 dbt() {
-  uvx --quiet --python 3.12 --from "$bundle" dbt "$@"
+  uvx \
+    --quiet \
+    --python 3.12 \
+    --from "$bundle" \
+    --with "metricflow==$metricflow_version" \
+    --with "dbt-core==$dbt_core_version" \
+    --with "dbt-postgres==$dbt_postgres_version" \
+    dbt "$@"
 }
 
 mf() {
-  uvx --quiet --python 3.12 --from "$bundle" mf "$@"
+  uvx \
+    --quiet \
+    --python 3.12 \
+    --from "$bundle" \
+    --with "metricflow==$metricflow_version" \
+    --with "dbt-core==$dbt_core_version" \
+    --with "dbt-postgres==$dbt_postgres_version" \
+    mf "$@"
 }
 
 dbt parse --project-dir "$project" --quiet
@@ -83,18 +103,12 @@ if [[ "$actual" != "$expected" ]]; then
 fi
 
 bundle_version="$(mf --version)"
-metricflow_version="$(
-  uv run \
-    --quiet \
-    --isolated \
-    --python 3.12 \
-    --with "$bundle" \
-    python -c 'from importlib.metadata import version; print(version("metricflow"))'
-)"
 jq -n \
   --arg engine "metricflow" \
   --arg version "$metricflow_version" \
   --arg bundle "$bundle_version" \
+  --arg dbt_core_version "$dbt_core_version" \
+  --arg dbt_postgres_version "$dbt_postgres_version" \
   --arg task "commerce-total-revenue" \
   --arg expected "$expected" \
   --arg actual "$actual" \
@@ -103,6 +117,10 @@ jq -n \
     engine: $engine,
     version: $version,
     bundle: $bundle,
+    dependencies: {
+      "dbt-core": $dbt_core_version,
+      "dbt-postgres": $dbt_postgres_version
+    },
     scope: "oss",
     task: $task,
     expected: {total_revenue: $expected},
