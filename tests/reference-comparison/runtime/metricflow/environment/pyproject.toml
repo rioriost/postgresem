@@ -1,0 +1,10 @@
+[project]
+name = "postgresem-metricflow-reference"
+version = "0.0.0"
+requires-python = "==3.12.13"
+dependencies = [
+  "dbt-core==1.12.3",
+  "dbt-metricflow[dbt-postgres]==0.14.0",
+  "dbt-postgres==1.11.0",
+  "metricflow==0.212.0",
+]

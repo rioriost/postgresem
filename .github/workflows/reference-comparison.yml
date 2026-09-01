@@ -31,7 +31,7 @@ jobs:
           - metricflow
     services:
       postgres:
-        image: postgres:18
+        image: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
         env:
           POSTGRES_DB: reference
           POSTGRES_USER: postgres
@@ -49,6 +49,7 @@ jobs:
       REFERENCE_DATABASE_NAME: reference
       REFERENCE_DATABASE_USER: semantic_user
       REFERENCE_DATABASE_PASSWORD: semantic-runtime
+      REFERENCE_DATABASE_IMAGE: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,6 +61,7 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: false
+          version: 0.12.8
 
       - name: Install Node.js
         if: matrix.engine == 'malloy'

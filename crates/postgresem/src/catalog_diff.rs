@@ -114,6 +114,16 @@ pub fn diff_catalogs(
             &after.server_version_num,
         )?;
     }
+    if before.role_context != after.role_context {
+        push_modified(
+            &mut changes,
+            "/role_context",
+            CatalogObjectKind::Context,
+            CatalogCompatibility::Breaking,
+            &before.role_context,
+            &after.role_context,
+        )?;
+    }
 
     let before_relations = relation_map(&before.relations);
     let after_relations = relation_map(&after.relations);
@@ -188,6 +198,16 @@ fn diff_relation(
             CatalogCompatibility::Breaking,
             &before.kind,
             &after.kind,
+        )?;
+    }
+    if before.owner != after.owner {
+        push_modified(
+            changes,
+            &format!("{base}/owner"),
+            CatalogObjectKind::Relation,
+            CatalogCompatibility::Breaking,
+            &before.owner,
+            &after.owner,
         )?;
     }
     if before.comment != after.comment {
@@ -482,8 +502,8 @@ const fn change_order(change: CatalogChangeKind) -> u8 {
 mod tests {
     use super::{CatalogCompatibility, CatalogDiffError, diff_catalogs};
     use crate::catalog::{
-        CatalogColumn, CatalogRelation, CatalogSnapshot, RelationGrantHints, RelationKind,
-        RowLevelSecurity,
+        CatalogColumn, CatalogRelation, CatalogRoleContext, CatalogSnapshot, RelationGrantHints,
+        RelationKind, RowLevelSecurity,
     };
 
     #[test]
@@ -534,14 +554,50 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn classifies_role_context_and_owner_changes_as_breaking() {
+        let before = snapshot(relation()).expect("valid source snapshot");
+        let mut after = before.clone();
+        after.role_context.bypass_rls = true;
+        after
+            .role_context
+            .effective_roles
+            .push("rls_policy_role".to_owned());
+        after.relations[0].owner = "postgresem_introspector".to_owned();
+        after.fingerprint.clear();
+        let after = after.finalize().expect("valid target snapshot");
+
+        let diff = diff_catalogs(&before, &after).expect("snapshots are comparable");
+
+        assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
+        assert_eq!(diff.summary.breaking, 2);
+        assert!(
+            diff.changes
+                .iter()
+                .any(|change| change.path == "/role_context")
+        );
+        assert!(
+            diff.changes
+                .iter()
+                .any(|change| change.path.ends_with("/owner"))
+        );
+    }
+
     fn snapshot(
         relation: CatalogRelation,
     ) -> Result<CatalogSnapshot, crate::catalog::CatalogError> {
         CatalogSnapshot {
-            schema_version: "1".to_owned(),
+            schema_version: "2".to_owned(),
             server_version_num: 180_000,
             current_database: "app".to_owned(),
             current_role: "postgresem_introspector".to_owned(),
+            role_context: CatalogRoleContext {
+                inherit: true,
+                superuser: false,
+                bypass_rls: false,
+                effective_roles: vec!["postgresem_introspector".to_owned()],
+                settable_roles: Vec::new(),
+            },
             relations: vec![relation],
             fingerprint: String::new(),
         }
@@ -553,6 +609,7 @@ mod tests {
             schema: "commerce".to_owned(),
             name: "orders".to_owned(),
             kind: RelationKind::Table,
+            owner: "postgresem_source_owner".to_owned(),
             comment: Some("Orders".to_owned()),
             grants: RelationGrantHints {
                 schema_usage: true,

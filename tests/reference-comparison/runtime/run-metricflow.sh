@@ -9,12 +9,14 @@ database_port="${REFERENCE_DATABASE_PORT:-5432}"
 database_name="${REFERENCE_DATABASE_NAME:-reference}"
 database_user="${REFERENCE_DATABASE_USER:-semantic_user}"
 database_password="${REFERENCE_DATABASE_PASSWORD:-semantic-runtime}"
+database_image="${REFERENCE_DATABASE_IMAGE:-postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280}"
 project_source="$repo_root/tests/reference-comparison/runtime/metricflow/project"
+environment="$repo_root/tests/reference-comparison/runtime/metricflow/environment"
 expected_file="$repo_root/tests/reference-comparison/runtime/expected.json"
-bundle='dbt-metricflow[dbt-postgres]==0.14.0'
 metricflow_version='0.212.0'
 dbt_core_version='1.12.3'
 dbt_postgres_version='1.11.0'
+python_version='3.12.13'
 
 mkdir -p "$output_dir"
 output_dir="$(cd "$output_dir" && pwd)"
@@ -63,24 +65,22 @@ export DBT_PROFILES_DIR="$output_dir"
 export DBT_LOG_PATH="$output_dir/metricflow-logs"
 
 dbt() {
-  uvx \
+  uv run \
     --quiet \
-    --python 3.12 \
-    --from "$bundle" \
-    --with "metricflow==$metricflow_version" \
-    --with "dbt-core==$dbt_core_version" \
-    --with "dbt-postgres==$dbt_postgres_version" \
+    --project "$environment" \
+    --frozen \
+    --no-dev \
+    --python "$python_version" \
     dbt "$@"
 }
 
 mf() {
-  uvx \
+  uv run \
     --quiet \
-    --python 3.12 \
-    --from "$bundle" \
-    --with "metricflow==$metricflow_version" \
-    --with "dbt-core==$dbt_core_version" \
-    --with "dbt-postgres==$dbt_postgres_version" \
+    --project "$environment" \
+    --frozen \
+    --no-dev \
+    --python "$python_version" \
     mf "$@"
 }
 
@@ -104,12 +104,20 @@ if [[ "$actual" != "$expected" ]]; then
 fi
 
 bundle_version="$(mf --version)"
+lock_digest="$(
+  openssl dgst -sha256 -r "$environment/uv.lock" |
+    awk '{print "sha256:" $1}'
+)"
 jq -n \
   --arg engine "metricflow" \
   --arg version "$metricflow_version" \
   --arg bundle "$bundle_version" \
   --arg dbt_core_version "$dbt_core_version" \
   --arg dbt_postgres_version "$dbt_postgres_version" \
+  --arg python_version "$python_version" \
+  --arg uv_version "$(uv --version)" \
+  --arg lock_digest "$lock_digest" \
+  --arg database_image "$database_image" \
   --arg task "commerce-total-revenue" \
   --arg expected "$expected" \
   --arg actual "$actual" \
@@ -122,6 +130,10 @@ jq -n \
       "dbt-core": $dbt_core_version,
       "dbt-postgres": $dbt_postgres_version
     },
+    python: $python_version,
+    uv: $uv_version,
+    lock: $lock_digest,
+    database_image: $database_image,
     scope: "oss",
     task: $task,
     expected: {total_revenue: $expected},

@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 output_dir="${1:?usage: run-malloy.sh OUTPUT_DIR}"
 project_source="$repo_root/tests/reference-comparison/runtime/malloy/project"
 expected_file="$repo_root/tests/reference-comparison/runtime/expected.json"
+database_image="${REFERENCE_DATABASE_IMAGE:-postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280}"
 runtime_version="0.0.432"
 release_reference="0.0.433"
 
@@ -37,12 +38,18 @@ if [[ "$actual" != "$expected" ]]; then
   echo "Malloy returned $actual, expected $expected" >&2
   exit 1
 fi
+lock_digest="$(
+  openssl dgst -sha256 -r "$project_source/package-lock.json" |
+    awk '{print "sha256:" $1}'
+)"
 
 jq -n \
   --arg engine "malloy" \
   --arg version "$runtime_version" \
   --arg release_reference "$release_reference" \
   --arg node_version "$(node --version)" \
+  --arg lock_digest "$lock_digest" \
+  --arg database_image "$database_image" \
   --arg task "commerce-total-revenue" \
   --arg expected "$expected" \
   --arg actual "$actual" \
@@ -53,6 +60,8 @@ jq -n \
     release_reference: $release_reference,
     runtime_boundary: "latest published npm packages; the 0.0.433 source release has no matching npm artifacts",
     node: $node_version,
+    lock: $lock_digest,
+    database_image: $database_image,
     scope: "oss",
     task: $task,
     expected: {total_revenue: $expected},

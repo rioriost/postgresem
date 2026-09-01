@@ -939,8 +939,8 @@ mod tests {
 
     use super::{OsiImportError, import};
     use crate::catalog::{
-        CatalogColumn, CatalogConstraint, CatalogRelation, CatalogSnapshot, RelationGrantHints,
-        RelationKind, RowLevelSecurity,
+        CatalogColumn, CatalogConstraint, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
+        RelationGrantHints, RelationKind, RowLevelSecurity,
     };
 
     const VALID_OSI: &str = r#"
@@ -1141,14 +1141,22 @@ semantic_model:
 
     fn catalog() -> Result<CatalogSnapshot, crate::catalog::CatalogError> {
         CatalogSnapshot {
-            schema_version: "1".to_owned(),
+            schema_version: "2".to_owned(),
             server_version_num: 180_000,
             current_database: "app".to_owned(),
             current_role: "postgresem_introspector".to_owned(),
+            role_context: CatalogRoleContext {
+                inherit: true,
+                superuser: false,
+                bypass_rls: false,
+                effective_roles: vec!["postgresem_introspector".to_owned()],
+                settable_roles: Vec::new(),
+            },
             relations: vec![CatalogRelation {
                 schema: "commerce".to_owned(),
                 name: "orders".to_owned(),
                 kind: RelationKind::Table,
+                owner: "postgresem_source_owner".to_owned(),
                 comment: Some("Orders".to_owned()),
                 grants: RelationGrantHints {
                     schema_usage: true,

@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{database, hash::sha256};
 
-const CATALOG_SNAPSHOT_SCHEMA_VERSION: &str = "1";
+const CATALOG_SNAPSHOT_SCHEMA_VERSION: &str = "2";
 
 const RELATIONS_SQL: &str = r"
     SELECT
@@ -19,6 +19,7 @@ const RELATIONS_SQL: &str = r"
             WHEN 'm' THEN 'materialized_view'
             WHEN 'f' THEN 'foreign_table'
         END AS relation_kind,
+        owner.rolname AS relation_owner,
         obj_description(c.oid, 'pg_class') AS relation_comment,
         c.relrowsecurity AS rls_enabled,
         c.relforcerowsecurity AS rls_forced,
@@ -27,12 +28,34 @@ const RELATIONS_SQL: &str = r"
         has_any_column_privilege(c.oid, 'SELECT') AS any_column_select
     FROM pg_catalog.pg_class AS c
     JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = c.relowner
     WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
       AND n.nspname NOT IN ('pg_catalog', 'information_schema')
       AND n.nspname <> 'semantic'
       AND n.nspname !~ '^pg_toast'
       AND n.nspname !~ '^pg_temp_'
     ORDER BY n.nspname, c.relname, c.relkind
+";
+
+const ROLE_CONTEXT_SQL: &str = r"
+    SELECT
+        current_role_attributes.rolinherit AS inherit,
+        current_role_attributes.rolsuper AS superuser,
+        current_role_attributes.rolbypassrls AS bypass_rls,
+        ARRAY(
+            SELECT candidate.rolname
+            FROM pg_catalog.pg_roles AS candidate
+            WHERE pg_catalog.pg_has_role(current_user, candidate.oid, 'USAGE')
+            ORDER BY candidate.rolname
+        ) AS effective_roles,
+        ARRAY(
+            SELECT candidate.rolname
+            FROM pg_catalog.pg_roles AS candidate
+            WHERE pg_catalog.pg_has_role(current_user, candidate.oid, 'MEMBER')
+            ORDER BY candidate.rolname
+        ) AS settable_roles
+    FROM pg_catalog.pg_roles AS current_role_attributes
+    WHERE current_role_attributes.rolname = current_user
 ";
 
 const COLUMNS_SQL: &str = r"
@@ -162,8 +185,19 @@ pub struct CatalogSnapshot {
     pub server_version_num: u32,
     pub current_database: String,
     pub current_role: String,
+    pub role_context: CatalogRoleContext,
     pub relations: Vec<CatalogRelation>,
     pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogRoleContext {
+    pub inherit: bool,
+    pub superuser: bool,
+    pub bypass_rls: bool,
+    pub effective_roles: Vec<String>,
+    pub settable_roles: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +206,7 @@ pub struct CatalogRelation {
     pub schema: String,
     pub name: String,
     pub kind: RelationKind,
+    pub owner: String,
     pub comment: Option<String>,
     pub grants: RelationGrantHints,
     pub rls: RowLevelSecurity,
@@ -360,6 +395,9 @@ fn scan(client: &mut Client) -> Result<CatalogSnapshot, CatalogError> {
         .read_only(true)
         .start()
         .map_err(CatalogError::StartTransaction)?;
+    transaction
+        .batch_execute("SET LOCAL search_path = pg_catalog")
+        .map_err(|source| query_error("search path", source))?;
 
     let metadata = transaction
         .query_one(
@@ -371,12 +409,22 @@ fn scan(client: &mut Client) -> Result<CatalogSnapshot, CatalogError> {
     let server_version: i32 = metadata.get(0);
     let server_version_num = u32::try_from(server_version)
         .map_err(|_| CatalogError::InvalidServerVersion(server_version))?;
+    let role_context = transaction
+        .query_one(ROLE_CONTEXT_SQL, &[])
+        .map_err(|source| query_error("role context", source))?;
 
     let mut snapshot = CatalogSnapshot {
         schema_version: CATALOG_SNAPSHOT_SCHEMA_VERSION.to_owned(),
         server_version_num,
         current_database: metadata.get(1),
         current_role: metadata.get(2),
+        role_context: CatalogRoleContext {
+            inherit: role_context.get("inherit"),
+            superuser: role_context.get("superuser"),
+            bypass_rls: role_context.get("bypass_rls"),
+            effective_roles: role_context.get("effective_roles"),
+            settable_roles: role_context.get("settable_roles"),
+        },
         relations: scan_relations(&mut transaction)?,
         fingerprint: String::new(),
     };
@@ -402,6 +450,7 @@ fn scan_relations(client: &mut impl GenericClient) -> Result<Vec<CatalogRelation
                 schema,
                 name,
                 kind: parse_relation_kind(row.get("relation_kind"))?,
+                owner: row.get("relation_owner"),
                 comment: row.get("relation_comment"),
                 grants: RelationGrantHints {
                     schema_usage: row.get("schema_usage"),
@@ -643,6 +692,10 @@ fn policy(
 
 impl CatalogSnapshot {
     fn normalize(&mut self) {
+        self.role_context.effective_roles.sort();
+        self.role_context.effective_roles.dedup();
+        self.role_context.settable_roles.sort();
+        self.role_context.settable_roles.dedup();
         for relation in &mut self.relations {
             relation.columns.sort_by(|left, right| {
                 left.ordinal
@@ -722,9 +775,9 @@ const fn policy_command_order(command: PolicyCommand) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CatalogColumn, CatalogError, CatalogRelation, CatalogSnapshot, PolicyCommand,
-        RelationGrantHints, RelationKind, RowLevelSecurity, check_constraint, hash_expression,
-        policy,
+        CatalogColumn, CatalogError, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
+        PolicyCommand, RelationGrantHints, RelationKind, RowLevelSecurity, check_constraint,
+        hash_expression, policy,
     };
 
     const RAW_CHECK: &str = "amount > 0 AND secret_check(amount)";
@@ -753,6 +806,20 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn rejects_catalog_snapshots_without_authorization_context() -> Result<(), CatalogError> {
+        let mut snapshot = snapshot_with_relation_order(["alpha", "zeta"])?;
+        snapshot.schema_version = "1".to_owned();
+        snapshot.fingerprint.clear();
+        snapshot = snapshot.finalize()?;
+
+        assert!(matches!(
+            snapshot.validated_normalized(),
+            Err(CatalogError::UnsupportedSchemaVersion(version)) if version == "1"
+        ));
+        Ok(())
+    }
+
     fn snapshot_with_relation_order(names: [&str; 2]) -> Result<CatalogSnapshot, CatalogError> {
         let relations = names
             .into_iter()
@@ -760,10 +827,20 @@ mod tests {
             .map(|(index, name)| relation(name, index == 0))
             .collect::<Vec<CatalogRelation>>();
         CatalogSnapshot {
-            schema_version: "1".to_owned(),
+            schema_version: "2".to_owned(),
             server_version_num: 180_000,
             current_database: "app".to_owned(),
             current_role: "postgresem_introspector".to_owned(),
+            role_context: CatalogRoleContext {
+                inherit: true,
+                superuser: false,
+                bypass_rls: false,
+                effective_roles: vec![
+                    "postgresem_introspector".to_owned(),
+                    "postgresem_reader".to_owned(),
+                ],
+                settable_roles: vec!["postgresem_reader".to_owned()],
+            },
             relations,
             fingerprint: String::new(),
         }
@@ -775,6 +852,7 @@ mod tests {
             schema: "public".to_owned(),
             name: name.to_owned(),
             kind: RelationKind::Table,
+            owner: "source_owner".to_owned(),
             comment: Some("business relation".to_owned()),
             grants: RelationGrantHints {
                 schema_usage: true,

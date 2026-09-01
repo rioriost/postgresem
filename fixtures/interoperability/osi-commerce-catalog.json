@@ -1,13 +1,21 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "server_version_num": 180000,
   "current_database": "app",
   "current_role": "postgresem_introspector",
+  "role_context": {
+    "inherit": true,
+    "superuser": false,
+    "bypass_rls": false,
+    "effective_roles": ["postgresem_introspector"],
+    "settable_roles": []
+  },
   "relations": [
     {
       "schema": "commerce",
       "name": "customers",
       "kind": "table",
+      "owner": "postgresem_source_owner",
       "comment": "Customers",
       "grants": {
         "schema_usage": true,
@@ -52,6 +60,7 @@
       "schema": "commerce",
       "name": "orders",
       "kind": "table",
+      "owner": "postgresem_source_owner",
       "comment": "Orders",
       "grants": {
         "schema_usage": true,
@@ -125,5 +134,5 @@
       "policies": []
     }
   ],
-  "fingerprint": "sha256:59a32fcd31f195253d504e4e7c0ba2a709e70a1cc00fe60adcf586afcebaad62"
+  "fingerprint": "sha256:53025c45f307416ccccfcc871fd847a569d857d81046133463364d93328b5b1e"
 }
