@@ -886,9 +886,11 @@ Linux amd64/arm64 artifactが両方で必須smoke/contract suiteを実行でき�
 catalog drift gate、Apache Ossie `0.1.1`からreview用candidateを生成する一方向import、
 PostgreSQL利用者価値のacceptance、固定したOSS runtimeの実行evidenceを記録した。
 reference workflow
-[`33515921966`](https://github.com/rioriost/postgresem/actions/runs/33515921966)
-ではWren AI、Cube、Malloy、MetricFlowを同一PostgreSQL 18 datasetに対して実行し、
-4実装すべてが期待する`total_revenue`を返した。
+[`33517361442`](https://github.com/rioriost/postgresem/actions/runs/33517361442)
+ではWren AI、Cube、Malloy、MetricFlowを同一digestのPostgreSQL 18 imageとdatasetに
+対して実行し、4実装すべてが期待する`total_revenue`を返した。Python transitive
+graph、Python/Node version、`uv`、npm package、Cube imageはpinまたはlockfileで固定し、
+evidenceにも記録した。
 
 - 共通PostgreSQL dataset/taskを使い、現行Wren AI、Cube、Malloy、MetricFlow releaseとの
   比較を再実行して文書化する。

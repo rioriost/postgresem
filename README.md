@@ -128,8 +128,8 @@ for the M6–M12 gates.
 - MCP `2024-11-05` over line-delimited JSON-RPC stdio
 - seven semantic-only tools and four resource URI forms
 - deterministic semantic model compatibility diffs with a breaking-change gate
-- fingerprinted PostgreSQL catalog drift with GRANT, RLS, constraint, and type
-  changes treated as breaking evidence
+- fingerprinted PostgreSQL catalog drift with GRANT, RLS, role authorization,
+  relation ownership, constraint, and type changes treated as breaking evidence
 - one-way Apache Ossie `0.1.1` import into a reviewable, query-only candidate
   that is cross-checked against PostgreSQL catalog evidence
 - pinned Wren AI, Cube, Malloy, and MetricFlow runtime comparisons against one

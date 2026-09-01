@@ -27,6 +27,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 |---|---|---|
 | LSQ | `schema_version: "1"` | strict JSON; unknown fields rejected; only v1 accepted |
 | Semantic Snapshot/Schema | `schema_version: "1"` | loader/compiler reject other snapshot versions |
+| PostgreSQL catalog snapshot | `schema_version: "2"` | fingerprint includes database, scanning role authorization context, relation ownership, and normalized catalog evidence |
 | MCP protocol | `2024-11-05` | initialize returns this version; stdio JSON-RPC only |
 | MCP tool schema | `"1"` | every tool requires this exact version |
 | compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
@@ -119,14 +120,19 @@ postgresem catalog diff \
 ```
 
 Catalog diff verifies both canonical snapshot fingerprints and requires the
-same database and introspection role. It reports deterministic JSON using
-JSON-pointer paths and three classifications:
+same database and introspection role. Snapshot v2 records the role's
+inheritance, superuser and `BYPASSRLS` flags, effective and settable role
+closure, and every relation owner. Scanning fixes the transaction-local
+`search_path` to `pg_catalog` so type and expression deparsing does not change
+with connection defaults. It reports deterministic JSON using JSON-pointer
+paths and three classifications:
 
 - `compatible`: relation or column additions;
 - `review_required`: server-version changes, comments, and newly observed
   constraints;
 - `breaking`: removals and changes to relation kinds, column types/nullability,
-  effective grants, constraints, RLS state, or RLS policies.
+  effective grants, role authorization, relation ownership, constraints, RLS
+  state, or RLS policies.
 
 The conservative classifier is a publication gate, not proof that a compatible
 addition has correct business meaning. RLS and GRANT changes are always
@@ -177,10 +183,13 @@ M7 reference execution is independently reproducible through
 and the dedicated
 [`reference-comparison.yml`](../.github/workflows/reference-comparison.yml)
 workflow. Run
-[`33515921966`](https://github.com/rioriost/postgresem/actions/runs/33515921966)
+[`33517361442`](https://github.com/rioriost/postgresem/actions/runs/33517361442)
 executed Wren AI, Cube, Malloy, and MetricFlow against one PostgreSQL 18
-dataset; every engine returned the expected `545.50`. This is query-result
-evidence, not a claim that the engines share postgresem's no-raw-SQL,
+dataset; every engine returned the expected `545.50`. PostgreSQL and Cube are
+digest-pinned, Wren and MetricFlow use exact Python plus committed `uv` locks,
+and Malloy uses exact Node plus a committed npm lock. Evidence records the
+resolved tool, lock, and image identities. This is query-result evidence, not
+a claim that the engines share postgresem's no-raw-SQL,
 immutable-publication, mutation, or PostgreSQL-authorization boundary.
 
 ## PostgreSQL support

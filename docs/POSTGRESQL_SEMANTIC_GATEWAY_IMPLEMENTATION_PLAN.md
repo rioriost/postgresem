@@ -915,9 +915,11 @@ required smoke/contract suites.
 comparison, fail-closed catalog drift gate, one-way Apache Ossie `0.1.1`
 candidate importer, PostgreSQL user-value acceptance, and pinned OSS runtime
 execution are recorded. Reference workflow run
-[`33515921966`](https://github.com/rioriost/postgresem/actions/runs/33515921966)
+[`33517361442`](https://github.com/rioriost/postgresem/actions/runs/33517361442)
 executed Wren AI, Cube, Malloy, and MetricFlow against the same PostgreSQL 18
-dataset; all four returned the expected `total_revenue` value.
+image digest and dataset; all four returned the expected `total_revenue`
+value. Python transitive graphs, Python and Node versions, `uv`, npm packages,
+and the Cube image are pinned or lockfile-bound and recorded in the evidence.
 
 - Re-run a documented comparison against current Wren AI, Cube, Malloy, and
   MetricFlow releases using common PostgreSQL datasets and tasks.

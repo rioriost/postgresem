@@ -6,16 +6,18 @@
 
 ### Added
 
-- Deterministic PostgreSQL catalog drift comparison with canonical fingerprint
-  verification, role/database binding, and compatible, review-required, and
-  breaking classifications.
+- Deterministic PostgreSQL catalog snapshot v2 and drift comparison with
+  canonical fingerprint verification, fixed deparser search path,
+  role/database binding, role authorization state, relation ownership, and
+  compatible, review-required, and breaking classifications.
 - One-way Apache Ossie `0.1.1` import into a reviewable query-only candidate,
   with PostgreSQL-authoritative type, nullability, key, relationship, and
   visibility checks.
 - Rejection coverage for unsupported expressions, lossy key semantics,
   aggregate/type mismatches, unsafe time roles, and tampered catalog evidence.
 - Pinned Wren AI, Cube, Malloy, and MetricFlow runtime harnesses over one
-  PostgreSQL 18 task, plus machine-readable GitHub Actions evidence.
+  immutable PostgreSQL 18 task, including locked transitive dependencies and
+  machine-readable GitHub Actions evidence.
 - Maintainer acceptance evidence for catalog-bound import and
   authorization-aware drift as the selected M7 user-value gaps.
 
@@ -33,6 +35,8 @@
 - Fail closed when imported semantics are ambiguous, computed, multi-dialect,
   cross-dataset, type-incompatible, composite, or insufficiently
   timezone-qualified.
+- Treat relation-owner, role-membership, inheritance, superuser, and
+  `BYPASSRLS` drift as breaking authorization evidence.
 - Keep external models and reference runtimes outside the postgresem runtime,
   publication, credential, GRANT, RLS, and audit authority.
 

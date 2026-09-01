@@ -124,8 +124,8 @@ M6〜M12のgateは
 - 改行区切りJSON-RPC stdio上のMCP `2024-11-05`
 - semantic操作に限定した7つのtoolと4形式のresource URI
 - breaking-change gateを持つ決定的Semantic Model互換性diff
-- fingerprint付きPostgreSQL catalog drift。GRANT、RLS、constraint、型の変更を
-  breaking evidenceとして扱う
+- fingerprint付きPostgreSQL catalog drift。GRANT、RLS、role authorization、
+  relation ownership、constraint、型の変更をbreaking evidenceとして扱う
 - PostgreSQL catalog evidenceと照合する、review可能かつquery-onlyなcandidateへの
   Apache Ossie `0.1.1`一方向import
 - 同一PostgreSQL 18 taskに対するWren AI、Cube、Malloy、MetricFlowの固定runtime比較と
