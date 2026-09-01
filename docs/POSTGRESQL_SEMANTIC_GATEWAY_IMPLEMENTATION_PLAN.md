@@ -920,6 +920,10 @@ executed Wren AI, Cube, Malloy, and MetricFlow against the same PostgreSQL 18
 image digest and dataset; all four returned the expected `total_revenue`
 value. Python transitive graphs, Python and Node versions, `uv`, npm packages,
 and the Cube image are pinned or lockfile-bound and recorded in the evidence.
+Release workflow run
+[`33526980637`](https://github.com/rioriost/postgresem/actions/runs/33526980637)
+published `v0.5.0`, four native archives, native Linux amd64/arm64 runtime
+evidence, signed checksums, and the signed multi-architecture image.
 
 - Re-run a documented comparison against current Wren AI, Cube, Malloy, and
   MetricFlow releases using common PostgreSQL datasets and tasks.

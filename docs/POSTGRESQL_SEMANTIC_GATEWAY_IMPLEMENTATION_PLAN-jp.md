@@ -891,6 +891,10 @@ reference workflow
 対して実行し、4実装すべてが期待する`total_revenue`を返した。Python transitive
 graph、Python/Node version、`uv`、npm package、Cube imageはpinまたはlockfileで固定し、
 evidenceにも記録した。
+release workflow
+[`33526980637`](https://github.com/rioriost/postgresem/actions/runs/33526980637)
+は`v0.5.0`、4種類のnative archive、Linux amd64/arm64 native runtime evidence、
+署名済みchecksum、署名済みmulti-architecture imageを公開した。
 
 - 共通PostgreSQL dataset/taskを使い、現行Wren AI、Cube、Malloy、MetricFlow releaseとの
   比較を再実行して文書化する。
