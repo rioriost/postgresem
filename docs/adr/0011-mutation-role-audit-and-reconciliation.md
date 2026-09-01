@@ -31,8 +31,9 @@ database denial.
    started audit attempt inside the same transaction. Successful data changes,
    the committed audit state, and the replayable result commit atomically.
 6. A matching committed idempotency key returns the stored result without
-   executing DML and records a replay attempt. A key reused with a different
-   LSM hash or revision is rejected.
+   executing DML and records a replay attempt. The key is bound to the
+   principal, configuration profile, mapped writer role, LSM hash, and
+   revision. Reuse under different authority, content, or revision is rejected.
 7. Validation, compilation, role, RLS, constraint, trigger, timeout, and
    rollback failures are recorded through a separate restricted audit
    connection after the business transaction has rolled back. Failure-audit
@@ -50,4 +51,3 @@ database denial.
 Committed mutation and audit evidence cannot diverge. Rejected attempts remain
 observable without granting writer roles direct access to semantic audit
 tables. Query credentials retain no business-data write privileges.
-

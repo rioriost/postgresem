@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::{
     DataType, Field, MutationOperation, MutationValue, NormalizedLsm, OutputColumn,
-    SemanticSnapshot, WritableModel, hash::sha256,
+    SemanticSnapshot, WritableField, WritableModel, hash::sha256,
 };
 
 pub const MUTATION_COMPILER_SEMANTIC_VERSION: &str = "0.1.0";
@@ -196,7 +196,7 @@ pub fn compile_lsm(
             return Err(MutationCompileError::InvalidWritableModel);
         }
         for row in &normalized.mutation.rows {
-            validate_value(field, &row[name])?;
+            validate_value(field, policy, &row[name])?;
         }
         if normalized.mutation.operation == MutationOperation::Upsert
             && !policy.updatable_on_conflict
@@ -298,9 +298,7 @@ fn validate_writable_model(
             || field.field.trim().is_empty()
             || !model_fields
                 .get(field.field.as_str())
-                .is_some_and(|model_field| {
-                    model_field.relationship.is_none() && model_field.nullable == field.nullable
-                })
+                .is_some_and(|model_field| model_field.relationship.is_none())
         {
             return Err(MutationCompileError::InvalidWritableModel);
         }
@@ -332,9 +330,13 @@ fn validate_writable_model(
     Ok(())
 }
 
-fn validate_value(field: &Field, value: &MutationValue) -> Result<(), MutationCompileError> {
+fn validate_value(
+    field: &Field,
+    writable_field: &WritableField,
+    value: &MutationValue,
+) -> Result<(), MutationCompileError> {
     if *value == MutationValue::Null {
-        return if field.nullable {
+        return if writable_field.nullable {
             Ok(())
         } else {
             Err(MutationCompileError::NullNotAllowed(
@@ -634,6 +636,27 @@ mod tests {
         assert!(compiled.statement.contains("$1::text::numeric"));
         assert_eq!(compiled.expected_rows, 1);
         assert_eq!(compiled.returning_schema[0].name, "order_id");
+    }
+
+    #[test]
+    fn exported_snapshot_round_trip_preserves_writable_nullability() {
+        let exported = serde_json::to_vec(&snapshot()).expect("snapshot serializes");
+        let imported: SemanticSnapshot =
+            serde_json::from_slice(&exported).expect("snapshot deserializes");
+        let normalized = normalize_lsm(&mutation(
+            "insert",
+            r#"[{"amount":{"type":"null"},"external_id":{"type":"text","value":"a"}}]"#,
+        ))
+        .expect("valid LSM");
+
+        let error = compile_lsm(
+            &normalized,
+            &imported,
+            &capabilities(),
+            MutationCompilerOptions::default(),
+        )
+        .expect_err("writable projection must preserve non-nullability");
+        assert_eq!(error.code(), "MUTATION_NULL_NOT_ALLOWED");
     }
 
     #[test]

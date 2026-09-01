@@ -176,7 +176,7 @@ before a query ID exists and therefore may have no query-audit row.
 | `MUTATION_TARGET_RELATION_NOT_FOUND` | No | published target relation is unavailable |
 | `MUTATION_TARGET_RELATION_OWNER` | No | writer role owns the target relation |
 | `MUTATION_UNSAFE_TARGET_RELATION` | No | target is not a supported table/partition |
-| `MUTATION_IDEMPOTENCY_CONFLICT` | No | key was already used for different LSM/revision content |
+| `MUTATION_IDEMPOTENCY_CONFLICT` | No | key was already used under different principal/profile/role authority or for different LSM/revision content |
 | `MUTATION_CANCELLED` | Conditional | PostgreSQL cancelled the statement |
 | `MUTATION_DATABASE_REJECTED` | Conditional | GRANT, RLS, constraint, trigger, or another database rule rejected the write |
 | `MUTATION_INVALID_ROW_SHAPE` | No | returned row shape did not match the compiled contract |

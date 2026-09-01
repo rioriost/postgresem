@@ -141,6 +141,14 @@ tenant_insert=$(
   postgresem mutation execute "${TEST_ROOT}/mutations/tenant-a-insert.json" --project commerce
 )
 printf '%s\n' "$tenant_insert" | grep -q '"tenant_a"'
+export POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_b_writer
+if postgresem mutation execute "${TEST_ROOT}/mutations/tenant-a-insert.json" \
+  --project commerce >/dev/null 2>&1
+then
+  echo "idempotent replay crossed the mapped writer authority" >&2
+  exit 1
+fi
+export POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_a_writer
 if postgresem mutation execute "${TEST_ROOT}/mutations/tenant-cross-insert.json" \
   --project commerce >/dev/null 2>&1
 then

@@ -91,7 +91,7 @@ POSTGRESEM_MIGRATION_MAX_VERSION=0004_beta_operational_report \
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/semantic/commerce.sql
 
 if psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
-  -c "SELECT to_regprocedure('semantic.claim_mutation(text,text,text,text,uuid,text,text,text,text,text,text,text,text,jsonb,jsonb,jsonb,bigint,bigint,bigint)')" |
+  -c "SELECT to_regprocedure('semantic.claim_mutation(text,text,text,text,text,uuid,text,text,text,text,text,text,text,text,jsonb,jsonb,jsonb,bigint,bigint,bigint)')" |
   grep -q claim_mutation
 then
   echo "N-1 database unexpectedly contains the current mutation function" >&2

@@ -530,6 +530,15 @@ fn claim_mutation(
         "capability_profile": published.capabilities.profile,
     });
     let operation = operation_name(compiled.operation);
+    let principal_subject_hash = sha256(context.principal_subject());
+    let authority_hash = sha256(
+        &serde_json::to_string(&[
+            principal_subject_hash.as_str(),
+            context.config_profile(),
+            config.database_role(),
+        ])
+        .map_err(MutationExecuteError::Serialization)?,
+    );
     let requested_rows = i64::try_from(compiled.expected_rows)
         .map_err(|_| MutationExecuteError::AffectedRowMismatch)?;
     let validation_ms = duration_milliseconds(validation_duration);
@@ -544,18 +553,19 @@ fn claim_mutation(
               affected_rows,
               result
             FROM semantic.claim_mutation(
-              $1, $2, $3, $4, $5::text::uuid, $6, $7, $8, $9, $10, $11,
-              $12, $13, $14, $15, $16, $17, $18, $19
+              $1, $2, $3, $4, $5, $6::text::uuid, $7, $8, $9, $10, $11,
+              $12, $13, $14, $15, $16, $17, $18, $19, $20
             )
             ",
             &[
                 &project,
                 &normalized.idempotency_key_hash,
+                &authority_hash,
                 &normalized.mutation.schema_version,
                 &normalized.hash,
                 &published.published.revision_id,
                 &published.published.snapshot.revision_hash,
-                &sha256(context.principal_subject()),
+                &principal_subject_hash,
                 &MUTATION_COMPILER_SEMANTIC_VERSION,
                 &context.config_profile(),
                 &operation,

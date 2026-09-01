@@ -52,6 +52,8 @@ CREATE TABLE semantic.mutation_idempotency (
   project text NOT NULL CHECK (btrim(project) <> ''),
   idempotency_key_hash text NOT NULL
     CHECK (idempotency_key_hash ~ '^sha256:[0-9a-f]{64}$'),
+  authority_hash text NOT NULL
+    CHECK (authority_hash ~ '^sha256:[0-9a-f]{64}$'),
   lsm_hash text NOT NULL CHECK (lsm_hash ~ '^sha256:[0-9a-f]{64}$'),
   revision_id uuid NOT NULL REFERENCES semantic.revision(revision_id),
   semantic_revision_hash text NOT NULL
@@ -140,6 +142,7 @@ FOR EACH ROW EXECUTE FUNCTION semantic.require_draft_revision();
 CREATE FUNCTION semantic.claim_mutation(
   p_project text,
   p_idempotency_key_hash text,
+  p_authority_hash text,
   p_lsm_schema_version text,
   p_lsm_hash text,
   p_revision_id uuid,
@@ -177,6 +180,7 @@ BEGIN
   INSERT INTO semantic.mutation_idempotency (
     project,
     idempotency_key_hash,
+    authority_hash,
     lsm_hash,
     revision_id,
     semantic_revision_hash,
@@ -186,6 +190,7 @@ BEGIN
   VALUES (
     p_project,
     p_idempotency_key_hash,
+    p_authority_hash,
     p_lsm_hash,
     p_revision_id,
     p_semantic_revision_hash,
@@ -254,7 +259,8 @@ BEGIN
     AND idempotency_key_hash = p_idempotency_key_hash
   FOR UPDATE;
 
-  IF v_existing.lsm_hash <> p_lsm_hash
+  IF v_existing.authority_hash <> p_authority_hash
+    OR v_existing.lsm_hash <> p_lsm_hash
     OR v_existing.revision_id <> p_revision_id
     OR v_existing.semantic_revision_hash <> p_semantic_revision_hash
   THEN
@@ -561,7 +567,7 @@ REVOKE ALL ON
 FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION semantic.claim_mutation(
-  text, text, text, text, uuid, text, text, text, text, text, text, text,
+  text, text, text, text, text, uuid, text, text, text, text, text, text, text,
   text, jsonb, jsonb, jsonb, bigint, bigint, bigint
 ) FROM PUBLIC;
 REVOKE ALL ON FUNCTION semantic.finish_mutation(
@@ -594,7 +600,7 @@ GRANT SELECT ON
 TO postgresem_runtime, postgresem_mutation_runtime;
 
 GRANT EXECUTE ON FUNCTION semantic.claim_mutation(
-  text, text, text, text, uuid, text, text, text, text, text, text, text,
+  text, text, text, text, text, uuid, text, text, text, text, text, text, text,
   text, jsonb, jsonb, jsonb, bigint, bigint, bigint
 ) TO postgresem_mutator;
 GRANT EXECUTE ON FUNCTION semantic.finish_mutation(
