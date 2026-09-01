@@ -791,6 +791,8 @@ fn catalog_primary_key(relation: &CatalogRelation) -> Vec<String> {
         .find_map(|constraint| match constraint {
             CatalogConstraint::PrimaryKey {
                 columns,
+                enforced: true,
+                period: false,
                 validated: true,
                 ..
             } => Some(columns.clone()),
@@ -808,6 +810,8 @@ fn catalog_foreign_keys(relation: &CatalogRelation) -> Vec<ImportedForeignKey> {
                 columns,
                 referenced_relation,
                 referenced_columns,
+                enforced: true,
+                period: false,
                 validated: true,
                 ..
             } => Some(ImportedForeignKey {
@@ -1076,6 +1080,8 @@ semantic_model:
         composite_catalog.relations[0].constraints[0] = CatalogConstraint::PrimaryKey {
             name: "orders_pkey".to_owned(),
             columns: vec!["order_id".to_owned(), "amount".to_owned()],
+            enforced: true,
+            period: false,
             deferrable: false,
             initially_deferred: false,
             validated: true,
@@ -1086,6 +1092,20 @@ semantic_model:
         assert!(matches!(
             import(composite_primary_key.as_bytes(), &composite_catalog, None),
             Err(OsiImportError::CompositePrimaryKey(_))
+        ));
+
+        let mut temporal_catalog = catalog().expect("valid catalog");
+        if let CatalogConstraint::PrimaryKey {
+            enforced, period, ..
+        } = &mut temporal_catalog.relations[0].constraints[0]
+        {
+            *enforced = false;
+            *period = true;
+        }
+        temporal_catalog = temporal_catalog.finalize().expect("valid temporal catalog");
+        assert!(matches!(
+            import(VALID_OSI.as_bytes(), &temporal_catalog, None),
+            Err(OsiImportError::PrimaryKeyMismatch(_))
         ));
 
         let mut text_amount = catalog().expect("valid catalog");
@@ -1157,6 +1177,7 @@ semantic_model:
                 name: "orders".to_owned(),
                 kind: RelationKind::Table,
                 owner: "postgresem_source_owner".to_owned(),
+                view: None,
                 comment: Some("Orders".to_owned()),
                 grants: RelationGrantHints {
                     schema_usage: true,
@@ -1188,6 +1209,8 @@ semantic_model:
                 constraints: vec![CatalogConstraint::PrimaryKey {
                     name: "orders_pkey".to_owned(),
                     columns: vec!["order_id".to_owned()],
+                    enforced: true,
+                    period: false,
                     deferrable: false,
                     initially_deferred: false,
                     validated: true,

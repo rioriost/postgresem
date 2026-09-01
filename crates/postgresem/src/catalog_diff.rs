@@ -210,6 +210,16 @@ fn diff_relation(
             &after.owner,
         )?;
     }
+    if before.view != after.view {
+        push_modified(
+            changes,
+            &format!("{base}/view"),
+            CatalogObjectKind::Relation,
+            CatalogCompatibility::Breaking,
+            &before.view,
+            &after.view,
+        )?;
+    }
     if before.comment != after.comment {
         push_modified(
             changes,
@@ -503,7 +513,8 @@ mod tests {
     use super::{CatalogCompatibility, CatalogDiffError, diff_catalogs};
     use crate::catalog::{
         CatalogColumn, CatalogConstraint, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
-        RelationGrantHints, RelationKind, RowLevelSecurity,
+        CatalogView, ForeignKeyAction, ForeignKeyMatch, RelationGrantHints, RelationKind,
+        RelationReference, RowLevelSecurity,
     };
 
     #[test]
@@ -590,6 +601,8 @@ mod tests {
             name: "orders_external_id_key".to_owned(),
             columns: vec!["external_id".to_owned()],
             nulls_not_distinct: false,
+            enforced: true,
+            period: false,
             deferrable: false,
             initially_deferred: false,
             validated: true,
@@ -619,6 +632,83 @@ mod tests {
         assert!(diff.changes[0].path.contains("/constraints/unique"));
     }
 
+    #[test]
+    fn classifies_view_definition_and_security_changes_as_breaking() {
+        let mut before_relation = relation();
+        before_relation.kind = RelationKind::View;
+        before_relation.view = Some(CatalogView {
+            definition_hash: "sha256:before".to_owned(),
+            security_invoker: false,
+            security_barrier: false,
+        });
+        let before = snapshot(before_relation).expect("valid source snapshot");
+        let mut after = before.clone();
+        after.relations[0].view = Some(CatalogView {
+            definition_hash: "sha256:after".to_owned(),
+            security_invoker: true,
+            security_barrier: true,
+        });
+        after.fingerprint.clear();
+        let after = after.finalize().expect("valid target snapshot");
+
+        let diff = diff_catalogs(&before, &after).expect("snapshots are comparable");
+
+        assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
+        assert_eq!(diff.summary.breaking, 1);
+        assert!(diff.changes[0].path.ends_with("/view"));
+    }
+
+    #[test]
+    fn classifies_foreign_key_enforcement_and_period_changes_as_breaking() {
+        let mut before_relation = relation();
+        before_relation
+            .constraints
+            .push(CatalogConstraint::ForeignKey {
+                name: "orders_customer_id_fkey".to_owned(),
+                columns: vec!["customer_id".to_owned()],
+                referenced_relation: RelationReference {
+                    schema: "commerce".to_owned(),
+                    name: "customers".to_owned(),
+                },
+                referenced_columns: vec!["customer_id".to_owned()],
+                delete_set_columns: Vec::new(),
+                match_type: ForeignKeyMatch::Simple,
+                on_update: ForeignKeyAction::NoAction,
+                on_delete: ForeignKeyAction::SetNull,
+                enforced: true,
+                period: false,
+                deferrable: false,
+                initially_deferred: false,
+                validated: true,
+            });
+        let before = snapshot(before_relation).expect("valid source snapshot");
+        let mut after = before.clone();
+        let foreign_key = after.relations[0]
+            .constraints
+            .iter_mut()
+            .find(|constraint| matches!(constraint, CatalogConstraint::ForeignKey { .. }));
+        assert!(foreign_key.is_some());
+        if let Some(CatalogConstraint::ForeignKey {
+            delete_set_columns,
+            enforced,
+            period,
+            ..
+        }) = foreign_key
+        {
+            delete_set_columns.push("customer_id".to_owned());
+            *enforced = false;
+            *period = true;
+        }
+        after.fingerprint.clear();
+        let after = after.finalize().expect("valid target snapshot");
+
+        let diff = diff_catalogs(&before, &after).expect("snapshots are comparable");
+
+        assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
+        assert_eq!(diff.summary.breaking, 1);
+        assert!(diff.changes[0].path.contains("/constraints/foreign_key"));
+    }
+
     fn snapshot(
         relation: CatalogRelation,
     ) -> Result<CatalogSnapshot, crate::catalog::CatalogError> {
@@ -646,6 +736,7 @@ mod tests {
             name: "orders".to_owned(),
             kind: RelationKind::Table,
             owner: "postgresem_source_owner".to_owned(),
+            view: None,
             comment: Some("Orders".to_owned()),
             grants: RelationGrantHints {
                 schema_usage: true,

@@ -38,7 +38,11 @@ publication authority.
    drift cannot hide behind an unchanged role name.
    Unique constraints include PostgreSQL `NULLS NOT DISTINCT` semantics so a
    conflict and data-integrity behavior change cannot retain the same
-   fingerprint.
+   fingerprint. Views bind a normalized definition hash plus
+   `security_invoker` and `security_barrier`. Constraints also bind
+   enforcement, temporal `PERIOD`/`WITHOUT OVERLAPS`, and selective
+   `ON DELETE SET NULL/DEFAULT` columns. Import uses only enforced,
+   non-temporal primary and foreign keys.
 3. Add a one-way Apache Ossie importer pinned to core specification `0.1.1`.
    The current `0.2.0.dev0` draft is intentionally rejected until a stable
    specification is published and reviewed.

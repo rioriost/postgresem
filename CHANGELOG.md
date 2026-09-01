@@ -40,6 +40,9 @@
 - Capture PostgreSQL membership `SET` capability separately from inherited
   privileges and treat unique-constraint `NULLS NOT DISTINCT` changes as
   breaking.
+- Treat view-definition, `security_invoker`, `security_barrier`, constraint
+  enforcement, temporal `PERIOD`/`WITHOUT OVERLAPS`, and selective
+  `ON DELETE SET NULL/DEFAULT` column changes as breaking drift.
 - Keep external models and reference runtimes outside the postgresem runtime,
   publication, credential, GRANT, RLS, and audit authority.
 

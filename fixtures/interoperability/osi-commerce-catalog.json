@@ -16,6 +16,7 @@
       "name": "customers",
       "kind": "table",
       "owner": "postgresem_source_owner",
+      "view": null,
       "comment": "Customers",
       "grants": {
         "schema_usage": true,
@@ -49,6 +50,8 @@
           "kind": "primary_key",
           "name": "customers_pkey",
           "columns": ["customer_id"],
+          "enforced": true,
+          "period": false,
           "deferrable": false,
           "initially_deferred": false,
           "validated": true
@@ -61,6 +64,7 @@
       "name": "orders",
       "kind": "table",
       "owner": "postgresem_source_owner",
+      "view": null,
       "comment": "Orders",
       "grants": {
         "schema_usage": true,
@@ -110,6 +114,8 @@
           "kind": "primary_key",
           "name": "orders_pkey",
           "columns": ["order_id"],
+          "enforced": true,
+          "period": false,
           "deferrable": false,
           "initially_deferred": false,
           "validated": true
@@ -123,9 +129,12 @@
             "name": "customers"
           },
           "referenced_columns": ["customer_id"],
+          "delete_set_columns": [],
           "match_type": "simple",
           "on_update": "no_action",
           "on_delete": "no_action",
+          "enforced": true,
+          "period": false,
           "deferrable": false,
           "initially_deferred": false,
           "validated": true
@@ -134,5 +143,5 @@
       "policies": []
     }
   ],
-  "fingerprint": "sha256:53025c45f307416ccccfcc871fd847a569d857d81046133463364d93328b5b1e"
+  "fingerprint": "sha256:92afb9c6255928e93dbd287a89cbb60398f0c57967ce57f5c550fbf1d54af085"
 }

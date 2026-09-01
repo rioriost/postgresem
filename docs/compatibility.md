@@ -126,8 +126,12 @@ closure, and every relation owner. Scanning fixes the transaction-local
 `search_path` to `pg_catalog` so type and expression deparsing does not change
 with connection defaults. Effective inherited roles and roles available
 through `SET ROLE` are captured separately. Unique constraints also record
-PostgreSQL `NULLS NOT DISTINCT`. It reports deterministic JSON using
-JSON-pointer paths and three classifications:
+PostgreSQL `NULLS NOT DISTINCT`. View evidence includes a normalized definition
+hash plus `security_invoker` and `security_barrier`. Constraint evidence
+includes enforcement, temporal `PERIOD`/`WITHOUT OVERLAPS`, and selective
+`ON DELETE SET NULL/DEFAULT` columns. The Ossie importer uses only enforced,
+non-temporal primary and foreign keys. Catalog diff reports deterministic JSON
+using JSON-pointer paths and three classifications:
 
 - `compatible`: relation or column additions;
 - `review_required`: server-version changes, comments, and newly observed

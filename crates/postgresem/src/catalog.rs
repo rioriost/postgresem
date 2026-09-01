@@ -20,6 +20,18 @@ const RELATIONS_SQL: &str = r"
             WHEN 'f' THEN 'foreign_table'
         END AS relation_kind,
         owner.rolname AS relation_owner,
+        CASE
+            WHEN c.relkind IN ('v', 'm')
+            THEN pg_catalog.pg_get_viewdef(c.oid, false)
+        END AS view_definition,
+        CASE
+            WHEN c.relkind = 'v'
+            THEN COALESCE('security_invoker=true' = ANY(c.reloptions), false)
+        END AS view_security_invoker,
+        CASE
+            WHEN c.relkind = 'v'
+            THEN COALESCE('security_barrier=true' = ANY(c.reloptions), false)
+        END AS view_security_barrier,
         obj_description(c.oid, 'pg_class') AS relation_comment,
         c.relrowsecurity AS rls_enabled,
         c.relforcerowsecurity AS rls_forced,
@@ -103,6 +115,15 @@ const CONSTRAINTS_SQL: &str = r"
              AND att.attnum = key.attnum
             ORDER BY key.ordinal
         ) AS referenced_columns,
+        ARRAY(
+            SELECT att.attname
+            FROM unnest(con.confdelsetcols) WITH ORDINALITY
+                AS key(attnum, ordinal)
+            JOIN pg_catalog.pg_attribute AS att
+              ON att.attrelid = con.conrelid
+             AND att.attnum = key.attnum
+            ORDER BY key.ordinal
+        ) AS delete_set_columns,
         CASE
             WHEN con.contype = 'c'
             THEN pg_catalog.pg_get_expr(con.conbin, con.conrelid, false)
@@ -113,6 +134,14 @@ const CONSTRAINTS_SQL: &str = r"
         con.condeferred AS initially_deferred,
         COALESCE(backing_index.indnullsnotdistinct, false)
             AS nulls_not_distinct,
+        COALESCE(
+            (pg_catalog.to_jsonb(con) ->> 'conenforced')::boolean,
+            true
+        ) AS enforced,
+        COALESCE(
+            (pg_catalog.to_jsonb(con) ->> 'conperiod')::boolean,
+            false
+        ) AS period,
         CASE con.confmatchtype
             WHEN 'f' THEN 'full'
             WHEN 'p' THEN 'partial'
@@ -211,12 +240,21 @@ pub struct CatalogRelation {
     pub name: String,
     pub kind: RelationKind,
     pub owner: String,
+    pub view: Option<CatalogView>,
     pub comment: Option<String>,
     pub grants: RelationGrantHints,
     pub rls: RowLevelSecurity,
     pub columns: Vec<CatalogColumn>,
     pub constraints: Vec<CatalogConstraint>,
     pub policies: Vec<RowLevelSecurityPolicy>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogView {
+    pub definition_hash: String,
+    pub security_invoker: bool,
+    pub security_barrier: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -261,6 +299,8 @@ pub enum CatalogConstraint {
     PrimaryKey {
         name: String,
         columns: Vec<String>,
+        enforced: bool,
+        period: bool,
         deferrable: bool,
         initially_deferred: bool,
         validated: bool,
@@ -269,6 +309,8 @@ pub enum CatalogConstraint {
         name: String,
         columns: Vec<String>,
         nulls_not_distinct: bool,
+        enforced: bool,
+        period: bool,
         deferrable: bool,
         initially_deferred: bool,
         validated: bool,
@@ -278,9 +320,12 @@ pub enum CatalogConstraint {
         columns: Vec<String>,
         referenced_relation: RelationReference,
         referenced_columns: Vec<String>,
+        delete_set_columns: Vec<String>,
         match_type: ForeignKeyMatch,
         on_update: ForeignKeyAction,
         on_delete: ForeignKeyAction,
+        enforced: bool,
+        period: bool,
         deferrable: bool,
         initially_deferred: bool,
         validated: bool,
@@ -290,6 +335,7 @@ pub enum CatalogConstraint {
         columns: Vec<String>,
         expression_hash: String,
         no_inherit: bool,
+        enforced: bool,
         validated: bool,
     },
 }
@@ -456,6 +502,7 @@ fn scan_relations(client: &mut impl GenericClient) -> Result<Vec<CatalogRelation
                 name,
                 kind: parse_relation_kind(row.get("relation_kind"))?,
                 owner: row.get("relation_owner"),
+                view: view_from_row(row),
                 comment: row.get("relation_comment"),
                 grants: RelationGrantHints {
                     schema_usage: row.get("schema_usage"),
@@ -469,6 +516,19 @@ fn scan_relations(client: &mut impl GenericClient) -> Result<Vec<CatalogRelation
             })
         })
         .collect()
+}
+
+fn view_from_row(row: &Row) -> Option<CatalogView> {
+    let definition: Option<String> = row.get("view_definition");
+    definition.map(|definition| CatalogView {
+        definition_hash: hash_expression(&definition),
+        security_invoker: row
+            .get::<_, Option<bool>>("view_security_invoker")
+            .unwrap_or(false),
+        security_barrier: row
+            .get::<_, Option<bool>>("view_security_barrier")
+            .unwrap_or(false),
+    })
 }
 
 fn scan_columns(
@@ -515,11 +575,15 @@ fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
     let validated = row.get("validated");
     let deferrable = row.get("deferrable");
     let initially_deferred = row.get("initially_deferred");
+    let enforced = row.get("enforced");
+    let period = row.get("period");
 
     match kind.as_str() {
         "primary_key" => Ok(CatalogConstraint::PrimaryKey {
             name,
             columns,
+            enforced,
+            period,
             deferrable,
             initially_deferred,
             validated,
@@ -528,6 +592,8 @@ fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
             name,
             columns,
             nulls_not_distinct: row.get("nulls_not_distinct"),
+            enforced,
+            period,
             deferrable,
             initially_deferred,
             validated,
@@ -543,9 +609,12 @@ fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
                     name: referenced_name.ok_or(CatalogError::MissingReferencedRelation)?,
                 },
                 referenced_columns: row.get("referenced_columns"),
+                delete_set_columns: row.get("delete_set_columns"),
                 match_type: parse_foreign_key_match(row.get("match_type"))?,
                 on_update: parse_foreign_key_action(row.get("on_update"))?,
                 on_delete: parse_foreign_key_action(row.get("on_delete"))?,
+                enforced,
+                period,
                 deferrable,
                 initially_deferred,
                 validated,
@@ -560,6 +629,7 @@ fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
                     .as_deref()
                     .ok_or(CatalogError::MissingCheckExpression)?,
                 row.get("no_inherit"),
+                enforced,
                 validated,
             ))
         }
@@ -666,6 +736,7 @@ fn check_constraint(
     columns: Vec<String>,
     expression: &str,
     no_inherit: bool,
+    enforced: bool,
     validated: bool,
 ) -> CatalogConstraint {
     CatalogConstraint::Check {
@@ -673,6 +744,7 @@ fn check_constraint(
         columns,
         expression_hash: hash_expression(expression),
         no_inherit,
+        enforced,
         validated,
     }
 }
@@ -859,6 +931,7 @@ mod tests {
             name: name.to_owned(),
             kind: RelationKind::Table,
             owner: "source_owner".to_owned(),
+            view: None,
             comment: Some("business relation".to_owned()),
             grants: RelationGrantHints {
                 schema_usage: true,
@@ -892,6 +965,7 @@ mod tests {
                 vec!["amount".to_owned()],
                 RAW_CHECK,
                 false,
+                true,
                 true,
             )],
             policies: vec![policy(
