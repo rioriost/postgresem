@@ -47,6 +47,7 @@ review. Completion is not a substitute for an external assessment.
 - future signed releases verify the expected GitHub workflow identity and OIDC
   issuer;
 - image digest, SBOM, provenance, and signature refer to the same manifest;
+- every GitHub Actions dependency is pinned to an immutable commit SHA;
 - no long-lived signing key is stored in repository secrets.
 
 ## Independent review evidence
@@ -58,3 +59,6 @@ Never publish exploit details before coordinated remediation.
 Follow the [M5 external evidence process](m5-external-evidence.md). Report
 suspected vulnerabilities privately through [SECURITY.md](../SECURITY.md);
 use the public evidence form only after coordinated remediation.
+
+An internal pre-review is preparation only. It does not establish reviewer
+independence and must not be recorded as completion of the external gate.

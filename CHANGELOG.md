@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Security
+
+- Pin every GitHub Actions dependency to an immutable commit SHA, including
+  the release-publishing action that receives `contents: write`.
+
 ## [0.3.0-beta.1] - 2026-08-31
 
 Beta release.
