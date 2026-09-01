@@ -983,7 +983,7 @@ M0、M6直後、M10、1.0前に公式資料で再評価する。
 | model正本 | MDL/YAML等のproject file | YAML/JavaScript等のcode | `.malloy` file | dbt manifest/YAML | PostgreSQL `semantic` schema |
 | DB catalog/COMMENT/FK取込 | scaffold機能あり | schema generationあり | connection schemaを利用 | dbt manifest中心 | catalog/COMMENT/FK/CHECK/RLSを第一級のevidenceとしてrevision管理 |
 | compiler | 多data source semantic engine | 多data source semantic layer | Malloy→SQL compiler | metric query→SQL compiler | PostgreSQL限定typed LSQ→SQL、決定性と安全な拒否を仕様化 |
-| MCP/agent | あり | あり | Publisher等であり | 主眼ではない | raw SQLなし。現在はLSQ discovery/validate/query/explain、将来は独立gate付きtyped mutation |
+| MCP/agent | あり | あり | Publisher等であり | 主眼ではない | raw SQLなし。LSQ discovery/validate/query/explainに加え、独立gate付きtyped LSM mutation |
 | governed write | product/API依存 | API/pre-aggregation workflow | 主たるsemantic contractではない | 主たるmetric contractではない | PostgreSQL専用typed ingestion、GRANT/RLS/constraintが正本。0.4から開始 |
 | security正本 | semantic/product policy | semantic access policy | 接続先権限との組合せ | dbt/platformとの組合せ | PostgreSQL GRANT/RLSを最終正本にしprincipalをDBまで伝播 |
 | lineage | 製品/engine機能 | 製品/semantic機能 | compiler metadata | semantic manifest/plan | revision、compiler、policy、source columnをqueryごとに構築 |

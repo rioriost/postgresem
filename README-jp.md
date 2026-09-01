@@ -8,10 +8,9 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-最新の公開リリースは**0.3.0-beta.1**です。ローカル評価および統制された読み取り専用
-pilotに適しており、本番環境への導入を意図したものではありません。
-現在のsource versionは**0.4.0**で、tagged releaseに先行してM6のgoverned mutationと
-Linux portability scopeを実装しています。
+最新の公開リリースと現在のsource versionは**0.4.0**です。このpreviewではgoverned
+mutationとLinux amd64/arm64でのnative runtime evidenceを追加しましたが、production
+readinessやlong-term supportを保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -161,7 +160,7 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
   cancellation境界です。
 - N-1および同名restore pathはfixtureでtestされていますが、本番backup、RPO/RTO、
   disaster recovery、down migrationはoperatorの責任です。
-- `v0.3.0-beta.1`のchecksumとimmutable container image digestは、GitHub release
+- `v0.4.0`のchecksumとimmutable container image digestは、GitHub release
   workflowによりkeyless署名されています。
 - PostgreSQL 18が検証済みのローカル開発targetです。PostgreSQL 16、17、18はDocker
   CIのmigration、integration、recovery matrixを通過しています。正確な境界は
@@ -180,12 +179,12 @@ tagをtriggerとするautomationは、4種類のnative archiveをbuildし、`SHA
 `SHA256SUMS`を正確なrelease workflow/tag identityに対して認証してから、対応する
 archiveのchecksumを検証します。
 
-[`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1)
-には、amd64およびarm64向けのLinux/macOS archive、`SHA256SUMS`、Sigstore signature、
-certificateが含まれます。公開imageは
-`ghcr.io/rioriost/postgresem:0.3.0-beta.1`です。checksumとimmutable image digestは
-GitHub OIDCでkeyless署名されています。検証時には、想定するworkflow identityと
-issuerを制約する必要があります。
+[`v0.4.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.4.0)
+には、amd64およびarm64向けのLinux/macOS archive、Linux binary/imageのnative
+runtime evidence、`SHA256SUMS`、Sigstore signature、certificateが含まれます。
+公開imageは`ghcr.io/rioriost/postgresem:0.4.0`です。checksumとimmutable image
+digestはGitHub OIDCでkeyless署名されています。検証時には、想定するworkflow
+identityとissuerを制約する必要があります。
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix)も参照して
 ください。
 

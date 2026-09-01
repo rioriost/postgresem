@@ -20,27 +20,27 @@ cosign verify-blob \
   --certificate SHA256SUMS.pem \
   --signature SHA256SUMS.sig \
   --certificate-identity-regexp \
-    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v0\.3\.0-beta\.1$' \
+    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v0\.4\.0$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   SHA256SUMS
 ```
 
 Then verify the selected archive against `SHA256SUMS`.
 
-Verify `v0.3.0-beta.1` by immutable image digest:
+Verify `v0.4.0` by immutable image digest:
 
 ```sh
 cosign verify \
   --certificate-identity-regexp \
-    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v0\.3\.0-beta\.1$' \
+    '^https://github.com/rioriost/postgresem/.github/workflows/release.yml@refs/tags/v0\.4\.0$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/rioriost/postgresem@sha256:b2f67b4a8da954b129b93a47641a55810ce36772d3efc6960a39bdaaad7a282d
+  ghcr.io/rioriost/postgresem@sha256:de4a77a9852b227e444fb8938cdb9d93a20336740cd10427c445458536313bd2
 ```
 
 The certificate identity and OIDC issuer checks are required. A signature
 without an expected workflow identity does not establish the intended
 publisher. Substitute the exact expected tag when verifying another release.
 
-These commands were exercised against the published beta assets. The checksum
-certificate matched the release workflow tag identity, and one valid image
-signature was found in the transparency log.
+These commands were exercised against the published `v0.4.0` assets. The
+checksum certificate matched the release workflow tag identity, and one valid
+image signature was found in the transparency log.

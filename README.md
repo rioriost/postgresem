@@ -8,10 +8,9 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The latest published release is **0.3.0-beta.1**. It is suitable for local
-evaluation and governed read-only pilots, not production deployment.
-The current source version is **0.4.0** and implements the M6 governed-mutation
-and Linux portability scope pending a tagged release.
+The latest published release and current source version are **0.4.0**. This
+preview adds governed mutation and native Linux amd64/arm64 runtime evidence,
+but it is not a production-readiness or long-term-support promise.
 
 ## What problem does postgresem solve?
 
@@ -169,7 +168,7 @@ and unknown semantic objects receive the same public “not available” errors.
   is the cancellation boundary.
 - N-1 and same-name restore paths are fixture-tested, but production backup,
   RPO/RTO, disaster recovery, and down migrations remain operator-owned.
-- `v0.3.0-beta.1` checksums and immutable container image digest are keyless
+- `v0.4.0` checksums and immutable container image digest are keyless
   signed by the GitHub release workflow.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
   and 18 pass the Docker CI migration, integration, and recovery matrix. See the
@@ -190,12 +189,12 @@ authenticates the signed `SHA256SUMS` against the exact release workflow/tag,
 and then verifies the matching archive checksum before installation.
 
 The
-[`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1)
-contains Linux and macOS archives for amd64 and arm64, `SHA256SUMS`, and its
-Sigstore signature and certificate. The public image is
-`ghcr.io/rioriost/postgresem:0.3.0-beta.1`. The checksum and immutable image
-digest are GitHub OIDC keyless-signed; verification must constrain the expected
-workflow identity and issuer. See the
+[`v0.4.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.4.0)
+contains Linux and macOS archives for amd64 and arm64, native Linux binary and
+image runtime evidence, `SHA256SUMS`, and its Sigstore signature and
+certificate. The public image is `ghcr.io/rioriost/postgresem:0.4.0`. The
+checksum and immutable image digest are GitHub OIDC keyless-signed;
+verification must constrain the expected workflow identity and issuer. See the
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
 
 ## Development

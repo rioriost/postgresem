@@ -1020,7 +1020,7 @@ Comparison is framed not as superiority but as differences in scope and where th
 | Model source of truth | MDL/YAML etc. project files | YAML/JavaScript etc. code | `.malloy` files | dbt manifest/YAML | PostgreSQL `semantic` schema |
 | DB catalog/COMMENT/FK ingestion | Scaffold feature available | Schema generation available | Uses connection schema | dbt manifest centric | catalog/COMMENT/FK/CHECK/RLS as first-class evidence with revision management |
 | Compiler | Multi-data-source semantic engine | Multi-data-source semantic layer | Malloy → SQL compiler | Metric query → SQL compiler | PostgreSQL-only typed LSQ → SQL; determinism and safe rejection specified |
-| MCP/agent | Available | Available | Available via Publisher, etc. | Not the primary focus | No raw SQL; current LSQ discovery/validate/query/explain, with separately gated typed mutation planned |
+| MCP/agent | Available | Available | Available via Publisher, etc. | Not the primary focus | No raw SQL; LSQ discovery/validate/query/explain plus separately gated typed LSM mutation |
 | Governed writes | Product/API dependent | API/pre-aggregation workflows | Not a primary semantic contract | Not a primary metric contract | PostgreSQL-only typed ingestion with GRANT/RLS/constraints as authority; starts in 0.4 |
 | Security source of truth | Semantic/product policy | Semantic access policy | Combined with connection-target permissions | Combined with dbt/platform | PostgreSQL GRANT/RLS as the ultimate authority; principal propagated to DB |
 | Lineage | Product/engine feature | Product/semantic feature | Compiler metadata | Semantic manifest/plan | Built per query from revision, compiler, policy, and source columns |

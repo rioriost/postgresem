@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The latest published release is
-`0.3.0-beta.1`; the current source package is `0.4.0`. Before 1.0:
+The project uses Semantic Versioning. The latest published release and current
+source package are `0.4.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -34,7 +34,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
 | database migrations | `0001`–`0005` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
 | source package | `0.4.0` | M6 governed-mutation and Linux portability package |
-| latest published package | `0.3.0-beta.1` | signed beta release; read-only public contract |
+| latest published package | `0.4.0` | signed preview release; governed query and mutation contracts |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -162,14 +162,14 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 | locally built `gateway:latest` OCI image | supported by `make dev-up`; Apple Container runs the image in a Linux arm64 VM on the documented macOS path |
 | Docker/Docker Compose on Linux amd64 | exercised by GitHub Actions integration jobs; not yet the end-user quickstart |
 | Linux amd64/arm64 runtime execution gate | native CI jobs execute the runtime image against PostgreSQL 18; tagged releases also execute each packaged binary and architecture-specific image before publication |
-| native binary archives | `v0.3.0-beta.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
+| native binary archives | `v0.4.0` published for Linux amd64/arm64 and macOS amd64/arm64 |
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
 | `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`; CI covers successful Linux architecture selection and failed-signature rejection |
-| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.3.0-beta.1` |
-| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:b2f67b4a8da954b129b93a47641a55810ce36772d3efc6960a39bdaaad7a282d` |
+| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.4.0` |
+| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:de4a77a9852b227e444fb8938cdb9d93a20336740cd10427c445458536313bd2` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
-| cryptographic release signatures | `v0.3.0-beta.1` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
+| cryptographic release signatures | `v0.4.0` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
 | MCP HTTP/server artifact | not implemented; the loopback Web demo is a sample adapter over stdio |
 
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
@@ -177,9 +177,9 @@ tags, requires the tag to match the workspace version, builds the four native
 archives, executes Linux amd64/arm64 packaged-binary smoke tests, executes both
 native runtime images, generates `SHA256SUMS`, publishes the
 multi-architecture image only after those gates, then creates a GitHub release.
-[Release run 33399332825](https://github.com/rioriost/postgresem/actions/runs/33399332825)
+[Release run 33494960050](https://github.com/rioriost/postgresem/actions/runs/33494960050)
 completed successfully and published the
-[`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1).
+[`v0.4.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.4.0).
 
 The installer uses HTTPS, requires Cosign, verifies the signed checksum against
 the exact repository release workflow and tag identity, verifies SHA-256
