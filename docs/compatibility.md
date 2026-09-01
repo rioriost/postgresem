@@ -27,7 +27,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 |---|---|---|
 | LSQ | `schema_version: "1"` | strict JSON; unknown fields rejected; only v1 accepted |
 | Semantic Snapshot/Schema | `schema_version: "1"` | loader/compiler reject other snapshot versions |
-| PostgreSQL catalog snapshot | `schema_version: "2"` | fingerprint includes database, scanning role authorization context, relation ownership, and normalized catalog evidence |
+| PostgreSQL catalog snapshot | `schema_version: "2"` | fingerprint includes database, complete role attributes/membership graph, scanning-role authorization, security-definer view/function owner authorization, normalized database/schema/relation/sequence/routine ACL evidence, non-system function/window/aggregate definitions and owners, relation ownership, and normalized catalog evidence |
 | MCP protocol | `2024-11-05` | initialize returns this version; stdio JSON-RPC only |
 | MCP tool schema | `"1"` | every tool requires this exact version |
 | compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
@@ -137,14 +137,32 @@ using JSON-pointer paths and three classifications:
 - `review_required`: server-version changes, comments, and newly observed
   constraints;
 - `breaking`: removals and changes to relation kinds, column types/nullability,
-  effective grants, role authorization, relation ownership, constraints, RLS
-  state, or RLS policies.
+  effective grants, role authorization, security-definer view-owner authority,
+  executable function definitions/owners/grants, relation ownership,
+  constraints, RLS state, or RLS policies.
 
 The conservative classifier is a publication gate, not proof that a compatible
 addition has correct business meaning. RLS and GRANT changes are always
 breaking because the same structural shape can have a different authorization
 boundary. A role change is rejected instead of being misreported as drift
 because catalog visibility is role-dependent.
+
+Snapshot v2 fingerprints every non-system function, window function, and
+aggregate conservatively, rather than trusting incomplete dependency edges for
+string-bodied SQL and PL/pgSQL functions. The serialized evidence contains
+definition hashes, not function bodies. This can classify an unrelated
+function change as breaking, but it prevents policies, CHECK constraints, or
+views from retaining the same fingerprint after executable behavior changes.
+Aggregate evidence deparses referenced functions, types, and operators instead
+of storing database-local OIDs, so an identical drop/recreate retains the same
+definition hash.
+It also binds a normalized hash of current-database, schema, relation,
+sequence, and routine ACLs. The conservative ACL inventory means that adding
+an object with new privileges can make the overall diff breaking even when its
+structural relation addition is otherwise compatible.
+The complete role graph binds every role's inheritance, superuser,
+`BYPASSRLS`, and direct membership options, so a mapped runtime or RLS policy
+role cannot change authority behind an unchanged role name.
 
 ## Migration and upgrade compatibility
 

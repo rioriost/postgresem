@@ -31,9 +31,40 @@ SQL
 
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
 DROP VIEW IF EXISTS commerce.catalog_security_view;
+DROP AGGREGATE IF EXISTS commerce.catalog_security_total(bigint);
+DROP FUNCTION IF EXISTS commerce.catalog_security_add(bigint, bigint);
+DROP FUNCTION IF EXISTS commerce.catalog_security_filter(bigint);
+DROP SEQUENCE IF EXISTS commerce.catalog_empty_acl_sequence;
+CREATE SEQUENCE commerce.catalog_empty_acl_sequence;
+REVOKE ALL ON SEQUENCE commerce.catalog_empty_acl_sequence
+  FROM PUBLIC, postgres;
+CREATE FUNCTION commerce.catalog_security_add(state bigint, value bigint)
+RETURNS bigint
+LANGUAGE sql
+IMMUTABLE
+AS 'SELECT state + value';
+CREATE AGGREGATE commerce.catalog_security_total(bigint) (
+  SFUNC = commerce.catalog_security_add,
+  STYPE = bigint,
+  INITCOND = '0',
+  PARALLEL = SAFE
+);
+CREATE FUNCTION commerce.catalog_security_filter(value bigint)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS 'SELECT value > 0';
+ALTER FUNCTION commerce.catalog_security_filter(bigint)
+  OWNER TO postgresem_source_owner;
 CREATE VIEW commerce.catalog_security_view
 WITH (security_invoker = on, security_barrier = 1)
-AS SELECT amount FROM commerce.orders;
+AS
+SELECT amount
+FROM commerce.orders
+WHERE commerce.catalog_security_filter(order_id);
+ALTER VIEW commerce.catalog_security_view OWNER TO postgresem_analyst;
 SQL
 postgresem catalog scan > /tmp/catalog-view-before.json
 python3 - /tmp/catalog-view-before.json <<'PY'
@@ -50,7 +81,90 @@ view = next(
 )
 if not view["security_invoker"] or not view["security_barrier"]:
     raise SystemExit("catalog scan did not normalize PostgreSQL view booleans")
+function = next(
+    function
+    for function in snapshot["functions"]
+    if function["schema"] == "commerce"
+    and function["name"] == "catalog_security_filter"
+)
+if view["owner_authorization"] is not None:
+    raise SystemExit("security-invoker view unexpectedly bound owner authority")
+if function["owner_authorization"] is None:
+    raise SystemExit("security-definer function omitted owner authority")
+aggregate = next(
+    function
+    for function in snapshot["functions"]
+    if function["schema"] == "commerce"
+    and function["name"] == "catalog_security_total"
+)
+if aggregate["kind"] != "aggregate":
+    raise SystemExit("catalog scan omitted user-defined aggregate evidence")
 PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DROP AGGREGATE commerce.catalog_security_total(bigint);
+CREATE AGGREGATE commerce.catalog_security_total(bigint) (
+  SFUNC = commerce.catalog_security_add,
+  STYPE = bigint,
+  INITCOND = '0',
+  PARALLEL = SAFE
+);
+SQL
+postgresem catalog scan > /tmp/catalog-aggregate-recreated.json
+python3 - \
+  /tmp/catalog-view-before.json \
+  /tmp/catalog-aggregate-recreated.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    before = json.load(stream)
+with open(sys.argv[2], encoding="utf-8") as stream:
+    after = json.load(stream)
+if before["fingerprint"] != after["fingerprint"]:
+    raise SystemExit("identical aggregate recreation changed catalog fingerprint")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DROP AGGREGATE commerce.catalog_security_total(bigint);
+CREATE AGGREGATE commerce.catalog_security_total(bigint) (
+  SFUNC = commerce.catalog_security_add,
+  STYPE = bigint,
+  INITCOND = '0',
+  PARALLEL = UNSAFE
+);
+SQL
+postgresem catalog scan > /tmp/catalog-aggregate-parallel.json
+if postgresem catalog diff \
+  --from /tmp/catalog-view-before.json \
+  --to /tmp/catalog-aggregate-parallel.json \
+  --fail-on-breaking >/tmp/catalog-aggregate-parallel-diff.json 2>/dev/null
+then
+  echo "catalog diff missed aggregate parallel-safety drift" >&2
+  exit 1
+fi
+python3 - /tmp/catalog-aggregate-parallel-diff.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    diff = json.load(stream)
+if not any(
+    change["path"].startswith(
+        "/functions/commerce/catalog_security_total/"
+    )
+    and change["compatibility"] == "breaking"
+    for change in diff["changes"]
+):
+    raise SystemExit("aggregate parallel-safety drift was not breaking")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DROP AGGREGATE commerce.catalog_security_total(bigint);
+CREATE AGGREGATE commerce.catalog_security_total(bigint) (
+  SFUNC = commerce.catalog_security_add,
+  STYPE = bigint,
+  INITCOND = '0',
+  PARALLEL = SAFE
+);
+SQL
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
 ALTER VIEW commerce.catalog_security_view
   RESET (security_invoker, security_barrier);
@@ -79,7 +193,103 @@ if diff["compatibility"] != "breaking" or len(view_changes) != 1:
     raise SystemExit("view security drift was not classified as breaking")
 PY
 psql --no-psqlrc -v ON_ERROR_STOP=1 \
-  -c 'DROP VIEW commerce.catalog_security_view'
+  -c 'ALTER ROLE postgresem_analyst BYPASSRLS'
+postgresem catalog scan > /tmp/catalog-view-owner-after.json
+if postgresem catalog diff \
+  --from /tmp/catalog-view-after.json \
+  --to /tmp/catalog-view-owner-after.json \
+  --fail-on-breaking >/tmp/catalog-view-owner-diff.json 2>/dev/null
+then
+  echo "catalog diff missed security-definer view owner authorization drift" >&2
+  exit 1
+fi
+python3 - /tmp/catalog-view-owner-diff.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    diff = json.load(stream)
+if not any(
+    change["path"] == "/relations/commerce/catalog_security_view/view"
+    and change["compatibility"] == "breaking"
+    for change in diff["changes"]
+):
+    raise SystemExit("view owner authorization drift was not classified as breaking")
+if not any(
+    change["path"] == "/role_graph_fingerprint"
+    and change["compatibility"] == "breaking"
+    for change in diff["changes"]
+):
+    raise SystemExit("non-scanner role authorization drift was not classified as breaking")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+ALTER ROLE postgresem_analyst NOBYPASSRLS;
+ALTER SEQUENCE commerce.catalog_empty_acl_sequence
+  OWNER TO postgresem_analyst;
+SQL
+postgresem catalog scan > /tmp/catalog-object-acl-after.json
+if postgresem catalog diff \
+  --from /tmp/catalog-view-after.json \
+  --to /tmp/catalog-object-acl-after.json \
+  --fail-on-breaking >/tmp/catalog-object-acl-diff.json 2>/dev/null
+then
+  echo "catalog diff missed normalized object ACL drift" >&2
+  exit 1
+fi
+python3 - /tmp/catalog-object-acl-diff.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    diff = json.load(stream)
+if not any(
+    change["path"] == "/object_privilege_fingerprint"
+    and change["compatibility"] == "breaking"
+    for change in diff["changes"]
+):
+    raise SystemExit("object ACL drift was not classified as breaking")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+ALTER SEQUENCE commerce.catalog_empty_acl_sequence OWNER TO postgres;
+CREATE OR REPLACE FUNCTION commerce.catalog_security_filter(value bigint)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS 'SELECT value >= 0';
+SQL
+postgresem catalog scan > /tmp/catalog-function-after.json
+if postgresem catalog diff \
+  --from /tmp/catalog-view-after.json \
+  --to /tmp/catalog-function-after.json \
+  --fail-on-breaking >/tmp/catalog-function-diff.json 2>/dev/null
+then
+  echo "catalog diff missed executable function drift" >&2
+  exit 1
+fi
+python3 - /tmp/catalog-function-diff.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    diff = json.load(stream)
+if not any(
+    change["path"].startswith(
+        "/functions/commerce/catalog_security_filter/"
+    )
+    and change["compatibility"] == "breaking"
+    for change in diff["changes"]
+):
+    raise SystemExit("function definition drift was not classified as breaking")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DROP VIEW commerce.catalog_security_view;
+DROP AGGREGATE commerce.catalog_security_total(bigint);
+DROP FUNCTION commerce.catalog_security_add(bigint, bigint);
+DROP FUNCTION commerce.catalog_security_filter(bigint);
+DROP SEQUENCE commerce.catalog_empty_acl_sequence;
+SQL
 
 export POSTGRESEM_DB_ROLE=postgresem_analyst
 if DATABASE_URL="${DATABASE_URL% sslmode=disable}" \

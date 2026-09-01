@@ -20,6 +20,21 @@ const RELATIONS_SQL: &str = r"
             WHEN 'f' THEN 'foreign_table'
         END AS relation_kind,
         owner.rolname AS relation_owner,
+        owner.rolinherit AS owner_inherit,
+        owner.rolsuper AS owner_superuser,
+        owner.rolbypassrls AS owner_bypass_rls,
+        ARRAY(
+            SELECT candidate.rolname
+            FROM pg_catalog.pg_roles AS candidate
+            WHERE pg_catalog.pg_has_role(owner.oid, candidate.oid, 'USAGE')
+            ORDER BY candidate.rolname
+        ) AS owner_effective_roles,
+        ARRAY(
+            SELECT candidate.rolname
+            FROM pg_catalog.pg_roles AS candidate
+            WHERE pg_catalog.pg_has_role(owner.oid, candidate.oid, 'SET')
+            ORDER BY candidate.rolname
+        ) AS owner_settable_roles,
         CASE
             WHEN c.relkind IN ('v', 'm')
             THEN pg_catalog.pg_get_viewdef(c.oid, false)
@@ -61,6 +76,282 @@ const RELATIONS_SQL: &str = r"
       AND n.nspname !~ '^pg_toast'
       AND n.nspname !~ '^pg_temp_'
     ORDER BY n.nspname, c.relname, c.relkind
+";
+
+const FUNCTIONS_SQL: &str = r"
+    SELECT
+        p.oid::bigint AS function_oid,
+        n.nspname AS schema_name,
+        p.proname AS function_name,
+        pg_catalog.pg_get_function_identity_arguments(p.oid)
+            AS identity_arguments,
+        CASE p.prokind
+            WHEN 'a' THEN pg_catalog.jsonb_build_object(
+                'kind', aggregate_definition.aggkind,
+                'parallel', p.proparallel,
+                'direct_arguments', aggregate_definition.aggnumdirectargs,
+                'transition_function',
+                    aggregate_definition.aggtransfn::oid::regprocedure::text,
+                'final_function', CASE aggregate_definition.aggfinalfn
+                    WHEN 0 THEN NULL
+                    ELSE aggregate_definition.aggfinalfn::oid::regprocedure::text
+                END,
+                'combine_function', CASE aggregate_definition.aggcombinefn
+                    WHEN 0 THEN NULL
+                    ELSE aggregate_definition.aggcombinefn::oid::regprocedure::text
+                END,
+                'serialize_function', CASE aggregate_definition.aggserialfn
+                    WHEN 0 THEN NULL
+                    ELSE aggregate_definition.aggserialfn::oid::regprocedure::text
+                END,
+                'deserialize_function', CASE aggregate_definition.aggdeserialfn
+                    WHEN 0 THEN NULL
+                    ELSE aggregate_definition.aggdeserialfn::oid::regprocedure::text
+                END,
+                'moving_transition_function',
+                    CASE aggregate_definition.aggmtransfn
+                        WHEN 0 THEN NULL
+                        ELSE aggregate_definition.aggmtransfn::oid::regprocedure::text
+                    END,
+                'moving_inverse_transition_function',
+                    CASE aggregate_definition.aggminvtransfn
+                        WHEN 0 THEN NULL
+                        ELSE aggregate_definition.aggminvtransfn::oid::regprocedure::text
+                    END,
+                'moving_final_function',
+                    CASE aggregate_definition.aggmfinalfn
+                        WHEN 0 THEN NULL
+                        ELSE aggregate_definition.aggmfinalfn::oid::regprocedure::text
+                    END,
+                'final_extra', aggregate_definition.aggfinalextra,
+                'moving_final_extra', aggregate_definition.aggmfinalextra,
+                'final_modify', aggregate_definition.aggfinalmodify,
+                'moving_final_modify', aggregate_definition.aggmfinalmodify,
+                'sort_operator', CASE aggregate_definition.aggsortop
+                    WHEN 0 THEN NULL
+                    ELSE aggregate_definition.aggsortop::regoperator::text
+                END,
+                'transition_type',
+                    pg_catalog.format_type(
+                        aggregate_definition.aggtranstype,
+                        NULL
+                    ),
+                'transition_space', aggregate_definition.aggtransspace,
+                'moving_transition_type',
+                    CASE aggregate_definition.aggmtranstype
+                        WHEN 0 THEN NULL
+                        ELSE pg_catalog.format_type(
+                            aggregate_definition.aggmtranstype,
+                            NULL
+                        )
+                    END,
+                'moving_transition_space', aggregate_definition.aggmtransspace,
+                'initial_value', aggregate_definition.agginitval,
+                'moving_initial_value', aggregate_definition.aggminitval
+            )::text
+            ELSE pg_catalog.pg_get_functiondef(p.oid)
+        END AS function_definition,
+        CASE p.prokind
+            WHEN 'f' THEN 'function'
+            WHEN 'w' THEN 'window_function'
+            WHEN 'a' THEN 'aggregate'
+        END AS function_kind,
+        p.prosecdef AS security_definer,
+        owner.rolname AS function_owner,
+        owner.rolinherit AS owner_inherit,
+        owner.rolsuper AS owner_superuser,
+        owner.rolbypassrls AS owner_bypass_rls,
+        ARRAY(
+            SELECT candidate.rolname
+            FROM pg_catalog.pg_roles AS candidate
+            WHERE pg_catalog.pg_has_role(owner.oid, candidate.oid, 'USAGE')
+            ORDER BY candidate.rolname
+        ) AS owner_effective_roles,
+        ARRAY(
+            SELECT candidate.rolname
+            FROM pg_catalog.pg_roles AS candidate
+            WHERE pg_catalog.pg_has_role(owner.oid, candidate.oid, 'SET')
+            ORDER BY candidate.rolname
+        ) AS owner_settable_roles
+    FROM pg_catalog.pg_proc AS p
+    JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = p.proowner
+    LEFT JOIN pg_catalog.pg_aggregate AS aggregate_definition
+      ON aggregate_definition.aggfnoid = p.oid
+    WHERE p.prokind IN ('f', 'w', 'a')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname !~ '^pg_toast'
+      AND n.nspname !~ '^pg_temp_'
+    ORDER BY
+        n.nspname,
+        p.proname,
+        pg_catalog.pg_get_function_identity_arguments(p.oid)
+";
+
+const OBJECT_PRIVILEGES_SQL: &str = r#"
+    WITH acl_objects AS (
+        SELECT
+            'database'::text AS object_kind,
+            ''::text AS schema_name,
+            database_catalog.datname AS object_name,
+            ''::text AS identity_arguments,
+            database_catalog.datdba AS owner_oid,
+            database_catalog.datacl AS object_acl,
+            'd'::"char" AS acl_kind
+        FROM pg_catalog.pg_database AS database_catalog
+        WHERE database_catalog.datname = current_database()
+
+        UNION ALL
+
+        SELECT
+            'schema',
+            '',
+            namespace.nspname,
+            '',
+            namespace.nspowner,
+            namespace.nspacl,
+            'n'::"char"
+        FROM pg_catalog.pg_namespace AS namespace
+        WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND namespace.nspname !~ '^pg_toast'
+          AND namespace.nspname !~ '^pg_temp_'
+
+        UNION ALL
+
+        SELECT
+            CASE relation.relkind
+                WHEN 'S' THEN 'sequence'
+                ELSE 'relation'
+            END,
+            namespace.nspname,
+            relation.relname,
+            '',
+            relation.relowner,
+            relation.relacl,
+            CASE relation.relkind
+                WHEN 'S' THEN 's'::"char"
+                ELSE 'r'::"char"
+            END
+        FROM pg_catalog.pg_class AS relation
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = relation.relnamespace
+        WHERE relation.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+          AND namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND namespace.nspname !~ '^pg_toast'
+          AND namespace.nspname !~ '^pg_temp_'
+
+        UNION ALL
+
+        SELECT
+            CASE routine.prokind
+                WHEN 'a' THEN 'aggregate'
+                WHEN 'p' THEN 'procedure'
+                ELSE 'function'
+            END,
+            namespace.nspname,
+            routine.proname,
+            pg_catalog.pg_get_function_identity_arguments(routine.oid),
+            routine.proowner,
+            routine.proacl,
+            'f'::"char"
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = routine.pronamespace
+        WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND namespace.nspname !~ '^pg_toast'
+          AND namespace.nspname !~ '^pg_temp_'
+    )
+    SELECT
+        object.object_kind,
+        object.schema_name,
+        object.object_name,
+        object.identity_arguments,
+        owner.rolname AS owner,
+        grantor.rolname AS grantor,
+        CASE access.grantee
+            WHEN 0 THEN 'public'
+            ELSE grantee.rolname
+        END AS grantee,
+        access.privilege_type,
+        access.is_grantable
+    FROM acl_objects AS object
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = object.owner_oid
+    LEFT JOIN LATERAL pg_catalog.aclexplode(
+        COALESCE(
+            object.object_acl,
+            pg_catalog.acldefault(object.acl_kind, object.owner_oid)
+        )
+    ) AS access ON true
+    LEFT JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = access.grantor
+    LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = access.grantee
+    ORDER BY
+        object.object_kind,
+        object.schema_name,
+        object.object_name,
+        object.identity_arguments,
+        owner,
+        grantee,
+        grantor,
+        access.privilege_type,
+        access.is_grantable
+"#;
+
+const ROLE_GRAPH_SQL: &str = r"
+    SELECT
+        member.rolname AS member_role,
+        member.rolinherit AS inherit,
+        member.rolsuper AS superuser,
+        member.rolbypassrls AS bypass_rls,
+        granted.rolname AS granted_role,
+        grantor.rolname AS grantor_role,
+        membership.admin_option,
+        CASE
+            WHEN membership.roleid IS NULL THEN NULL
+            ELSE COALESCE(
+                (
+                    pg_catalog.to_jsonb(membership)
+                    ->> 'inherit_option'
+                )::boolean,
+                true
+            )
+        END AS inherit_option,
+        CASE
+            WHEN membership.roleid IS NULL THEN NULL
+            ELSE COALESCE(
+                (pg_catalog.to_jsonb(membership) ->> 'set_option')::boolean,
+                true
+            )
+        END AS set_option
+    FROM pg_catalog.pg_roles AS member
+    LEFT JOIN pg_catalog.pg_auth_members AS membership
+      ON membership.member = member.oid
+    LEFT JOIN pg_catalog.pg_roles AS granted
+      ON granted.oid = membership.roleid
+    LEFT JOIN pg_catalog.pg_roles AS grantor
+      ON grantor.oid = membership.grantor
+    ORDER BY member.rolname, granted.rolname, grantor.rolname
+";
+
+const FUNCTION_GRANTS_SQL: &str = r"
+    SELECT
+        grantor.rolname AS grantor,
+        CASE access.grantee
+            WHEN 0 THEN 'public'
+            ELSE grantee.rolname
+        END AS grantee,
+        access.is_grantable
+    FROM pg_catalog.pg_proc AS p
+    CROSS JOIN LATERAL pg_catalog.aclexplode(
+        COALESCE(
+            p.proacl,
+            pg_catalog.acldefault('f', p.proowner)
+        )
+    ) AS access
+    JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = access.grantor
+    LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = access.grantee
+    WHERE p.oid = $1::bigint::oid
+      AND access.privilege_type = 'EXECUTE'
+    ORDER BY grantee, grantor, access.is_grantable
 ";
 
 const ROLE_CONTEXT_SQL: &str = r"
@@ -233,6 +524,9 @@ pub struct CatalogSnapshot {
     pub current_database: String,
     pub current_role: String,
     pub role_context: CatalogRoleContext,
+    pub role_graph_fingerprint: String,
+    pub object_privilege_fingerprint: String,
+    pub functions: Vec<CatalogFunction>,
     pub relations: Vec<CatalogRelation>,
     pub fingerprint: String,
 }
@@ -269,6 +563,62 @@ pub struct CatalogView {
     pub definition_hash: String,
     pub security_invoker: bool,
     pub security_barrier: bool,
+    pub owner_authorization: Option<CatalogRoleContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogFunction {
+    pub schema: String,
+    pub name: String,
+    pub identity_arguments: String,
+    pub kind: CatalogFunctionKind,
+    pub definition_hash: String,
+    pub owner: String,
+    pub owner_authorization: Option<CatalogRoleContext>,
+    pub grants: Vec<CatalogFunctionGrant>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CatalogFunctionKind {
+    Function,
+    WindowFunction,
+    Aggregate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogFunctionGrant {
+    pub grantor: String,
+    pub grantee: String,
+    pub grantable: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ObjectPrivilegeEvidence {
+    object_kind: String,
+    schema: String,
+    name: String,
+    identity_arguments: String,
+    owner: String,
+    grantor: Option<String>,
+    grantee: Option<String>,
+    privilege: Option<String>,
+    grantable: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+struct RoleGraphEvidence {
+    member: String,
+    inherit: bool,
+    superuser: bool,
+    bypass_rls: bool,
+    granted_role: Option<String>,
+    grantor_role: Option<String>,
+    admin_option: Option<bool>,
+    inherit_option: Option<bool>,
+    set_option: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -461,7 +811,10 @@ fn scan(client: &mut Client) -> Result<CatalogSnapshot, CatalogError> {
         .start()
         .map_err(CatalogError::StartTransaction)?;
     transaction
-        .batch_execute("SET LOCAL search_path = pg_catalog")
+        .batch_execute(
+            "SET LOCAL search_path = pg_catalog; \
+             SET LOCAL quote_all_identifiers = off",
+        )
         .map_err(|source| query_error("search path", source))?;
 
     let metadata = transaction
@@ -490,6 +843,9 @@ fn scan(client: &mut Client) -> Result<CatalogSnapshot, CatalogError> {
             effective_roles: role_context.get("effective_roles"),
             settable_roles: role_context.get("settable_roles"),
         },
+        role_graph_fingerprint: scan_role_graph_fingerprint(&mut transaction)?,
+        object_privilege_fingerprint: scan_object_privilege_fingerprint(&mut transaction)?,
+        functions: scan_functions(&mut transaction)?,
         relations: scan_relations(&mut transaction)?,
         fingerprint: String::new(),
     };
@@ -542,7 +898,108 @@ fn view_from_row(row: &Row) -> Option<CatalogView> {
         security_barrier: row
             .get::<_, Option<bool>>("view_security_barrier")
             .unwrap_or(false),
+        owner_authorization: row
+            .get::<_, Option<bool>>("view_security_invoker")
+            .filter(|security_invoker| !security_invoker)
+            .map(|_| role_context_from_owner_row(row)),
     })
+}
+
+fn scan_functions(client: &mut impl GenericClient) -> Result<Vec<CatalogFunction>, CatalogError> {
+    client
+        .query(FUNCTIONS_SQL, &[])
+        .map_err(|source| query_error("functions", source))?
+        .iter()
+        .map(|row| {
+            let oid: i64 = row.get("function_oid");
+            Ok(CatalogFunction {
+                schema: row.get("schema_name"),
+                name: row.get("function_name"),
+                identity_arguments: row.get("identity_arguments"),
+                kind: parse_function_kind(row.get("function_kind"))?,
+                definition_hash: hash_expression(
+                    row.get::<_, String>("function_definition").as_str(),
+                ),
+                owner: row.get("function_owner"),
+                owner_authorization: row
+                    .get::<_, bool>("security_definer")
+                    .then(|| role_context_from_owner_row(row)),
+                grants: scan_function_grants(client, oid)?,
+            })
+        })
+        .collect()
+}
+
+fn scan_object_privilege_fingerprint(
+    client: &mut impl GenericClient,
+) -> Result<String, CatalogError> {
+    let evidence = client
+        .query(OBJECT_PRIVILEGES_SQL, &[])
+        .map_err(|source| query_error("object privileges", source))?
+        .iter()
+        .map(|row| ObjectPrivilegeEvidence {
+            object_kind: row.get("object_kind"),
+            schema: row.get("schema_name"),
+            name: row.get("object_name"),
+            identity_arguments: row.get("identity_arguments"),
+            owner: row.get("owner"),
+            grantor: row.get("grantor"),
+            grantee: row.get("grantee"),
+            privilege: row.get("privilege_type"),
+            grantable: row.get("is_grantable"),
+        })
+        .collect::<Vec<_>>();
+    let canonical = serde_json::to_vec(&evidence).map_err(CatalogError::Serialization)?;
+    Ok(sha256(canonical))
+}
+
+fn scan_role_graph_fingerprint(client: &mut impl GenericClient) -> Result<String, CatalogError> {
+    let evidence = client
+        .query(ROLE_GRAPH_SQL, &[])
+        .map_err(|source| query_error("role graph", source))?
+        .iter()
+        .map(|row| RoleGraphEvidence {
+            member: row.get("member_role"),
+            inherit: row.get("inherit"),
+            superuser: row.get("superuser"),
+            bypass_rls: row.get("bypass_rls"),
+            granted_role: row.get("granted_role"),
+            grantor_role: row.get("grantor_role"),
+            admin_option: row.get("admin_option"),
+            inherit_option: row.get("inherit_option"),
+            set_option: row.get("set_option"),
+        })
+        .collect::<Vec<_>>();
+    let canonical = serde_json::to_vec(&evidence).map_err(CatalogError::Serialization)?;
+    Ok(sha256(canonical))
+}
+
+fn scan_function_grants(
+    client: &mut impl GenericClient,
+    oid: i64,
+) -> Result<Vec<CatalogFunctionGrant>, CatalogError> {
+    client
+        .query(FUNCTION_GRANTS_SQL, &[&oid])
+        .map_err(|source| query_error("function grants", source))?
+        .iter()
+        .map(|row| {
+            Ok(CatalogFunctionGrant {
+                grantor: row.get("grantor"),
+                grantee: row.get("grantee"),
+                grantable: row.get("is_grantable"),
+            })
+        })
+        .collect()
+}
+
+fn role_context_from_owner_row(row: &Row) -> CatalogRoleContext {
+    CatalogRoleContext {
+        inherit: row.get("owner_inherit"),
+        superuser: row.get("owner_superuser"),
+        bypass_rls: row.get("owner_bypass_rls"),
+        effective_roles: row.get("owner_effective_roles"),
+        settable_roles: row.get("owner_settable_roles"),
+    }
 }
 
 fn scan_columns(
@@ -697,6 +1154,18 @@ fn parse_relation_kind(value: String) -> Result<RelationKind, CatalogError> {
     }
 }
 
+fn parse_function_kind(value: String) -> Result<CatalogFunctionKind, CatalogError> {
+    match value.as_str() {
+        "function" => Ok(CatalogFunctionKind::Function),
+        "window_function" => Ok(CatalogFunctionKind::WindowFunction),
+        "aggregate" => Ok(CatalogFunctionKind::Aggregate),
+        _ => Err(CatalogError::UnsupportedValue {
+            field: "function kind",
+            value,
+        }),
+    }
+}
+
 fn parse_foreign_key_match(value: String) -> Result<ForeignKeyMatch, CatalogError> {
     match value.as_str() {
         "full" => Ok(ForeignKeyMatch::Full),
@@ -784,11 +1253,31 @@ fn policy(
 
 impl CatalogSnapshot {
     fn normalize(&mut self) {
-        self.role_context.effective_roles.sort();
-        self.role_context.effective_roles.dedup();
-        self.role_context.settable_roles.sort();
-        self.role_context.settable_roles.dedup();
+        normalize_role_context(&mut self.role_context);
+        for function in &mut self.functions {
+            if let Some(owner_authorization) = &mut function.owner_authorization {
+                normalize_role_context(owner_authorization);
+            }
+            function.grants.sort_by(|left, right| {
+                left.grantee
+                    .cmp(&right.grantee)
+                    .then(left.grantor.cmp(&right.grantor))
+                    .then(left.grantable.cmp(&right.grantable))
+            });
+            function.grants.dedup();
+        }
+        self.functions.sort_by(|left, right| {
+            left.schema
+                .cmp(&right.schema)
+                .then(left.name.cmp(&right.name))
+                .then(left.identity_arguments.cmp(&right.identity_arguments))
+        });
         for relation in &mut self.relations {
+            if let Some(view) = &mut relation.view {
+                if let Some(owner_authorization) = &mut view.owner_authorization {
+                    normalize_role_context(owner_authorization);
+                }
+            }
             relation.columns.sort_by(|left, right| {
                 left.ordinal
                     .cmp(&right.ordinal)
@@ -841,6 +1330,13 @@ impl CatalogSnapshot {
     }
 }
 
+fn normalize_role_context(context: &mut CatalogRoleContext) {
+    context.effective_roles.sort();
+    context.effective_roles.dedup();
+    context.settable_roles.sort();
+    context.settable_roles.dedup();
+}
+
 fn constraint_order(left: &CatalogConstraint, right: &CatalogConstraint) -> Ordering {
     constraint_sort_key(left).cmp(&constraint_sort_key(right))
 }
@@ -867,13 +1363,14 @@ const fn policy_command_order(command: PolicyCommand) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CatalogColumn, CatalogError, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
-        PolicyCommand, RelationGrantHints, RelationKind, RowLevelSecurity, check_constraint,
-        hash_expression, policy,
+        CatalogColumn, CatalogError, CatalogFunction, CatalogFunctionKind, CatalogRelation,
+        CatalogRoleContext, CatalogSnapshot, PolicyCommand, RelationGrantHints, RelationKind,
+        RowLevelSecurity, check_constraint, hash_expression, policy,
     };
 
     const RAW_CHECK: &str = "amount > 0 AND secret_check(amount)";
     const RAW_POLICY: &str = "tenant_id = current_setting('app.secret_tenant')";
+    const RAW_FUNCTION: &str = "SELECT current_setting('app.secret_value')";
 
     #[test]
     fn fingerprint_is_deterministic_after_normalization() -> Result<(), CatalogError> {
@@ -888,13 +1385,27 @@ mod tests {
     #[test]
     fn serialized_snapshot_excludes_raw_check_and_policy_expressions()
     -> Result<(), Box<dyn std::error::Error>> {
-        let snapshot = snapshot_with_relation_order(["alpha", "zeta"])?;
+        let mut snapshot = snapshot_with_relation_order(["alpha", "zeta"])?;
+        snapshot.functions.push(CatalogFunction {
+            schema: "security".to_owned(),
+            name: "secret_check".to_owned(),
+            identity_arguments: "numeric".to_owned(),
+            kind: CatalogFunctionKind::Function,
+            definition_hash: hash_expression(RAW_FUNCTION),
+            owner: "source_owner".to_owned(),
+            owner_authorization: None,
+            grants: Vec::new(),
+        });
+        snapshot.fingerprint.clear();
+        let snapshot = snapshot.finalize()?;
         let serialized = serde_json::to_string(&snapshot)?;
 
         assert!(!serialized.contains(RAW_CHECK));
         assert!(!serialized.contains(RAW_POLICY));
+        assert!(!serialized.contains(RAW_FUNCTION));
         assert!(serialized.contains(&hash_expression(RAW_CHECK)));
         assert!(serialized.contains(&hash_expression(RAW_POLICY)));
+        assert!(serialized.contains(&hash_expression(RAW_FUNCTION)));
         Ok(())
     }
 
@@ -933,6 +1444,9 @@ mod tests {
                 ],
                 settable_roles: vec!["postgresem_reader".to_owned()],
             },
+            role_graph_fingerprint: "sha256:role-graph".to_owned(),
+            object_privilege_fingerprint: "sha256:privileges".to_owned(),
+            functions: Vec::new(),
             relations,
             fingerprint: String::new(),
         }

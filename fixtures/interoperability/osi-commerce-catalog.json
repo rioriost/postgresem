@@ -8,8 +8,11 @@
     "superuser": false,
     "bypass_rls": false,
     "effective_roles": ["postgresem_introspector"],
-    "settable_roles": []
+    "settable_roles": ["postgresem_introspector"]
   },
+  "role_graph_fingerprint": "sha256:3081f4c8480ebc4a59eebb12660d5a19c221e449d7cb6aaef2f081bf8e41ffdb",
+  "object_privilege_fingerprint": "sha256:b886018ef415690067316b2f82163ff809a6e5a608b216a05c4f07a98dc09ec2",
+  "functions": [],
   "relations": [
     {
       "schema": "commerce",
@@ -143,5 +146,5 @@
       "policies": []
     }
   ],
-  "fingerprint": "sha256:92afb9c6255928e93dbd287a89cbb60398f0c57967ce57f5c550fbf1d54af085"
+  "fingerprint": "sha256:a00a7a8ea9bc0942f975f66cae3c3fcb669b42cd9eea45e32717b33f67df4778"
 }

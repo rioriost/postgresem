@@ -5,8 +5,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::catalog::{
-    CatalogColumn, CatalogConstraint, CatalogError, CatalogRelation, CatalogSnapshot,
-    RowLevelSecurityPolicy,
+    CatalogColumn, CatalogConstraint, CatalogError, CatalogFunction, CatalogRelation,
+    CatalogSnapshot, RowLevelSecurityPolicy,
 };
 
 const CATALOG_DIFF_SCHEMA_VERSION: &str = "1";
@@ -23,6 +23,7 @@ pub enum CatalogCompatibility {
 #[serde(rename_all = "snake_case")]
 pub enum CatalogObjectKind {
     Context,
+    Function,
     Relation,
     Column,
     Constraint,
@@ -124,7 +125,28 @@ pub fn diff_catalogs(
             &after.role_context,
         )?;
     }
+    if before.role_graph_fingerprint != after.role_graph_fingerprint {
+        push_modified(
+            &mut changes,
+            "/role_graph_fingerprint",
+            CatalogObjectKind::Context,
+            CatalogCompatibility::Breaking,
+            &before.role_graph_fingerprint,
+            &after.role_graph_fingerprint,
+        )?;
+    }
+    if before.object_privilege_fingerprint != after.object_privilege_fingerprint {
+        push_modified(
+            &mut changes,
+            "/object_privilege_fingerprint",
+            CatalogObjectKind::Context,
+            CatalogCompatibility::Breaking,
+            &before.object_privilege_fingerprint,
+            &after.object_privilege_fingerprint,
+        )?;
+    }
 
+    diff_functions(&before.functions, &after.functions, &mut changes)?;
     let before_relations = relation_map(&before.relations);
     let after_relations = relation_map(&after.relations);
     for key in before_relations.keys().chain(after_relations.keys()) {
@@ -150,6 +172,66 @@ pub fn diff_catalogs(
             )?,
             (None, None) => {}
         }
+    }
+
+    fn diff_functions(
+        before: &[CatalogFunction],
+        after: &[CatalogFunction],
+        changes: &mut Vec<CatalogChange>,
+    ) -> Result<(), CatalogDiffError> {
+        let left = function_map(before);
+        let right = function_map(after);
+        for key in left.keys().chain(right.keys()) {
+            let path = function_path(key);
+            match (left.get(key), right.get(key)) {
+                (Some(before), Some(after)) if *before != *after => push_modified(
+                    changes,
+                    &path,
+                    CatalogObjectKind::Function,
+                    CatalogCompatibility::Breaking,
+                    *before,
+                    *after,
+                )?,
+                (Some(before), None) => push_change(
+                    changes,
+                    path,
+                    CatalogObjectKind::Function,
+                    CatalogChangeKind::Removed,
+                    CatalogCompatibility::Breaking,
+                    Some(*before),
+                    None::<&CatalogFunction>,
+                )?,
+                (None, Some(after)) => push_change(
+                    changes,
+                    path,
+                    CatalogObjectKind::Function,
+                    CatalogChangeKind::Added,
+                    CatalogCompatibility::Breaking,
+                    None::<&CatalogFunction>,
+                    Some(*after),
+                )?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn function_map(
+        functions: &[CatalogFunction],
+    ) -> BTreeMap<(&str, &str, &str), &CatalogFunction> {
+        functions
+            .iter()
+            .map(|function| {
+                (
+                    (
+                        function.schema.as_str(),
+                        function.name.as_str(),
+                        function.identity_arguments.as_str(),
+                    ),
+                    function,
+                )
+            })
+            .collect()
     }
 
     changes.sort_by(|left, right| {
@@ -469,6 +551,15 @@ fn relation_path(relation: &CatalogRelation) -> String {
     )
 }
 
+fn function_path(key: &(&str, &str, &str)) -> String {
+    format!(
+        "/functions/{}/{}/{}",
+        path_segment(key.0),
+        path_segment(key.1),
+        path_segment(key.2)
+    )
+}
+
 fn path_segment(value: &str) -> String {
     value.replace('~', "~0").replace('/', "~1")
 }
@@ -512,9 +603,10 @@ const fn change_order(change: CatalogChangeKind) -> u8 {
 mod tests {
     use super::{CatalogCompatibility, CatalogDiffError, diff_catalogs};
     use crate::catalog::{
-        CatalogColumn, CatalogConstraint, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
-        CatalogView, ForeignKeyAction, ForeignKeyMatch, RelationGrantHints, RelationKind,
-        RelationReference, RowLevelSecurity,
+        CatalogColumn, CatalogConstraint, CatalogFunction, CatalogFunctionGrant,
+        CatalogFunctionKind, CatalogRelation, CatalogRoleContext, CatalogSnapshot, CatalogView,
+        ForeignKeyAction, ForeignKeyMatch, RelationGrantHints, RelationKind, RelationReference,
+        RowLevelSecurity,
     };
 
     #[test]
@@ -574,6 +666,8 @@ mod tests {
             .role_context
             .effective_roles
             .push("rls_policy_role".to_owned());
+        after.role_graph_fingerprint = "sha256:changed-role-graph".to_owned();
+        after.object_privilege_fingerprint = "sha256:changed-privileges".to_owned();
         after.relations[0].owner = "postgresem_introspector".to_owned();
         after.fingerprint.clear();
         let after = after.finalize().expect("valid target snapshot");
@@ -581,7 +675,7 @@ mod tests {
         let diff = diff_catalogs(&before, &after).expect("snapshots are comparable");
 
         assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
-        assert_eq!(diff.summary.breaking, 2);
+        assert_eq!(diff.summary.breaking, 4);
         assert!(
             diff.changes
                 .iter()
@@ -591,6 +685,16 @@ mod tests {
             diff.changes
                 .iter()
                 .any(|change| change.path.ends_with("/owner"))
+        );
+        assert!(
+            diff.changes
+                .iter()
+                .any(|change| change.path == "/object_privilege_fingerprint")
+        );
+        assert!(
+            diff.changes
+                .iter()
+                .any(|change| change.path == "/role_graph_fingerprint")
         );
     }
 
@@ -640,6 +744,7 @@ mod tests {
             definition_hash: "sha256:before".to_owned(),
             security_invoker: false,
             security_barrier: false,
+            owner_authorization: Some(role_context("postgresem_source_owner")),
         });
         let before = snapshot(before_relation).expect("valid source snapshot");
         let mut after = before.clone();
@@ -647,6 +752,7 @@ mod tests {
             definition_hash: "sha256:after".to_owned(),
             security_invoker: true,
             security_barrier: true,
+            owner_authorization: None,
         });
         after.fingerprint.clear();
         let after = after.finalize().expect("valid target snapshot");
@@ -656,6 +762,50 @@ mod tests {
         assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
         assert_eq!(diff.summary.breaking, 1);
         assert!(diff.changes[0].path.ends_with("/view"));
+    }
+
+    #[test]
+    fn classifies_view_owner_authorization_and_function_changes_as_breaking() {
+        let mut before_relation = relation();
+        before_relation.kind = RelationKind::View;
+        before_relation.view = Some(CatalogView {
+            definition_hash: "sha256:view".to_owned(),
+            security_invoker: false,
+            security_barrier: false,
+            owner_authorization: Some(role_context("postgresem_source_owner")),
+        });
+        let mut before = snapshot(before_relation).expect("valid source snapshot");
+        before.functions.push(function());
+        before.fingerprint.clear();
+        let before = before.finalize().expect("valid source snapshot");
+
+        let mut after = before.clone();
+        if let Some(owner) = after.relations[0]
+            .view
+            .as_mut()
+            .and_then(|view| view.owner_authorization.as_mut())
+        {
+            owner.bypass_rls = true;
+        }
+        after.functions[0].definition_hash = "sha256:changed".to_owned();
+        after.functions[0].grants[0].grantable = true;
+        after.fingerprint.clear();
+        let after = after.finalize().expect("valid target snapshot");
+
+        let diff = diff_catalogs(&before, &after).expect("snapshots are comparable");
+
+        assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
+        assert_eq!(diff.summary.breaking, 2);
+        assert!(
+            diff.changes
+                .iter()
+                .any(|change| change.path.ends_with("/view"))
+        );
+        assert!(
+            diff.changes
+                .iter()
+                .any(|change| change.path.starts_with("/functions/"))
+        );
     }
 
     #[test]
@@ -724,10 +874,40 @@ mod tests {
                 effective_roles: vec!["postgresem_introspector".to_owned()],
                 settable_roles: Vec::new(),
             },
+            role_graph_fingerprint: "sha256:role-graph".to_owned(),
+            object_privilege_fingerprint: "sha256:privileges".to_owned(),
+            functions: Vec::new(),
             relations: vec![relation],
             fingerprint: String::new(),
         }
         .finalize()
+    }
+
+    fn role_context(role: &str) -> CatalogRoleContext {
+        CatalogRoleContext {
+            inherit: true,
+            superuser: false,
+            bypass_rls: false,
+            effective_roles: vec![role.to_owned()],
+            settable_roles: vec![role.to_owned()],
+        }
+    }
+
+    fn function() -> CatalogFunction {
+        CatalogFunction {
+            schema: "security".to_owned(),
+            name: "allowed".to_owned(),
+            identity_arguments: "bigint".to_owned(),
+            kind: CatalogFunctionKind::Function,
+            definition_hash: "sha256:function".to_owned(),
+            owner: "postgresem_source_owner".to_owned(),
+            owner_authorization: Some(role_context("postgresem_source_owner")),
+            grants: vec![CatalogFunctionGrant {
+                grantor: "postgresem_source_owner".to_owned(),
+                grantee: "public".to_owned(),
+                grantable: false,
+            }],
+        }
     }
 
     fn relation() -> CatalogRelation {

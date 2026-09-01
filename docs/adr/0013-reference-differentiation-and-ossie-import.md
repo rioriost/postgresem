@@ -36,6 +36,23 @@ publication authority.
    also binds the scanning role's inheritance, superuser, `BYPASSRLS`,
    effective/settable role closure, and each relation owner so authorization
    drift cannot hide behind an unchanged role name.
+   Default security-definer views additionally bind the owner's authorization
+   attributes and role closure. Because PostgreSQL does not expose complete
+   dependency edges for every string-bodied SQL or PL/pgSQL function, snapshot
+   v2 conservatively fingerprints every non-system function, window function,
+   and aggregate definition, owner, normalized EXECUTE grants, and, for
+   `SECURITY DEFINER`, owner authorization. Function bodies remain hash-only
+   in serialized evidence. A normalized ACL fingerprint also covers the
+   current database plus non-system schemas, relations, sequences, and
+   routines so owner object privileges cannot change invisibly. Any such
+   executable or ACL change is breaking rather than risking an unchanged
+   policy, CHECK, or view fingerprint.
+   Aggregate evidence uses deparsed function, type, and operator identities
+   rather than database-local OIDs. The snapshot also fingerprints the
+   complete role attribute and direct-membership graph, including PostgreSQL
+   16+ `INHERIT` and `SET` membership options, so runtime and policy-role
+   authority changes are visible even when the scan uses a separate
+   introspector.
    Unique constraints include PostgreSQL `NULLS NOT DISTINCT` semantics so a
    conflict and data-integrity behavior change cannot retain the same
    fingerprint. Views bind a normalized definition hash plus

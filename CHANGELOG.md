@@ -8,8 +8,11 @@
 
 - Deterministic PostgreSQL catalog snapshot v2 and drift comparison with
   canonical fingerprint verification, fixed deparser search path,
-  role/database binding, role authorization state, relation ownership, and
-  compatible, review-required, and breaking classifications.
+  role/database binding, complete role-graph and security-definer view-owner
+  authorization state, relation ownership, normalized object ACL evidence,
+  OID-independent non-system function/window/aggregate definition and
+  EXECUTE-grant evidence, and compatible, review-required, and breaking
+  classifications.
 - One-way Apache Ossie `0.1.1` import into a reviewable query-only candidate,
   with PostgreSQL-authoritative type, nullability, key, relationship, and
   visibility checks.

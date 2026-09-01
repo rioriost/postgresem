@@ -1172,6 +1172,9 @@ semantic_model:
                 effective_roles: vec!["postgresem_introspector".to_owned()],
                 settable_roles: Vec::new(),
             },
+            role_graph_fingerprint: "sha256:role-graph".to_owned(),
+            object_privilege_fingerprint: "sha256:privileges".to_owned(),
+            functions: Vec::new(),
             relations: vec![CatalogRelation {
                 schema: "commerce".to_owned(),
                 name: "orders".to_owned(),
