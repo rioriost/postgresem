@@ -296,9 +296,9 @@ fn validate_writable_model(
     for field in &writable.fields {
         if !names.insert(&field.field)
             || field.field.trim().is_empty()
-            || !model_fields
+            || model_fields
                 .get(field.field.as_str())
-                .is_some_and(|model_field| model_field.relationship.is_none())
+                .is_none_or(|model_field| model_field.relationship.is_some())
         {
             return Err(MutationCompileError::InvalidWritableModel);
         }
@@ -306,9 +306,9 @@ fn validate_writable_model(
     let mut returning = BTreeSet::new();
     for field in &writable.returning {
         if !returning.insert(field)
-            || !model_fields
+            || model_fields
                 .get(field.as_str())
-                .is_some_and(|model_field| model_field.relationship.is_none())
+                .is_none_or(|model_field| model_field.relationship.is_some())
         {
             return Err(MutationCompileError::InvalidWritableModel);
         }

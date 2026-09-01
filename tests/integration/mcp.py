@@ -687,4 +687,11 @@ $$;
     % principal_hash
 )
 
+psql(
+    """
+DELETE FROM commerce.orders WHERE external_id = 'mcp-order-1';
+TRUNCATE semantic.mutation_audit, semantic.mutation_idempotency;
+"""
+)
+
 print("MCP stdio integration checks passed")
