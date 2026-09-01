@@ -1,5 +1,7 @@
 # PostgreSQL Semantic Gateway
 
+[日本語](README-jp.md)
+
 `postgresem` is a PostgreSQL-native semantic gateway for AI agents and
 applications. It accepts strict, versioned Logical Semantic Queries (LSQ),
 resolves them against an immutable published semantic revision, and executes
@@ -8,6 +10,57 @@ boundary.
 
 The latest published release is **0.3.0-beta.1**. It is suitable for local
 evaluation and governed read-only pilots, not production deployment.
+
+## What problem does postgresem solve?
+
+A PostgreSQL database already knows a great deal about its data: schemas,
+tables, columns, types, keys, foreign keys, constraints, comments, privileges,
+and row-level security policies. What it usually does not express completely
+is the business meaning of that structure. An application or AI agent still
+needs to know which table represents an order, which timestamp defines revenue
+recognition, which joins are safe, which metric definition is approved, and
+which fields a particular user is allowed to discover or query.
+
+Without a governed semantic layer, those answers tend to be duplicated across
+application code, BI tools, prompts, documentation, and YAML files. The copies
+drift independently from the database and from one another. An AI agent that
+sees only physical schema metadata may produce syntactically valid SQL that
+uses the wrong grain, creates join fan-out, applies an inconsistent metric
+definition, or bypasses the intended access path.
+
+`postgresem` keeps the missing semantic contract in PostgreSQL alongside the
+data. It combines database-native evidence such as `pg_catalog`, `COMMENT`,
+PK/UNIQUE/FK, `CHECK`, GRANT, and RLS with explicitly reviewed models, fields,
+relationships, metrics, terms, and policy bindings. These definitions are
+published as immutable revisions. Agents query the approved semantic names
+through LSQ instead of submitting raw SQL, and the deterministic compiler
+either produces a bounded parameterized `SELECT` or rejects an ambiguous or
+unsupported request.
+
+Keeping this contract in PostgreSQL provides several practical benefits:
+
+- **One governed source of truth:** physical metadata, business semantics,
+  permissions, and revision history live under the same database operational
+  boundary instead of being synchronized across a separate metadata service.
+- **Security remains authoritative in the database:** PostgreSQL GRANT and RLS
+  still enforce access at execution time. The semantic layer can narrow what
+  is visible or queryable, but it cannot grant access the database denies.
+- **Meaning changes with the data model:** semantic migrations, publication,
+  backup, restore, and drift checks can be coordinated with the schema they
+  describe.
+- **Safer AI access:** agents discover approved concepts and construct typed
+  LSQs; they do not receive an unrestricted SQL execution interface or need to
+  infer business meaning from table and column names alone.
+- **Lineage and audit by construction:** each result is tied to the semantic
+  revision, metrics, relationships, source columns, policy context, compiler
+  version, and SQL hash used to produce it.
+- **Less infrastructure for PostgreSQL-centered systems:** the core contract
+  requires no external catalog, vector database, or policy engine. PostgreSQL
+  remains the durable system of record for both data and its governed meaning.
+
+This approach is intentionally PostgreSQL-specific. It favors deep integration
+with PostgreSQL types, catalog metadata, roles, RLS, transactions, and backup
+procedures over a broad abstraction across many database dialects.
 
 ## Start here
 
