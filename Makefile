@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -47,6 +47,9 @@ test-install:
 
 test-web-demo:
 	python3 examples/web_demo/test_server.py
+
+test-reference-comparison:
+	tests/reference-comparison/run.sh
 
 test-db:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
@@ -168,6 +171,6 @@ test-recovery:
 	echo "recovery integration test timed out" >&2; \
 	exit 1
 
-preview-check: fmt check test test-db test-execution test-mcp test-mutation test-performance
+preview-check: fmt check test test-reference-comparison test-db test-execution test-mcp test-mutation test-performance
 
 beta-check: preview-check test-install test-web-demo test-recovery

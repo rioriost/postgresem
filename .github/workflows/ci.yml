@@ -50,6 +50,9 @@ jobs:
       - name: Run Web demo tests
         run: make test-web-demo
 
+      - name: Run reference comparison fixtures
+        run: make test-reference-comparison
+
       - name: Parse JSON schemas
         run: |
           python3 - <<'PY'

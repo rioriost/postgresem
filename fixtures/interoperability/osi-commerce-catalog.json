@@ -1,0 +1,129 @@
+{
+  "schema_version": "1",
+  "server_version_num": 180000,
+  "current_database": "app",
+  "current_role": "postgresem_introspector",
+  "relations": [
+    {
+      "schema": "commerce",
+      "name": "customers",
+      "kind": "table",
+      "comment": "Customers",
+      "grants": {
+        "schema_usage": true,
+        "table_select": true,
+        "any_column_select": true
+      },
+      "rls": {
+        "enabled": false,
+        "forced": false
+      },
+      "columns": [
+        {
+          "name": "customer_id",
+          "ordinal": 1,
+          "data_type": "bigint",
+          "nullable": false,
+          "comment": null,
+          "select_grant": true
+        },
+        {
+          "name": "region",
+          "ordinal": 2,
+          "data_type": "text",
+          "nullable": false,
+          "comment": null,
+          "select_grant": true
+        }
+      ],
+      "constraints": [
+        {
+          "kind": "primary_key",
+          "name": "customers_pkey",
+          "columns": ["customer_id"],
+          "deferrable": false,
+          "initially_deferred": false,
+          "validated": true
+        }
+      ],
+      "policies": []
+    },
+    {
+      "schema": "commerce",
+      "name": "orders",
+      "kind": "table",
+      "comment": "Orders",
+      "grants": {
+        "schema_usage": true,
+        "table_select": true,
+        "any_column_select": true
+      },
+      "rls": {
+        "enabled": false,
+        "forced": false
+      },
+      "columns": [
+        {
+          "name": "order_id",
+          "ordinal": 1,
+          "data_type": "bigint",
+          "nullable": false,
+          "comment": null,
+          "select_grant": true
+        },
+        {
+          "name": "customer_id",
+          "ordinal": 2,
+          "data_type": "bigint",
+          "nullable": false,
+          "comment": null,
+          "select_grant": true
+        },
+        {
+          "name": "ordered_at",
+          "ordinal": 3,
+          "data_type": "timestamp with time zone",
+          "nullable": false,
+          "comment": null,
+          "select_grant": true
+        },
+        {
+          "name": "amount",
+          "ordinal": 4,
+          "data_type": "numeric(12,2)",
+          "nullable": false,
+          "comment": null,
+          "select_grant": true
+        }
+      ],
+      "constraints": [
+        {
+          "kind": "primary_key",
+          "name": "orders_pkey",
+          "columns": ["order_id"],
+          "deferrable": false,
+          "initially_deferred": false,
+          "validated": true
+        },
+        {
+          "kind": "foreign_key",
+          "name": "orders_customer_id_fkey",
+          "columns": ["customer_id"],
+          "referenced_relation": {
+            "schema": "commerce",
+            "name": "customers"
+          },
+          "referenced_columns": ["customer_id"],
+          "match_type": "simple",
+          "on_update": "no_action",
+          "on_delete": "no_action",
+          "deferrable": false,
+          "initially_deferred": false,
+          "validated": true
+        }
+      ],
+      "policies": []
+    }
+  ],
+  "fingerprint": "sha256:59a32fcd31f195253d504e4e7c0ba2a709e70a1cc00fe60adcf586afcebaad62"
+}

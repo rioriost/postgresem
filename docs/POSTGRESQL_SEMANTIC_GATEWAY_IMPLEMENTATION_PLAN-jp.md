@@ -882,6 +882,11 @@ Linux amd64/arm64 artifactが両方で必須smoke/contract suiteを実行でき�
 
 ### M7: 0.5 — Reference比較とinteroperability
 
+**実装status:** `0.4.0`後の作業として進行中。2026-09-01時点の比較、fail-closedな
+catalog drift gate、Apache Ossie `0.1.1`からreview用candidateを生成する一方向importを
+current sourceへ実装済み。`0.5`へpromotionする前に、external reference runtimeでの
+実行evidenceとuser-value evidenceが残る。
+
 - 共通PostgreSQL dataset/taskを使い、現行Wren AI、Cube、Malloy、MetricFlow releaseとの
   比較を再実行して文書化する。
 - authoring、discovery、query semantics、mutation、API/SDK、lineage、governance、

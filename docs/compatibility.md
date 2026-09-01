@@ -151,6 +151,27 @@ compatibility.
 project's current published snapshot, not a full database backup or uninstall
 bundle. See [ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall.md).
 
+M7 adds a one-way Apache Ossie `0.1.1` candidate importer:
+
+```sh
+postgresem model import osi \
+  --from semantic-model.yaml \
+  --catalog catalog-snapshot.json
+```
+
+The importer requires fingerprinted catalog evidence, accepts only direct
+single-column ANSI field expressions and supported single-field aggregate
+metrics, and cross-checks PostgreSQL types, nullability, primary keys, foreign
+keys, relation visibility, and database identity. It emits a reviewable
+snapshot and warnings; it does not write or publish Semantic Schema rows and
+never creates a writable model. Verified relationship fields are projected as
+`<relationship>_<field>` names. The mutable Ossie `0.2.0.dev0` draft, custom
+extensions, computed or multi-dialect expressions, unique-key semantics,
+cross-dataset metrics, composite primary keys, and composite relationships are
+rejected. Time-dimension roles require PostgreSQL `date` or
+timestamp-without-time-zone evidence; the importer does not invent a timezone
+for timestamp-with-time-zone fields.
+
 ## PostgreSQL support
 
 | PostgreSQL | Preview status | Evidence/boundary |

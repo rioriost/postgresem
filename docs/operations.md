@@ -265,6 +265,28 @@ type, grant, constraint, RLS, or policy drift is breaking. Review the JSON
 evidence before building a semantic candidate; the command does not modify or
 publish Semantic Schema rows.
 
+## Apache Ossie candidate import
+
+Import the supported Apache Ossie `0.1.1` subset only after capturing catalog
+evidence with the intended introspection role:
+
+```sh
+postgresem model import osi \
+  --from semantic-model.yaml \
+  --catalog catalog-snapshot.json > import-report.json
+```
+
+Use `--snapshot-only` to emit the candidate `SemanticSnapshot` directly. The
+importer validates the catalog fingerprint and cross-checks database identity,
+relation/column visibility, PostgreSQL types and nullability, a single-column
+primary key, and single-column foreign keys. It accepts only direct
+single-column field expressions and a closed set of single-field aggregate
+metrics. Unsupported or lossy semantics fail instead of being approximated.
+
+The result is not a publication operation. Review warnings, run `model diff`,
+and use the controlled revision workflow above. Imported models are query-only;
+writable projections must be authored and reviewed separately.
+
 ## Upgrade order
 
 Forward migrations `0001` through `0005`, idempotent reruns, N-1 execution, and

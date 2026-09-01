@@ -95,6 +95,7 @@ for the M6–M12 gates.
 - [Operations guide](docs/operations.md)
 - [Error reference](docs/error-reference.md)
 - [Compatibility policy and support matrix](docs/compatibility.md)
+- [M7 reference comparison](docs/reference-comparison/2026-09-01.md)
 - [Performance baseline and reproduction](docs/performance.md)
 - [Developer-preview exit checklist](docs/developer-preview-checklist.md)
 - [M5 beta checklist](docs/beta-checklist.md)

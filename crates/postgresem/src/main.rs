@@ -16,6 +16,7 @@ mod executor;
 mod hash;
 mod mcp;
 mod mutation_executor;
+mod osi;
 mod published_model;
 mod report;
 
@@ -149,6 +150,24 @@ enum ModelCommands {
         project: String,
         #[arg(long, default_value = "DATABASE_URL", value_name = "NAME")]
         database_url_env: String,
+    },
+    Import {
+        #[command(subcommand)]
+        command: ModelImportCommands,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ModelImportCommands {
+    Osi {
+        #[arg(long, value_name = "PATH")]
+        from: PathBuf,
+        #[arg(long)]
+        catalog: PathBuf,
+        #[arg(long)]
+        semantic_model: Option<String>,
+        #[arg(long)]
+        snapshot_only: bool,
     },
 }
 
@@ -299,6 +318,18 @@ fn run() -> Result<(), Box<dyn Error>> {
                     database_url_env,
                 },
         } => export_model(&database_url_env, &project),
+        Commands::Model {
+            command:
+                ModelCommands::Import {
+                    command:
+                        ModelImportCommands::Osi {
+                            from,
+                            catalog,
+                            semantic_model,
+                            snapshot_only,
+                        },
+                },
+        } => import_osi(&from, &catalog, semantic_model.as_deref(), snapshot_only),
         Commands::Mutation {
             command: MutationCommands::Validate { path, snapshot },
         } => validate_mutation(&path, &snapshot),
@@ -543,6 +574,22 @@ fn export_model(database_url_env: &str, project: &str) -> Result<(), Box<dyn Err
     Ok(())
 }
 
+fn import_osi(
+    from: &PathBuf,
+    catalog_path: &PathBuf,
+    semantic_model: Option<&str>,
+    snapshot_only: bool,
+) -> Result<(), Box<dyn Error>> {
+    let catalog: catalog::CatalogSnapshot = serde_json::from_slice(&fs::read(catalog_path)?)?;
+    let report = osi::import(&fs::read(from)?, &catalog, semantic_model)?;
+    if snapshot_only {
+        println!("{}", serde_json::to_string_pretty(&report.snapshot)?);
+    } else {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    }
+    Ok(())
+}
+
 fn scan_catalog(database_url_env: &str) -> Result<(), Box<dyn Error>> {
     let snapshot = catalog::scan_from_env(database_url_env)?;
     println!("{}", serde_json::to_string_pretty(&snapshot)?);
@@ -635,7 +682,7 @@ mod tests {
 
     use super::{
         BenchmarkCommands, CatalogCommands, Cli, Commands, McpCommands, ModelCommands,
-        MutationCommands, QueryCommands,
+        ModelImportCommands, MutationCommands, QueryCommands,
     };
 
     #[test]
@@ -767,6 +814,50 @@ mod tests {
                 "--project",
                 "commerce",
                 "postgresql://localhost/app",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn model_import_osi_requires_catalog_evidence() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "model",
+                "import",
+                "osi",
+                "--from",
+                "model.yaml",
+                "--catalog",
+                "catalog.json",
+                "--semantic-model",
+                "commerce",
+                "--snapshot-only",
+            ]),
+            Ok(Cli {
+                command: Commands::Model {
+                    command: ModelCommands::Import {
+                        command: ModelImportCommands::Osi {
+                            from,
+                            catalog,
+                            semantic_model: Some(semantic_model),
+                            snapshot_only: true,
+                        }
+                    }
+                }
+            }) if from.to_str() == Some("model.yaml")
+                && catalog.to_str() == Some("catalog.json")
+                && semantic_model == "commerce"
+        ));
+        assert!(
+            Cli::try_parse_from([
+                "postgresem",
+                "model",
+                "import",
+                "osi",
+                "--from",
+                "model.yaml",
             ])
             .is_err()
         );

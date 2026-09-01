@@ -911,6 +911,11 @@ required smoke/contract suites.
 
 ### M7: 0.5 — Reference Comparison and Interoperability
 
+**Implementation status:** in progress after `0.4.0`. The 2026-09-01
+comparison, fail-closed catalog drift gate, and one-way Apache Ossie `0.1.1`
+candidate importer are implemented in the current source. External reference
+runtime execution and user-value evidence remain before promotion to `0.5`.
+
 - Re-run a documented comparison against current Wren AI, Cube, Malloy, and
   MetricFlow releases using common PostgreSQL datasets and tasks.
 - Publish a capability/gap matrix covering authoring, discovery, query

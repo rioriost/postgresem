@@ -90,6 +90,7 @@ M6〜M12のgateは
 - [運用ガイド](docs/operations.md)
 - [エラーリファレンス](docs/error-reference.md)
 - [互換性policyとsupport matrix](docs/compatibility.md)
+- [M7 reference比較](docs/reference-comparison/2026-09-01.md)
 - [Performance baselineと再現手順](docs/performance.md)
 - [Developer preview exit checklist](docs/developer-preview-checklist.md)
 - [M5 beta checklist](docs/beta-checklist.md)
