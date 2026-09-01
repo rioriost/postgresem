@@ -40,3 +40,7 @@ For field evaluation, record:
 - P0/P1 security and correctness defects.
 
 Do not infer adoption from fixture, maintainer, CI, or automated demo traffic.
+
+Follow the [M5 external evidence process](m5-external-evidence.md) for the
+required weekly checkpoints, redaction rules, 28-day acceptance criteria, and
+one-public-record-per-database submission workflow.

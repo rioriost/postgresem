@@ -55,3 +55,6 @@ Record reviewer identity/organization, scope, commit/tag, dates, findings,
 severity, remediation commits, retest evidence, and accepted residual risk.
 Never publish exploit details before coordinated remediation.
 
+Follow the [M5 external evidence process](m5-external-evidence.md). Report
+suspected vulnerabilities privately through [SECURITY.md](../SECURITY.md);
+use the public evidence form only after coordinated remediation.

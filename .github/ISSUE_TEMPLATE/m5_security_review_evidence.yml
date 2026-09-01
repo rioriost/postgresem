@@ -1,0 +1,88 @@
+name: M5 independent security review evidence
+description: Record a redacted summary after an independent review and coordinated remediation
+title: "[M5 security review]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form only after an independent security review has completed
+        and findings have been privately triaged. Do not publish exploit
+        details or unresolved vulnerabilities here.
+
+        New or unresolved vulnerabilities must be reported privately through
+        the repository security policy.
+
+  - type: input
+    id: reviewer
+    attributes:
+      label: Reviewer identity and organization
+      description: Identify the independent reviewer or reviewing organization and disclose relevant project relationships.
+    validations:
+      required: true
+
+  - type: input
+    id: scope
+    attributes:
+      label: Reviewed commit or release
+      description: Use an immutable Git commit SHA, signed release tag, or image digest.
+      placeholder: v0.3.0-beta.1 / commit SHA / sha256 image digest
+    validations:
+      required: true
+
+  - type: input
+    id: dates
+    attributes:
+      label: Review and retest dates
+      placeholder: Review 2026-09-01 through 2026-09-05; retest 2026-09-10
+    validations:
+      required: true
+
+  - type: textarea
+    id: coverage
+    attributes:
+      label: Scope and methodology
+      description: Summarize reviewed trust boundaries, code and configuration, test methods, exclusions, and environment without exploit details.
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: Redacted findings summary
+      description: Give counts by severity and affected areas. Do not include reproduction steps for unresolved vulnerabilities.
+      placeholder: |
+        P0/critical:
+        P1/high:
+        Medium:
+        Low:
+        Informational:
+    validations:
+      required: true
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Remediation and retest evidence
+      description: Link remediation commits, releases, advisories, and reviewer retest statements that are safe to disclose.
+    validations:
+      required: true
+
+  - type: textarea
+    id: residual
+    attributes:
+      label: Residual risk and exclusions
+      description: Record accepted residual risks, unreviewed components, and assumptions.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: attestations
+    attributes:
+      label: Review attestations
+      options:
+        - label: The reviewer was independent from implementation of the reviewed changes.
+          required: true
+        - label: All P0/P1 findings are resolved and were retested, or the review found no P0/P1 issues.
+          required: true
+        - label: This public summary contains no credentials, private metadata, customer data, or unresolved exploit details.
+          required: true

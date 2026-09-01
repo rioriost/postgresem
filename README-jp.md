@@ -69,6 +69,7 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 - [Performance baselineと再現手順](docs/performance.md)
 - [Developer preview exit checklist](docs/developer-preview-checklist.md)
 - [M5 beta checklist](docs/beta-checklist.md)
+- [M5 external evidence収集手順](docs/m5-external-evidence.md)
 - [Backupとrestore](docs/backup-restore.md)
 - [SLOとadoption reporting](docs/slo-and-adoption.md)
 - [Incident runbook](docs/incident-runbook.md)

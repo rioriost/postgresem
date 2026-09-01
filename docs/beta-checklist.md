@@ -13,6 +13,7 @@ that must come from independent environments.
 | incident runbook | documented | [incident runbook](incident-runbook.md) |
 | release signing verification | implemented and exercised | [`v0.3.0-beta.1`](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1) checksum and image signatures verified against the release workflow identity |
 | security review preparation | documented | [security review checklist](security-review-checklist.md) |
+| external evidence collection workflow | implemented | [M5 external evidence process](m5-external-evidence.md) and structured field/security review issue forms |
 | MCP Streamable HTTP | deferred | authentication and request identity are prerequisites |
 | loopback commerce Web demo | implemented | [Web demo](../examples/web_demo/README.md); existing stdio MCP path |
 | independent security review | **outstanding** | cannot be self-certified |

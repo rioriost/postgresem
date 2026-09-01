@@ -1,0 +1,119 @@
+name: M5 field evidence
+description: Submit redacted evidence from one non-fixture PostgreSQL deployment operated for at least 28 days
+title: "[M5 field evidence]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        M5 requires evidence from at least two non-fixture PostgreSQL databases,
+        each operated with postgresem for at least 28 days.
+
+        Submit one issue per database. A maintainer, fixture, CI, or automated
+        demo run does not satisfy this gate.
+
+        **Do not submit credentials, connection strings, private database,
+        schema, model, table, column, principal, or customer names, SQL or LSQ
+        text, query results, logs, or source data. Use stable pseudonyms and
+        aggregate values only. Report vulnerabilities privately through the
+        repository security policy.**
+
+  - type: input
+    id: deployment
+    attributes:
+      label: Stable deployment pseudonym
+      description: A non-sensitive identifier that distinguishes this database from other submissions.
+      placeholder: retail-analytics-a
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Redacted environment
+      description: PostgreSQL version, postgresem version or commit, operating environment, and installation method.
+      placeholder: PostgreSQL 17, postgresem v0.3.0-beta.1, Linux arm64, signed release archive
+    validations:
+      required: true
+
+  - type: textarea
+    id: database
+    attributes:
+      label: Non-fixture database profile
+      description: Describe approximate scale and relevant features without private names or data.
+      placeholder: |
+        Approximate relations/columns:
+        Approximate semantic models/metrics:
+        RLS used (yes/no and generic description):
+        Why this is a real non-fixture database:
+    validations:
+      required: true
+
+  - type: input
+    id: period
+    attributes:
+      label: Continuous operating period
+      description: Give UTC start and end dates. The interval must be at least 28 days.
+      placeholder: 2026-09-01 through 2026-09-29
+    validations:
+      required: true
+
+  - type: textarea
+    id: weekly
+    attributes:
+      label: Weekly checkpoints
+      description: Summarize at least four checkpoints, including successful audited use and aggregate report state.
+      placeholder: |
+        Week 1 — usage summary; audit_complete; compiler objective:
+        Week 2 — usage summary; audit_complete; compiler objective:
+        Week 3 — usage summary; audit_complete; compiler objective:
+        Week 4 — usage summary; audit_complete; compiler objective:
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcomes
+    attributes:
+      label: Correctness, rejection, and operational outcomes
+      description: Provide redacted aggregate success, explicit rejection, timeout, truncation, and incomplete-audit observations plus how correctness was independently checked.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: defects
+    attributes:
+      label: P0/P1 security or correctness defects during the period
+      options:
+        - None observed
+        - One or more observed and privately reported
+    validations:
+      required: true
+
+  - type: textarea
+    id: incidents
+    attributes:
+      label: Incident disposition
+      description: State whether any incidents or unresolved audit gaps occurred. Reference public remediation only after coordinated disclosure; include no exploit details.
+    validations:
+      required: true
+
+  - type: textarea
+    id: value
+    attributes:
+      label: User-confirmed value
+      description: Describe repeated use, time saved, correctness improvement, and whether the operator would continue the pilot.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: attestations
+    attributes:
+      label: Evidence attestations
+      options:
+        - label: This submission describes a non-fixture database and at least 28 continuous days of operation.
+          required: true
+        - label: The evidence is based on real operator/user activity, not maintainer, CI, fixture, or automated demo traffic alone.
+          required: true
+        - label: I removed secrets, private metadata, SQL/LSQ text, logs, query results, and source data.
+          required: true
+        - label: Any suspected vulnerability was reported privately before this public submission.
+          required: true
