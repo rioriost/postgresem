@@ -27,6 +27,7 @@ jobs:
         engine:
           - wren
           - cube
+          - malloy
           - metricflow
     services:
       postgres:
@@ -59,6 +60,14 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: false
+
+      - name: Install Node.js
+        if: matrix.engine == 'malloy'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: tests/reference-comparison/runtime/malloy/project/package-lock.json
 
       - name: Initialize common PostgreSQL dataset
         shell: bash

@@ -1,0 +1,9 @@
+{
+  "name": "postgresem-malloy-reference",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@malloydata/db-postgres": "0.0.432",
+    "@malloydata/malloy": "0.0.432"
+  }
+}
