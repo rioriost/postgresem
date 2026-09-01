@@ -119,8 +119,9 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 
 ## Previewの制限事項
 
-- PostgreSQL connectionは`NoTls`です。ローカルまたは別途保護されたconnectionだけで
-  使用してください。
+- PostgreSQL connectionには明示的な`sslmode`が必要です。remote connectionでは
+  `sslmode=require`を使用してください。`sslmode=disable`は、ローカルまたは別途
+  保護されたconnectionとして明示的に選択した場合だけ受け入れます。
 - MCPはstdio専用です。HTTP listenerやremote authentication layerはありません。
 - MCPのconcurrent cancellationは未実装です。PostgreSQL statement timeoutが現在の
   cancellation境界です。
@@ -136,8 +137,9 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 
 tagをtriggerとするautomationは、4種類のnative archiveをbuildし、`SHA256SUMS`を生成
 して、image SBOMおよびprovenance付きのmulti-architecture GHCR imageを公開します。
-[`scripts/install.sh`](scripts/install.sh)は対応するarchiveをdownloadし、install前に
-SHA-256 checksumを検証します。
+[`scripts/install.sh`](scripts/install.sh)はCosignを必須とし、署名済み
+`SHA256SUMS`を正確なrelease workflow/tag identityに対して認証してから、対応する
+archiveのchecksumを検証します。
 
 [`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1)
 には、amd64およびarm64向けのLinux/macOS archive、`SHA256SUMS`、Sigstore signature、

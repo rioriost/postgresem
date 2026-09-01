@@ -60,8 +60,8 @@ services:
       seed:
         condition: service_completed_successfully
     environment:
-      MCP_RUNTIME_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_runtime"
-      MCP_AUDIT_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_audit_writer"
+      MCP_RUNTIME_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_runtime sslmode=disable"
+      MCP_AUDIT_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_audit_writer sslmode=disable"
       POSTGRESEM_RUNTIME_PASSWORD: ${POSTGRESEM_RUNTIME_PASSWORD}
       POSTGRESEM_AUDIT_WRITER_PASSWORD: ${POSTGRESEM_AUDIT_WRITER_PASSWORD}
       POSTGRESEM_DB_ROLE: postgresem_analyst

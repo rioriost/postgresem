@@ -138,8 +138,11 @@ selection through `.env` is therefore neither supported nor documented.
 `compose.ci.yaml` is a Docker Compose overlay selected by CI through
 `COMPOSE_FILE`; it is not an Apple Container version-selection mechanism.
 
-All current Rust PostgreSQL connections use `NoTls`; even a supported server
-version must be local or reached through an independently protected channel.
+Rust PostgreSQL connections require an explicit `sslmode`. `sslmode=require`
+uses the platform-native TLS implementation and validates the server
+certificate and hostname. `sslmode=disable` is retained for the loopback and
+compose-local development paths. Omitted `sslmode` and downgrade-capable
+`sslmode=prefer` are rejected.
 
 ## Artifact, release, and runtime matrix
 
@@ -151,7 +154,7 @@ version must be local or reached through an independently protected channel.
 | Docker/Docker Compose | doctor can detect it, but the Make targets invoke `container-compose`; not the documented M4 path |
 | native binary archives | `v0.3.0-beta.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
-| `scripts/install.sh` | supports macOS/Linux amd64/arm64, verifies `SHA256SUMS`, and was exercised against the published `v0.3.0-beta.1` macOS arm64 archive |
+| `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`, and was exercised against the published `v0.3.0-beta.1` macOS arm64 archive |
 | versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.3.0-beta.1` |
 | multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:b2f67b4a8da954b129b93a47641a55810ce36772d3efc6960a39bdaaad7a282d` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
@@ -167,11 +170,9 @@ creates a GitHub release.
 completed successfully and published the
 [`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1).
 
-The installer uses HTTPS and verifies SHA-256 equality, and also rejects unsafe
-archive paths and link entry types. `v0.3.0-beta.1` publishes a signed checksum;
-publisher authentication requires the workflow identity checks in
-[release verification](release-verification.md), because the installer itself
-does not invoke Cosign.
+The installer uses HTTPS, requires Cosign, verifies the signed checksum against
+the exact repository release workflow and tag identity, verifies SHA-256
+equality, and rejects unsafe archive paths and link entry types.
 
 The local `gateway:latest` image is built from the current checkout. `latest`
 is not a stable release identifier and must not be treated as a signed
@@ -181,7 +182,8 @@ supply-chain artifact.
 
 - developer preview, not production-ready;
 - stdio MCP only; no HTTP, remote authentication, or TLS termination;
-- PostgreSQL client uses `NoTls`;
+- remote PostgreSQL TLS requires a platform-trusted certificate and hostname;
+  custom trust roots and client certificates are not yet configurable;
 - no concurrent MCP cancellation;
 - no connection pool or remote multi-user service;
 - snapshot is reloaded per operation;

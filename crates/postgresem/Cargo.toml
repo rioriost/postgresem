@@ -9,7 +9,9 @@ repository.workspace = true
 [dependencies]
 clap.workspace = true
 fallible-iterator.workspace = true
+native-tls.workspace = true
 postgres.workspace = true
+postgres-native-tls.workspace = true
 postgresem-compiler = { path = "../postgresem-compiler" }
 serde.workspace = true
 serde_json.workspace = true

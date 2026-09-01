@@ -5,7 +5,7 @@ use std::{
 };
 
 use fallible_iterator::FallibleIterator;
-use postgres::{Client, Config, IsolationLevel, NoTls, Transaction, error::SqlState, types::ToSql};
+use postgres::{Client, IsolationLevel, Transaction, error::SqlState, types::ToSql};
 use postgresem_compiler::{
     COMPILER_SEMANTIC_VERSION, CompiledParameter, CompiledQuery, CompilerOptions, DataType,
     Lineage, Literal, NormalizedLsq, OutputColumn, SemanticSnapshot, compile_lsq, normalize_lsq,
@@ -15,7 +15,10 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::published_model::{self, PublishedModel};
+use crate::{
+    database,
+    published_model::{self, PublishedModel},
+};
 
 const DEFAULT_MAX_RESULT_BYTES: usize = 1_048_576;
 const DEFAULT_STATEMENT_TIMEOUT_MS: u64 = 30_000;
@@ -342,8 +345,12 @@ fn execute_compiled(
         .start()
         .map_err(ExecuteError::StartSourceTransaction)?;
 
-    verify_role(&mut transaction, &config.database_role)?;
+    fix_search_path(&mut transaction)?;
+    let is_role_member = verify_role(&mut transaction, &config.database_role)?;
     verify_relation_ownership(&mut transaction, snapshot, compiled, &config.database_role)?;
+    if !is_role_member {
+        return Err(ExecuteError::DatabaseRoleMembership);
+    }
     apply_transaction_configuration(&mut transaction, config)?;
 
     let sql = result_wrapper_sql(compiled);
@@ -396,7 +403,10 @@ fn execute_compiled(
     })
 }
 
-fn verify_role(transaction: &mut Transaction<'_>, database_role: &str) -> Result<(), ExecuteError> {
+fn verify_role(
+    transaction: &mut Transaction<'_>,
+    database_role: &str,
+) -> Result<bool, ExecuteError> {
     let row = transaction
         .query_opt(
             r"
@@ -414,10 +424,7 @@ fn verify_role(transaction: &mut Transaction<'_>, database_role: &str) -> Result
     if row.get::<_, bool>("rolsuper") || row.get::<_, bool>("rolbypassrls") {
         return Err(ExecuteError::UnsafeDatabaseRole);
     }
-    if !row.get::<_, bool>("is_member") {
-        return Err(ExecuteError::DatabaseRoleMembership);
-    }
-    Ok(())
+    Ok(row.get("is_member"))
 }
 
 fn verify_relation_ownership(
@@ -481,11 +488,24 @@ fn apply_transaction_configuration(
     ] {
         let milliseconds = format!("{}ms", value.as_millis());
         transaction
-            .query_one("SELECT set_config($1, $2, true)", &[&name, &milliseconds])
+            .query_one(
+                "SELECT pg_catalog.set_config($1, $2, true)",
+                &[&name, &milliseconds],
+            )
             .map_err(ExecuteError::TransactionConfiguration)?;
     }
     transaction
-        .query_one("SELECT set_config('TimeZone', 'UTC', true)", &[])
+        .query_one("SELECT pg_catalog.set_config('TimeZone', 'UTC', true)", &[])
+        .map_err(ExecuteError::TransactionConfiguration)?;
+    Ok(())
+}
+
+fn fix_search_path(transaction: &mut Transaction<'_>) -> Result<(), ExecuteError> {
+    transaction
+        .query_one(
+            "SELECT pg_catalog.set_config('search_path', 'pg_catalog', true)",
+            &[],
+        )
         .map_err(ExecuteError::TransactionConfiguration)?;
     Ok(())
 }
@@ -654,16 +674,7 @@ fn connect(
     password: Option<&str>,
     error: impl Fn() -> ExecuteError,
 ) -> Result<Client, ExecuteError> {
-    let config = connection_config(conninfo, password).map_err(|_| error())?;
-    config.connect(NoTls).map_err(|_| error())
-}
-
-fn connection_config(conninfo: &str, password: Option<&str>) -> Result<Config, postgres::Error> {
-    let mut config = conninfo.parse::<Config>()?;
-    if let Some(password) = password {
-        config.password(password);
-    }
-    Ok(config)
+    database::connect(conninfo, password).map_err(|_| error())
 }
 
 fn positive_integer_environment<T>(variable: &'static str, default: T) -> Result<T, ExecuteError>
@@ -709,10 +720,11 @@ fn hash(value: &str) -> String {
 mod tests {
     use postgresem_compiler::{CompiledQuery, DataType, Lineage, OutputColumn};
 
+    use crate::database::connection_config;
+
     use super::{
-        ExecuteError, ExecutionContext, ExecutorConfig, RESULT_TRUNCATION_WARNING,
-        connection_config, result_warnings, result_wrapper_sql, valid_database_role,
-        valid_environment_variable_name,
+        ExecuteError, ExecutionContext, ExecutorConfig, RESULT_TRUNCATION_WARNING, result_warnings,
+        result_wrapper_sql, valid_database_role, valid_environment_variable_name,
     };
 
     #[test]

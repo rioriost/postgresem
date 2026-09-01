@@ -1,15 +1,74 @@
 #!/bin/sh
 set -eu
 
-export DATABASE_URL="host=${PGHOST} port=${PGPORT} dbname=${PGDATABASE} user=postgresem_runtime password=${POSTGRESEM_RUNTIME_PASSWORD}"
-export POSTGRESEM_AUDIT_DATABASE_URL="host=${PGHOST} port=${PGPORT} dbname=${PGDATABASE} user=postgresem_audit_writer password=${POSTGRESEM_AUDIT_WRITER_PASSWORD}"
+export DATABASE_URL="host=${PGHOST} port=${PGPORT} dbname=${PGDATABASE} user=postgresem_runtime password=${POSTGRESEM_RUNTIME_PASSWORD} sslmode=disable"
+export POSTGRESEM_AUDIT_DATABASE_URL="host=${PGHOST} port=${PGPORT} dbname=${PGDATABASE} user=postgresem_audit_writer password=${POSTGRESEM_AUDIT_WRITER_PASSWORD} sslmode=disable"
 export POSTGRESEM_MAX_RESULT_BYTES=1048576
 
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
 TRUNCATE semantic.query_audit;
+DO $$
+BEGIN
+  IF pg_has_role(
+    'postgresem_runtime',
+    'postgresem_source_owner',
+    'MEMBER'
+  ) OR pg_has_role(
+    'postgresem_runtime',
+    'postgresem_test_superuser',
+    'MEMBER'
+  ) OR pg_has_role(
+    'postgresem_runtime',
+    'postgresem_test_bypassrls',
+    'MEMBER'
+  ) THEN
+    RAISE EXCEPTION 'runtime login can SET ROLE to an unsafe role';
+  END IF;
+END;
+$$;
 SQL
 
 export POSTGRESEM_DB_ROLE=postgresem_analyst
+if DATABASE_URL="${DATABASE_URL% sslmode=disable}" \
+  postgresem query execute /tests/queries/commerce-revenue.json \
+  --project commerce >/dev/null 2>&1
+then
+  echo "execution accepted a connection without an explicit sslmode" >&2
+  exit 1
+fi
+if DATABASE_URL="${DATABASE_URL%sslmode=disable}sslmode=require" \
+  postgresem query execute /tests/queries/commerce-revenue.json \
+  --project commerce >/dev/null 2>&1
+then
+  echo "sslmode=require unexpectedly downgraded to plaintext" >&2
+  exit 1
+fi
+
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+ALTER ROLE postgresem_runtime RESET search_path;
+DROP SCHEMA IF EXISTS postgresem_attacker CASCADE;
+CREATE SCHEMA postgresem_attacker;
+CREATE FUNCTION postgresem_attacker.date_trunc(text, timestamptz)
+RETURNS timestamptz
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'untrusted search_path function executed';
+END;
+$$;
+GRANT USAGE ON SCHEMA postgresem_attacker TO postgresem_analyst;
+ALTER ROLE postgresem_runtime
+  SET search_path = postgresem_attacker, pg_catalog;
+SQL
+monthly_revenue=$(
+  postgresem query execute /tests/queries/monthly-revenue.json --project commerce
+)
+printf '%s\n' "$monthly_revenue" | grep -q '"semantic_revision": "sha256:'
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+ALTER ROLE postgresem_runtime RESET search_path;
+DROP SCHEMA postgresem_attacker CASCADE;
+SQL
+
 commerce=$(
   postgresem query execute /tests/queries/commerce-revenue.json --project commerce
 )
@@ -95,7 +154,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'audit writer does not have the audit lifecycle functions';
   END IF;
-  IF (SELECT count(*) FROM semantic.query_audit) <> 9 THEN
+  IF (SELECT count(*) FROM semantic.query_audit) <> 10 THEN
     RAISE EXCEPTION 'unexpected guarded execution audit count';
   END IF;
   IF EXISTS (
@@ -116,7 +175,7 @@ BEGIN
     SELECT count(*)
     FROM semantic.query_audit
     WHERE status = 'succeeded'
-  ) <> 6 THEN
+  ) <> 7 THEN
     RAISE EXCEPTION 'unexpected successful guarded execution audit count';
   END IF;
   IF (

@@ -25,8 +25,8 @@ create_database() {
 
 configure_gateway_urls() {
   database=$1
-  export DATABASE_URL="host=$PGHOST port=$PGPORT dbname=$database user=postgresem_runtime password=$POSTGRESEM_RUNTIME_PASSWORD"
-  export POSTGRESEM_AUDIT_DATABASE_URL="host=$PGHOST port=$PGPORT dbname=$database user=postgresem_audit_writer password=$POSTGRESEM_AUDIT_WRITER_PASSWORD"
+  export DATABASE_URL="host=$PGHOST port=$PGPORT dbname=$database user=postgresem_runtime password=$POSTGRESEM_RUNTIME_PASSWORD sslmode=disable"
+  export POSTGRESEM_AUDIT_DATABASE_URL="host=$PGHOST port=$PGPORT dbname=$database user=postgresem_audit_writer password=$POSTGRESEM_AUDIT_WRITER_PASSWORD sslmode=disable"
   export POSTGRESEM_DB_ROLE=postgresem_analyst
 }
 

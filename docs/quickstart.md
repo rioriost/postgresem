@@ -49,9 +49,9 @@ values.update({
     "POSTGRESEM_RUNTIME_PASSWORD": runtime,
     "POSTGRESEM_AUDIT_WRITER_PASSWORD": audit,
     "DATABASE_URL":
-        f"postgresql://postgresem_runtime:{runtime}@127.0.0.1:55432/postgresem_dev",
+        f"postgresql://postgresem_runtime:{runtime}@127.0.0.1:55432/postgresem_dev?sslmode=disable",
     "POSTGRESEM_AUDIT_DATABASE_URL":
-        f"postgresql://postgresem_audit_writer:{audit}@127.0.0.1:55432/postgresem_dev",
+        f"postgresql://postgresem_audit_writer:{audit}@127.0.0.1:55432/postgresem_dev?sslmode=disable",
 })
 
 out = []

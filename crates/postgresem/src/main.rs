@@ -7,6 +7,7 @@ use postgresem_compiler::{
 
 mod benchmark;
 mod catalog;
+mod database;
 mod doctor;
 mod executor;
 mod mcp;

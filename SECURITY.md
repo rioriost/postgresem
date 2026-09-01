@@ -60,9 +60,10 @@ invariant:
 ## Safe evaluation
 
 Use only disposable or explicitly approved non-production databases and
-least-privilege credentials. Current PostgreSQL connections use `NoTls`; do not
-send them over an untrusted network. Do not expose `make mcp` through an ad-hoc
-network wrapper.
+least-privilege credentials. PostgreSQL connections require an explicit
+`sslmode`; use `sslmode=require` over untrusted networks and reserve
+`sslmode=disable` for local or independently protected connections. Do not
+expose `make mcp` through an ad-hoc network wrapper.
 
 Audit metadata and semantic exports can still reveal structure and usage
 patterns. Restrict them even though they omit raw result rows and credentials.

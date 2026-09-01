@@ -63,9 +63,12 @@ WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgresem_tenant_b')
 GRANT postgresem_auditor TO postgresem_audit_writer;
 GRANT
   postgresem_analyst,
-  postgresem_source_owner,
   postgresem_tenant_a,
-  postgresem_tenant_b,
+  postgresem_tenant_b
+TO postgresem_runtime;
+
+REVOKE
+  postgresem_source_owner,
   postgresem_test_superuser,
   postgresem_test_bypassrls
-TO postgresem_runtime;
+FROM postgresem_runtime;

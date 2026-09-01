@@ -30,7 +30,7 @@ environment = os.environ.copy()
 environment["PREVIEW_CATALOG_URL"] = (
     f"host={environment['PGHOST']} port={environment['PGPORT']} "
     f"dbname={environment['PGDATABASE']} user={environment['PGUSER']} "
-    f"password={environment['PGPASSWORD']}"
+    f"password={environment['PGPASSWORD']} sslmode=disable"
 )
 
 

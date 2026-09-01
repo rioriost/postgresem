@@ -1,8 +1,9 @@
 use std::env;
 
-use postgres::{Config, NoTls};
 use serde_json::Value;
 use thiserror::Error;
+
+use crate::database;
 
 const MAX_WINDOW_HOURS: u32 = 24 * 365;
 
@@ -41,12 +42,7 @@ pub fn beta(
     }
     let conninfo = required_environment(audit_database_url_variable)?;
     let password = required_environment(audit_password_variable)?;
-    let mut config = conninfo
-        .parse::<Config>()
-        .map_err(|_| ReportError::AuditConnect(audit_database_url_variable.to_owned()))?;
-    config.password(password);
-    let mut client = config
-        .connect(NoTls)
+    let mut client = database::connect(&conninfo, Some(&password))
         .map_err(|_| ReportError::AuditConnect(audit_database_url_variable.to_owned()))?;
     let window_hours = i32::try_from(window_hours).map_err(|_| ReportError::InvalidWindow)?;
     let row = client

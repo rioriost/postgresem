@@ -11,8 +11,9 @@ usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [VERSION|latest]
 
-Downloads a postgresem GitHub release, verifies its SHA-256 checksum, and
-installs it without sudo. VERSION may be written with or without a leading v.
+Downloads a postgresem GitHub release, verifies its keyless Sigstore
+signature and SHA-256 checksum, and installs it without sudo. VERSION may be
+written with or without a leading v.
 
 Environment:
   POSTGRESEM_INSTALL_DIR  Destination directory (default: $HOME/.local/bin)
@@ -49,6 +50,7 @@ fi
 command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v tar >/dev/null 2>&1 || die "tar is required"
 command -v awk >/dev/null 2>&1 || die "awk is required"
+command -v cosign >/dev/null 2>&1 || die "cosign is required"
 
 case "$repository" in
   */*) ;;
@@ -115,6 +117,8 @@ work_dir=$(mktemp -d "${install_dir}/.postgresem-install.XXXXXX") ||
   die "could not create a staging directory in $install_dir"
 archive_path=$work_dir/$archive
 checksums_path=$work_dir/SHA256SUMS
+signature_path=$work_dir/SHA256SUMS.sig
+certificate_path=$work_dir/SHA256SUMS.pem
 listing_path=$work_dir/archive-contents
 verbose_listing_path=$work_dir/archive-types
 extract_dir=$work_dir/extracted
@@ -123,13 +127,33 @@ mkdir "$extract_dir"
 curl --proto '=https' --tlsv1.2 \
   --fail --silent --show-error --location \
   --retry 3 --connect-timeout 15 \
-  --output "$archive_path" "${base_url}/${archive}" ||
-  die "could not download ${archive}"
+  --output "$checksums_path" "${base_url}/SHA256SUMS" ||
+  die "could not download SHA256SUMS"
 curl --proto '=https' --tlsv1.2 \
   --fail --silent --show-error --location \
   --retry 3 --connect-timeout 15 \
-  --output "$checksums_path" "${base_url}/SHA256SUMS" ||
-  die "could not download SHA256SUMS"
+  --output "$signature_path" "${base_url}/SHA256SUMS.sig" ||
+  die "could not download SHA256SUMS.sig"
+curl --proto '=https' --tlsv1.2 \
+  --fail --silent --show-error --location \
+  --retry 3 --connect-timeout 15 \
+  --output "$certificate_path" "${base_url}/SHA256SUMS.pem" ||
+  die "could not download SHA256SUMS.pem"
+
+certificate_identity="https://github.com/${repository}/.github/workflows/release.yml@refs/tags/${tag}"
+cosign verify-blob \
+  --certificate "$certificate_path" \
+  --signature "$signature_path" \
+  --certificate-identity "$certificate_identity" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "$checksums_path" >/dev/null ||
+  die "Sigstore verification failed for SHA256SUMS"
+
+curl --proto '=https' --tlsv1.2 \
+  --fail --silent --show-error --location \
+  --retry 3 --connect-timeout 15 \
+  --output "$archive_path" "${base_url}/${archive}" ||
+  die "could not download ${archive}"
 
 expected=$(
   awk -v name="$archive" '

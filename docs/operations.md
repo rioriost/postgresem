@@ -284,9 +284,15 @@ threshold is a local regression ceiling, not an operational SLO. See
 
 ## Current network boundary
 
-All Rust PostgreSQL connections use `NoTls`. The development database binds
-only to `127.0.0.1:55432`, and the gateway connects to the compose-local `db`
-service. Do not route these credentials over an untrusted network.
+All Rust PostgreSQL connections require an explicit TLS mode. Use
+`sslmode=require` for remote connections; the native TLS connector validates
+the server certificate and hostname against the platform trust store.
+Downgrade-capable `sslmode=prefer` and an omitted `sslmode` are rejected.
+
+The development database binds only to `127.0.0.1:55432`, and the gateway
+connects to the compose-local `db` service. Those local connection strings
+explicitly use `sslmode=disable`. Do not use that setting across an untrusted
+network.
 
 The Apple Container `compose.yaml` uses a static PostgreSQL 18 image because
 `container-compose` does not interpolate `${POSTGRES_IMAGE}` variables.

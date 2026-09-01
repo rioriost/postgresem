@@ -68,11 +68,11 @@ def has_key(value, forbidden):
 env = os.environ.copy()
 env["MCP_RUNTIME_DATABASE_URL"] = (
     f"host={env['PGHOST']} port={env['PGPORT']} dbname={env['PGDATABASE']} "
-    "user=postgresem_runtime"
+    "user=postgresem_runtime sslmode=disable"
 )
 env["MCP_AUDIT_DATABASE_URL"] = (
     f"host={env['PGHOST']} port={env['PGPORT']} dbname={env['PGDATABASE']} "
-    "user=postgresem_audit_writer"
+    "user=postgresem_audit_writer sslmode=disable"
 )
 env["POSTGRESEM_MAX_RESULT_BYTES"] = "12"
 

@@ -1,12 +1,14 @@
 use std::{collections::BTreeMap, env};
 
-use postgres::{Client, IsolationLevel, NoTls, Row};
+use postgres::{Client, IsolationLevel, Row};
 use postgresem_compiler::{
     Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model, Relation,
     Relationship, SemanticSnapshot,
 };
 use serde::Deserialize;
 use thiserror::Error;
+
+use crate::database;
 
 const REVISION_SQL: &str = r"
     SELECT
@@ -109,7 +111,7 @@ pub enum PublishedModelError {
     Connect {
         variable: String,
         #[source]
-        source: postgres::Error,
+        source: database::ConnectError,
     },
     #[error("failed to start read-only semantic model transaction")]
     StartTransaction(#[source] postgres::Error),
@@ -239,7 +241,7 @@ pub fn load_published_from_env(
         }
     })?;
     let mut client =
-        Client::connect(&database_url, NoTls).map_err(|source| PublishedModelError::Connect {
+        database::connect(&database_url, None).map_err(|source| PublishedModelError::Connect {
             variable: variable.to_owned(),
             source,
         })?;

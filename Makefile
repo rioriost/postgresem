@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-web-demo test-db test-execution test-mcp test-performance test-recovery preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-db test-execution test-mcp test-performance test-recovery preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -40,6 +40,9 @@ check:
 
 test:
 	cargo test --workspace --all-features
+
+test-install:
+	tests/install/security.sh
 
 test-web-demo:
 	python3 examples/web_demo/test_server.py
@@ -146,4 +149,4 @@ test-recovery:
 
 preview-check: fmt check test test-db test-execution test-mcp test-performance
 
-beta-check: preview-check test-web-demo test-recovery
+beta-check: preview-check test-install test-web-demo test-recovery

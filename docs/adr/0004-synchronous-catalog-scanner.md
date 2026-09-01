@@ -14,9 +14,11 @@ bodies.
 
 Use the synchronous `postgres` crate in the `postgresem` binary. It matches the
 short-lived CLI workflow and keeps database I/O out of
-`postgresem-compiler`. The initial connector uses `NoTls`; TLS connector
-selection is deferred until deployment requirements and certificate handling
-are defined.
+`postgresem-compiler`. The initial implementation used `NoTls`. The M5
+security remediation replaces it with the platform-native TLS connector for
+all PostgreSQL clients. Connections must explicitly select `sslmode=require`
+or `sslmode=disable`; omitted and downgrade-capable `sslmode=prefer`
+configurations fail closed.
 
 `postgresem catalog scan` accepts only the name of an environment variable
 containing the connection URL. It does not accept the URL as a command-line
@@ -52,7 +54,7 @@ client connection configuration.
 ## Consequences
 
 The CLI can produce reproducible source evidence without adding asynchronous
-runtime machinery to the compiler. Remote databases that require TLS are not
-supported by this MVP connector; adding a TLS implementation requires a
-follow-up decision covering trust roots, client certificates, and deployment
-configuration.
+runtime machinery to the compiler. Remote databases can use
+`sslmode=require` with platform trust roots and hostname validation. Custom
+trust roots and client certificates require a follow-up decision and are not
+yet configurable.

@@ -124,8 +124,9 @@ and unknown semantic objects receive the same public “not available” errors.
 
 ## Preview limitations
 
-- PostgreSQL connections use `NoTls`; use only local or otherwise protected
-  connections.
+- PostgreSQL connections require an explicit `sslmode`. Use
+  `sslmode=require` for remote connections; `sslmode=disable` is accepted only
+  as an explicit choice for local or independently protected connections.
 - MCP is stdio only. There is no HTTP listener or remote authentication layer.
 - Concurrent MCP cancellation is not implemented; PostgreSQL statement timeout
   is the cancellation boundary.
@@ -141,8 +142,9 @@ and unknown semantic objects receive the same public “not available” errors.
 
 Tag-triggered automation is configured to build four native archives, generate
 `SHA256SUMS`, and publish a multi-architecture GHCR image with image SBOM and
-provenance. [`scripts/install.sh`](scripts/install.sh) downloads a matching
-archive and verifies its SHA-256 checksum before installation.
+provenance. [`scripts/install.sh`](scripts/install.sh) requires Cosign,
+authenticates the signed `SHA256SUMS` against the exact release workflow/tag,
+and then verifies the matching archive checksum before installation.
 
 The
 [`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1)

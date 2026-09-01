@@ -1,0 +1,6 @@
+{
+  "schema_version": "1",
+  "model": "orders",
+  "dimensions": [{"field": "ordered_at", "time_grain": "month"}],
+  "metrics": [{"metric": "revenue"}]
+}

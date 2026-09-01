@@ -6,6 +6,12 @@
 
 - Pin every GitHub Actions dependency to an immutable commit SHA, including
   the release-publishing action that receives `contents: write`.
+- Remove runtime membership in test superuser and `BYPASSRLS` roles.
+- Add TLS-capable PostgreSQL connections and reject omitted or
+  downgrade-capable TLS modes.
+- Require exact Sigstore workflow/tag verification before the installer trusts
+  release checksums.
+- Fix the guarded transaction `search_path` to `pg_catalog`.
 
 ## [0.3.0-beta.1] - 2026-08-31
 

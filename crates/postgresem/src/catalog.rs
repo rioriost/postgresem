@@ -1,9 +1,11 @@
 use std::{cmp::Ordering, env};
 
-use postgres::{Client, GenericClient, IsolationLevel, NoTls, Row};
+use postgres::{Client, GenericClient, IsolationLevel, Row};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+use crate::database;
 
 const CATALOG_SNAPSHOT_SCHEMA_VERSION: &str = "1";
 
@@ -309,7 +311,7 @@ pub enum CatalogError {
     Connect {
         variable: String,
         #[source]
-        source: postgres::Error,
+        source: database::ConnectError,
     },
     #[error("failed to start read-only catalog transaction")]
     StartTransaction(#[source] postgres::Error),
@@ -341,7 +343,7 @@ pub fn scan_from_env(variable: &str) -> Result<CatalogSnapshot, CatalogError> {
         env::VarError::NotUnicode(_) => CatalogError::InvalidConnectionUrl(variable.to_owned()),
     })?;
     let mut client =
-        Client::connect(&database_url, NoTls).map_err(|source| CatalogError::Connect {
+        database::connect(&database_url, None).map_err(|source| CatalogError::Connect {
             variable: variable.to_owned(),
             source,
         })?;
