@@ -2,10 +2,9 @@ use std::{cmp::Ordering, env};
 
 use postgres::{Client, GenericClient, IsolationLevel, Row};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::database;
+use crate::{database, hash::sha256};
 
 const CATALOG_SNAPSHOT_SCHEMA_VERSION: &str = "1";
 
@@ -600,7 +599,7 @@ fn query_error(operation: &'static str, source: postgres::Error) -> CatalogError
 }
 
 fn hash_expression(expression: &str) -> String {
-    format!("sha256:{:x}", Sha256::digest(expression.as_bytes()))
+    sha256(expression)
 }
 
 fn check_constraint(
@@ -668,7 +667,7 @@ impl CatalogSnapshot {
         let mut canonical = self.clone();
         canonical.fingerprint.clear();
         let bytes = serde_json::to_vec(&canonical).map_err(CatalogError::Serialization)?;
-        Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
+        Ok(sha256(bytes))
     }
 
     #[cfg(test)]

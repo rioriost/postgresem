@@ -12,11 +12,11 @@ use postgresem_compiler::{
 };
 use serde::Serialize;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::{
     database,
+    hash::sha256,
     published_model::{self, PublishedModel},
 };
 
@@ -713,7 +713,7 @@ fn duration_milliseconds(duration: Duration) -> i64 {
 }
 
 fn hash(value: &str) -> String {
-    format!("sha256:{:x}", Sha256::digest(value.as_bytes()))
+    sha256(value)
 }
 
 #[cfg(test)]
