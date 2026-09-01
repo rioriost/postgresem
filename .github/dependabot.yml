@@ -8,6 +8,11 @@ updates:
       time: "09:00"
       timezone: Asia/Tokyo
     open-pull-requests-limit: 10
+    ignore:
+      # postgres 0.19 RowIter implements the fallible-iterator 0.2 trait.
+      - dependency-name: fallible-iterator
+        versions:
+          - 0.3.x
     groups:
       cargo-minor-and-patch:
         patterns:
