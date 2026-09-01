@@ -17,6 +17,7 @@ dbt_core_version='1.12.3'
 dbt_postgres_version='1.11.0'
 
 mkdir -p "$output_dir"
+output_dir="$(cd "$output_dir" && pwd)"
 profiles_file="$output_dir/profiles.yml"
 result_file="$output_dir/metricflow-result.csv"
 work_root="$(mktemp -d "$output_dir/metricflow-project.XXXXXX")"
