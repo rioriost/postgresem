@@ -472,7 +472,26 @@ fn execute_mutation(
         "cli",
     )?;
     let result = mutation_executor::execute(&fs::read(path)?, project, &config, &context)?;
-    println!("{}", serde_json::to_string_pretty(&result)?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema_version": result.schema_version,
+            "mutation_id": result.mutation_id,
+            "semantic_revision": result.semantic_revision,
+            "operation": result.operation,
+            "model": result.model,
+            "columns": result.columns,
+            "rows": result.rows,
+            "affected_rows": result.affected_rows,
+            "replayed": result.replayed,
+            "lineage": {
+                "model": result.lineage.model,
+                "fields": result.lineage.fields,
+                "returning_fields": result.lineage.returning_fields,
+            },
+            "warnings": result.warnings,
+        }))?
+    );
     Ok(())
 }
 

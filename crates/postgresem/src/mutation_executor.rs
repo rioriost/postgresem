@@ -644,6 +644,19 @@ fn verify_role(
             SELECT
               role.rolsuper,
               role.rolbypassrls,
+              EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_roles AS inherited_role
+                WHERE (
+                    inherited_role.rolsuper
+                    OR inherited_role.rolbypassrls
+                )
+                  AND pg_catalog.pg_has_role(
+                    role.oid,
+                    inherited_role.oid,
+                    'MEMBER'
+                  )
+              ) AS can_assume_unsafe_role,
               pg_has_role(session_user, role.oid, 'MEMBER') AS is_member
             FROM pg_catalog.pg_roles AS role
             WHERE role.rolname = $1
@@ -652,7 +665,10 @@ fn verify_role(
         )
         .map_err(MutationExecuteError::TransactionConfiguration)?
         .ok_or(MutationExecuteError::DatabaseRoleNotFound)?;
-    if row.get::<_, bool>("rolsuper") || row.get::<_, bool>("rolbypassrls") {
+    if row.get::<_, bool>("rolsuper")
+        || row.get::<_, bool>("rolbypassrls")
+        || row.get::<_, bool>("can_assume_unsafe_role")
+    {
         return Err(MutationExecuteError::UnsafeDatabaseRole);
     }
     Ok(row.get("is_member"))
@@ -674,13 +690,19 @@ fn verify_target_relation(
         .query_opt(
             r"
             SELECT
-              owner.rolname = $1 AS owned_by_role,
+              pg_catalog.pg_has_role(
+                mapped_role.oid,
+                owner.oid,
+                'MEMBER'
+              ) AS can_assume_owner,
               relation.relkind::text AS relation_kind
             FROM pg_catalog.pg_class AS relation
             JOIN pg_catalog.pg_namespace AS namespace
               ON namespace.oid = relation.relnamespace
             JOIN pg_catalog.pg_roles AS owner
               ON owner.oid = relation.relowner
+            JOIN pg_catalog.pg_roles AS mapped_role
+              ON mapped_role.rolname = $1
             WHERE namespace.nspname = $2
               AND relation.relname = $3
             ",
@@ -688,7 +710,7 @@ fn verify_target_relation(
         )
         .map_err(MutationExecuteError::TransactionConfiguration)?
         .ok_or(MutationExecuteError::TargetRelationNotFound)?;
-    if row.get::<_, bool>("owned_by_role") {
+    if row.get::<_, bool>("can_assume_owner") {
         return Err(MutationExecuteError::TargetRelationOwner);
     }
     if !matches!(row.get::<_, String>("relation_kind").as_str(), "r" | "p") {

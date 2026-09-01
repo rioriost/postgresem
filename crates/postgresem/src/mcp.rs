@@ -1542,6 +1542,8 @@ fn public_tool_name(method: &str, params: &Value) -> Option<&'static str> {
         Some("validate_semantic_query") => Some("validate_semantic_query"),
         Some("query_semantic_model") => Some("query_semantic_model"),
         Some("explain_semantic_query") => Some("explain_semantic_query"),
+        Some("validate_semantic_mutation") => Some("validate_semantic_mutation"),
+        Some("mutate_semantic_model") => Some("mutate_semantic_model"),
         Some(_) => Some("unknown"),
         None => None,
     }

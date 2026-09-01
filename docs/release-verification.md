@@ -4,6 +4,14 @@
 first release with keyless Sigstore signatures for its checksums and immutable
 container image digest.
 
+Beginning with `v0.4.0`, publication is additionally gated by native Linux
+amd64/arm64 execution. Each packaged binary and each architecture-specific
+runtime image must start and complete explicit-TLS, catalog, query, and
+governed-mutation smoke checks against PostgreSQL 18. The workflow uploads
+machine-readable `*-runtime.json` evidence alongside the release artifacts.
+The multi-architecture manifest is published only after both native image jobs
+pass.
+
 Signed release assets include `SHA256SUMS`, `SHA256SUMS.sig`, and
 `SHA256SUMS.pem`. Verify them with Cosign:
 

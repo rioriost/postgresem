@@ -141,6 +141,8 @@ services:
       POSTGRESEM_RUNTIME_PASSWORD: ${POSTGRESEM_RUNTIME_PASSWORD}
       POSTGRESEM_AUDIT_WRITER_PASSWORD: ${POSTGRESEM_AUDIT_WRITER_PASSWORD}
       POSTGRESEM_MUTATION_RUNTIME_PASSWORD: ${POSTGRESEM_MUTATION_RUNTIME_PASSWORD}
+      MCP_RUNTIME_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_runtime sslmode=disable"
+      MCP_AUDIT_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_audit_writer sslmode=disable"
       MCP_MUTATION_DATABASE_URL: "host=db port=5432 dbname=postgresem_dev user=postgresem_mutation_runtime sslmode=disable"
       MCP_MUTATION_DB_ROLE: postgresem_order_writer
       POSTGRESEM_MCP_PROJECT: commerce

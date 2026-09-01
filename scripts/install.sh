@@ -51,6 +51,7 @@ command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v tar >/dev/null 2>&1 || die "tar is required"
 command -v awk >/dev/null 2>&1 || die "awk is required"
 command -v cosign >/dev/null 2>&1 || die "cosign is required"
+command -v mktemp >/dev/null 2>&1 || die "mktemp is required"
 
 case "$repository" in
   */*) ;;

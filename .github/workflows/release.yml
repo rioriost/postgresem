@@ -159,17 +159,114 @@ jobs:
                               archive.addfile(info)
           PY
 
+      - name: Smoke packaged binary
+        shell: bash
+        env:
+          ASSET_ARCH: ${{ matrix.asset_arch }}
+          ASSET_OS: ${{ matrix.asset_os }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          archive="postgresem-${version}-${ASSET_OS}-${ASSET_ARCH}"
+          mkdir -p dist/smoke
+          tar -xzf "dist/${archive}.tar.gz" -C dist/smoke
+          test -x "dist/smoke/${archive}/postgresem"
+          "dist/smoke/${archive}/postgresem" --version
+
+      - name: Start Linux release smoke database
+        if: matrix.asset_os == 'linux'
+        shell: bash
+        env:
+          POSTGRES_SUPERUSER_PASSWORD: release-superuser-password
+          POSTGRESEM_RUNTIME_PASSWORD: release-runtime-password
+          POSTGRESEM_AUDIT_WRITER_PASSWORD: release-audit-writer-password
+          POSTGRESEM_MUTATION_RUNTIME_PASSWORD: release-mutation-runtime-password
+        run: |
+          set -euo pipefail
+          docker network create postgresem-release
+          docker run --detach \
+            --name postgresem-release-db \
+            --network postgresem-release \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_DB=postgresem_dev \
+            --env POSTGRES_USER=postgres \
+            --env POSTGRES_PASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            --env POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --volume "$PWD/fixtures/postgres:/docker-entrypoint-initdb.d:ro" \
+            --volume "$PWD/migrations:/migrations:ro" \
+            --volume "$PWD/fixtures/semantic:/semantic:ro" \
+            postgres:18
+          for attempt in $(seq 1 60); do
+            if docker exec postgresem-release-db \
+              pg_isready -U postgres -d postgresem_dev >/dev/null 2>&1
+            then
+              break
+            fi
+            if [ "$attempt" = 60 ]; then
+              docker logs postgresem-release-db
+              exit 1
+            fi
+            sleep 2
+          done
+          docker exec \
+            --env PGHOST=127.0.0.1 \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            postgresem-release-db sh /migrations/run.sh
+          docker exec \
+            --env PGHOST=127.0.0.1 \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            postgresem-release-db sh /semantic/run.sh
+
+      - name: Run packaged Linux runtime smoke
+        if: matrix.asset_os == 'linux'
+        shell: bash
+        env:
+          ASSET_ARCH: ${{ matrix.asset_arch }}
+          POSTGRESEM_RUNTIME_PASSWORD: release-runtime-password
+          POSTGRESEM_AUDIT_WRITER_PASSWORD: release-audit-writer-password
+          POSTGRESEM_MUTATION_RUNTIME_PASSWORD: release-mutation-runtime-password
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          archive="postgresem-${version}-linux-${ASSET_ARCH}"
+          export PATH="$PWD/dist/smoke/${archive}:$PATH"
+          export PGHOST=127.0.0.1
+          export PGPORT=55432
+          export PGDATABASE=postgresem_dev
+          export POSTGRESEM_EXPECTED_ARCH="${ASSET_ARCH}"
+          export POSTGRESEM_TEST_ROOT="$PWD/tests"
+          export POSTGRESEM_EVIDENCE_FILE="$PWD/dist/linux-${ASSET_ARCH}-runtime.json"
+          tests/runtime/linux-smoke.sh
+
+      - name: Stop Linux release smoke database
+        if: always() && matrix.asset_os == 'linux'
+        run: |
+          docker rm --force postgresem-release-db >/dev/null 2>&1 || true
+          docker network rm postgresem-release >/dev/null 2>&1 || true
+
       - name: Upload release archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.asset_os }}-${{ matrix.asset_arch }}
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*-runtime.json
           if-no-files-found: error
           retention-days: 7
 
   checksums:
     name: Generate checksums
-    needs: binaries
+    needs:
+      - binaries
+      - image-smoke
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -186,7 +283,8 @@ jobs:
         run: |
           set -eu
           cd dist
-          sha256sum ./*.tar.gz | sed 's#  \./#  #' > SHA256SUMS
+          sha256sum ./*.tar.gz ./*-runtime.json |
+            sed 's#  \./#  #' > SHA256SUMS
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -236,9 +334,123 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
 
+  image-smoke:
+    name: Linux ${{ matrix.arch }} image smoke
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: amd64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+    env:
+      POSTGRES_SUPERUSER_PASSWORD: release-superuser-password
+      POSTGRESEM_RUNTIME_PASSWORD: release-runtime-password
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: release-audit-writer-password
+      POSTGRESEM_MUTATION_RUNTIME_PASSWORD: release-mutation-runtime-password
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build native release image
+        run: docker build --file Containerfile --tag postgresem:image-smoke .
+
+      - name: Start PostgreSQL 18
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create postgresem-image-smoke
+          docker run --detach \
+            --name postgresem-image-smoke-db \
+            --network postgresem-image-smoke \
+            --network-alias db \
+            --env POSTGRES_DB=postgresem_dev \
+            --env POSTGRES_USER=postgres \
+            --env POSTGRES_PASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            --env POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --volume "$PWD/fixtures/postgres:/docker-entrypoint-initdb.d:ro" \
+            --volume "$PWD/migrations:/migrations:ro" \
+            --volume "$PWD/fixtures/semantic:/semantic:ro" \
+            postgres:18
+          for attempt in $(seq 1 60); do
+            if docker exec postgresem-image-smoke-db \
+              pg_isready -U postgres -d postgresem_dev >/dev/null 2>&1
+            then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs postgresem-image-smoke-db
+          exit 1
+
+      - name: Apply migrations and publish fixture
+        run: |
+          docker exec \
+            --env PGHOST=127.0.0.1 \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            postgresem-image-smoke-db sh /migrations/run.sh
+          docker exec \
+            --env PGHOST=127.0.0.1 \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            postgresem-image-smoke-db sh /semantic/run.sh
+
+      - name: Run native image smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-evidence
+          docker run --rm \
+            --network postgresem-image-smoke \
+            --entrypoint /bin/sh \
+            --env PGHOST=db \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env POSTGRESEM_EXPECTED_ARCH=${{ matrix.arch }} \
+            --env POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --volume "$PWD/tests:/tests:ro" \
+            postgresem:image-smoke \
+            /tests/runtime/linux-smoke.sh |
+            tee "runtime-evidence/linux-${{ matrix.arch }}-image-runtime.json"
+
+      - name: Upload image runtime evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-image-runtime-${{ matrix.arch }}
+          path: runtime-evidence/*.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show runtime logs after failure
+        if: failure()
+        run: docker logs postgresem-image-smoke-db
+
+      - name: Stop runtime services
+        if: always()
+        run: |
+          docker rm --force postgresem-image-smoke-db >/dev/null 2>&1 || true
+          docker network rm postgresem-image-smoke >/dev/null 2>&1 || true
+
   image:
     name: Publish multi-architecture image
-    needs: metadata
+    needs:
+      - metadata
+      - image-smoke
     runs-on: ubuntu-24.04
     permissions:
       contents: read

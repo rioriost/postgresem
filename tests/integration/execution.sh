@@ -4,6 +4,7 @@ set -eu
 export DATABASE_URL="host=${PGHOST} port=${PGPORT} dbname=${PGDATABASE} user=postgresem_runtime password=${POSTGRESEM_RUNTIME_PASSWORD} sslmode=disable"
 export POSTGRESEM_AUDIT_DATABASE_URL="host=${PGHOST} port=${PGPORT} dbname=${PGDATABASE} user=postgresem_audit_writer password=${POSTGRESEM_AUDIT_WRITER_PASSWORD} sslmode=disable"
 export POSTGRESEM_MAX_RESULT_BYTES=1048576
+TEST_ROOT=${TEST_ROOT:-/tests}
 
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
 TRUNCATE semantic.query_audit;
@@ -30,14 +31,14 @@ SQL
 
 export POSTGRESEM_DB_ROLE=postgresem_analyst
 if DATABASE_URL="${DATABASE_URL% sslmode=disable}" \
-  postgresem query execute /tests/queries/commerce-revenue.json \
+  postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
   --project commerce >/dev/null 2>&1
 then
   echo "execution accepted a connection without an explicit sslmode" >&2
   exit 1
 fi
 if DATABASE_URL="${DATABASE_URL%sslmode=disable}sslmode=require" \
-  postgresem query execute /tests/queries/commerce-revenue.json \
+  postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
   --project commerce >/dev/null 2>&1
 then
   echo "sslmode=require unexpectedly downgraded to plaintext" >&2
@@ -61,7 +62,7 @@ ALTER ROLE postgresem_runtime
   SET search_path = postgresem_attacker, pg_catalog;
 SQL
 monthly_revenue=$(
-  postgresem query execute /tests/queries/monthly-revenue.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/monthly-revenue.json" --project commerce
 )
 printf '%s\n' "$monthly_revenue" | grep -q '"semantic_revision": "sha256:'
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
@@ -70,21 +71,21 @@ DROP SCHEMA postgresem_attacker CASCADE;
 SQL
 
 commerce=$(
-  postgresem query execute /tests/queries/commerce-revenue.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" --project commerce
 )
 printf '%s\n' "$commerce" | grep -q '"semantic_revision": "sha256:'
 printf '%s\n' "$commerce" | grep -q '"200.50"'
 printf '%s\n' "$commerce" | grep -q '"truncated": false'
 
 typed_order=$(
-  postgresem query execute /tests/queries/typed-order.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/typed-order.json" --project commerce
 )
 printf '%s\n' "$typed_order" | grep -q '1,'
 printf '%s\n' "$typed_order" | grep -q '"2026-01-15T10:00:00+00:00"'
 printf '%s\n' "$typed_order" | grep -q '"120.00"'
 
 typed_subscription=$(
-  postgresem query execute /tests/queries/typed-subscription.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/typed-subscription.json" --project commerce
 )
 printf '%s\n' "$typed_subscription" | grep -q '101,'
 printf '%s\n' "$typed_subscription" | grep -q '"2026-01-01"'
@@ -92,7 +93,7 @@ printf '%s\n' "$typed_subscription" | grep -q 'true'
 
 export POSTGRESEM_DB_ROLE=postgresem_tenant_a
 tenant_a=$(
-  postgresem query execute /tests/queries/tenant-revenue.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/tenant-revenue.json" --project commerce
 )
 printf '%s\n' "$tenant_a" | grep -q '"250.00"'
 if printf '%s\n' "$tenant_a" | grep -q '"999.00"'; then
@@ -102,7 +103,7 @@ fi
 
 export POSTGRESEM_DB_ROLE=postgresem_tenant_b
 tenant_b=$(
-  postgresem query execute /tests/queries/tenant-revenue.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/tenant-revenue.json" --project commerce
 )
 printf '%s\n' "$tenant_b" | grep -q '"999.00"'
 if printf '%s\n' "$tenant_b" | grep -q '"250.00"'; then
@@ -116,7 +117,7 @@ for unsafe_role in \
   postgresem_test_bypassrls
 do
   export POSTGRESEM_DB_ROLE=$unsafe_role
-  if postgresem query execute /tests/queries/commerce-revenue.json \
+  if postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
     --project commerce >/dev/null 2>&1
   then
     echo "unsafe mapped role was accepted: $unsafe_role" >&2
@@ -125,9 +126,31 @@ do
 done
 
 export POSTGRESEM_DB_ROLE=postgresem_analyst
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "GRANT postgresem_test_bypassrls TO postgresem_analyst"
+if postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
+  --project commerce >/dev/null 2>&1
+then
+  echo "mapped query role inherited a BYPASSRLS role" >&2
+  exit 1
+fi
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "REVOKE postgresem_test_bypassrls FROM postgresem_analyst"
+
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "GRANT postgresem_source_owner TO postgresem_analyst"
+if postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
+  --project commerce >/dev/null 2>&1
+then
+  echo "mapped query role inherited a source relation owner" >&2
+  exit 1
+fi
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "REVOKE postgresem_source_owner FROM postgresem_analyst"
+
 export POSTGRESEM_MAX_RESULT_BYTES=2
 limited=$(
-  postgresem query execute /tests/queries/order-statuses.json --project commerce
+  postgresem query execute "${TEST_ROOT}/queries/order-statuses.json" --project commerce
 )
 printf '%s\n' "$limited" | grep -q '"rows": \[\]'
 printf '%s\n' "$limited" | grep -q '"truncated": true'
@@ -154,7 +177,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'audit writer does not have the audit lifecycle functions';
   END IF;
-  IF (SELECT count(*) FROM semantic.query_audit) <> 10 THEN
+  IF (SELECT count(*) FROM semantic.query_audit) <> 12 THEN
     RAISE EXCEPTION 'unexpected guarded execution audit count';
   END IF;
   IF EXISTS (
@@ -182,7 +205,7 @@ BEGIN
     SELECT count(*)
     FROM semantic.query_audit
     WHERE status = 'failed'
-  ) <> 3 THEN
+  ) <> 5 THEN
     RAISE EXCEPTION 'unexpected failed guarded execution audit count';
   END IF;
   IF NOT EXISTS (
@@ -221,7 +244,7 @@ before_count=$(
   psql --no-psqlrc --tuples-only --no-align -c \
     'SELECT count(*) FROM semantic.query_audit'
 )
-if postgresem query execute /tests/queries/commerce-revenue.json \
+if postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
   --project commerce >/dev/null 2>&1
 then
   echo "execution continued after mandatory started audit failure" >&2
@@ -245,7 +268,7 @@ REVOKE EXECUTE ON FUNCTION semantic.finish_query_audit(
 SQL
 
 terminal_failure=$(
-  postgresem query execute /tests/queries/commerce-revenue.json \
+  postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
     --project commerce 2>&1 || true
 )
 if printf '%s\n' "$terminal_failure" | grep -q '"schema_version"'; then

@@ -4,11 +4,14 @@
 
 `postgresem`は、AIエージェントとアプリケーションのためのPostgreSQLネイティブな
 セマンティックゲートウェイです。厳格かつバージョン化されたLogical Semantic Query
-（LSQ）を受け取り、immutableな公開済みSemantic Revisionに対して解決し、保護された
-PostgreSQL境界を通じて、決定的に生成されたパラメータ化`SELECT`クエリを実行します。
+（LSQ）とLogical Semantic Mutation（LSM）を受け取り、immutableな公開済みSemantic
+Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
+パラメータ化operationを実行します。
 
 最新の公開リリースは**0.3.0-beta.1**です。ローカル評価および統制された読み取り専用
 pilotに適しており、本番環境への導入を意図したものではありません。
+現在のsource versionは**0.4.0**で、tagged releaseに先行してM6のgoverned mutationと
+Linux portability scopeを実装しています。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -60,16 +63,16 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 
 ## 1.0までのロードマップ
 
-現在の`0.3` betaは統制されたread-only systemです。M6は`1.0`ではなく`0.4`として
-releaseし、上限付きinsertと明示的にmodel化された冪等upsertのための独立した型付き
-mutation contractを追加する計画です。既存の`READ ONLY` query executorを弱めず、raw
+現在のsourceはM6を`1.0`ではなく`0.4`として実装しています。上限付きinsertと明示的に
+model化された冪等upsertのための独立した型付きmutation contractです。既存の`READ ONLY`
+query executorを弱めず、raw
 SQL、任意DML、物理identifier、request-selected database roleは公開しません。
 PostgreSQLのGRANT、RLS `WITH CHECK`、constraint、triggerを最終正本として維持します。
 
-`0.4`では、cross buildしたarchiveやmulti-architecture image manifestだけでなく、
-Linux amd64/arm64上で実際にruntime testを実行することをrelease要件にします。Mac
-StudioとApple Containerはmaintainerのlocal reference環境として残しますが、唯一の
-support targetではありません。
+`0.4`では、cross buildしたarchiveやmulti-architecture image manifestを実行evidence
+とはせず、packaged binaryとruntime imageをLinux amd64/arm64上でnative実行するgateを
+追加しました。Mac StudioとApple Containerはmaintainerのlocal reference環境として
+残しますが、唯一のsupport targetではありません。
 
 `0.4`以降の`0.5`から`0.9`では、Wren AI、Cube、Malloy、MetricFlow等の現行reference
 implementationと再現可能な比較を行い、不足するauthoring、semantic、integration、
@@ -102,24 +105,28 @@ M6〜M12のgateは
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## Betaで実装されているもの
+## 0.4で実装されているもの
 
 - LSQ v1 validationと決定的compile
 - PostgreSQLをbacking storeとするSemantic Snapshot/Schema v1
 - canonical hashを持つimmutableな公開済みrevision
 - row数とbyte数に上限を設けた保護された読み取り専用実行
+- LSM v1 validationと、上限付きinsert/承認済みupsertの決定的compile
+- queryとは分離したwriter credential、mapped writer role、mutation transaction、
+  冪等replay、reconciliation
 - PostgreSQLのGRANTとRLSを強制する固定role mapping
-- 必須query audit lifecycle record
+- 必須query/mutation audit lifecycle record
 - 改行区切りJSON-RPC stdio上のMCP `2024-11-05`
-- semantic操作に限定した5つのtoolと3形式のresource URI
+- semantic操作に限定した7つのtoolと4形式のresource URI
 - breaking-change gateを持つ決定的Semantic Model互換性diff
 - 100 modelのcompiler baselineと決定的な100 relation catalog check
 - PostgreSQL 18を使用するローカルApple Container Compose開発stack
 
 MCP toolは`list_semantic_models`、`describe_semantic_model`、
 `validate_semantic_query`、`query_semantic_model`、
-`explain_semantic_query`です。raw SQLまたはcompiler outputを返すMCP toolはなく、
-MCP responseは生成SQLや物理lineageを公開しません。
+`explain_semantic_query`に加え、mutation設定時の
+`validate_semantic_mutation`と`mutate_semantic_model`です。raw SQLまたはcompiler
+outputを返すMCP toolはなく、MCP responseは生成SQLや物理lineageを公開しません。
 
 ## Security境界
 
@@ -129,6 +136,11 @@ durableな`started` audit rowが必要です。その後、`SET LOCAL ROLE`とtr
 timeoutを設定した`READ ONLY` transactionを使用します。executorは、必要なrole
 membershipを持たないrole、superuser、`BYPASSRLS` role、queryが使用するsource
 relationのowner roleを拒否します。
+
+mutationは独立したlogin、mapped writer role、compiler、executor、idempotency store、
+audit lifecycleを使用します。business DML、committed idempotency result、terminalな
+committed audit stateは同一transactionで確定します。PostgreSQLのcolumn GRANT、RLS
+`USING`/`WITH CHECK`、constraint、triggerが最終authorityです。
 
 Apple Containerでは、`/etc/hosts` fallbackのためにGatewayのCompose設定userをrootに
 する必要があります。startup commandはidle processを直ちに`postgresem`へ降格し、
@@ -154,9 +166,11 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 - PostgreSQL 18が検証済みのローカル開発targetです。PostgreSQL 16、17、18はDocker
   CIのmigration、integration、recovery matrixを通過しています。正確な境界は
   [compatibility matrix](docs/compatibility.md)を参照してください。
-- 現在もLinux amd64 CIとmulti-architecture release artifactはありますが、M6でLinux
-  amd64/arm64両方の実行evidenceをrelease-blockingにします。
-- governed writeは`0.4`で計画しており、現在のreleaseはmutation requestを受け付けません。
+- native Linux amd64/arm64 CI gateはruntime imageをPostgreSQL 18に対して実行します。
+  tagged releaseではpackaged binaryとarchitecture別imageも公開前にgateします。
+- governed writeは公開済みinsert/upsert projectionに限定されます。update、delete、
+  merge、copy、call、DDL、raw SQL、caller-selected conflict target/returning fieldは
+  未対応です。
 
 ## Packaging状況
 

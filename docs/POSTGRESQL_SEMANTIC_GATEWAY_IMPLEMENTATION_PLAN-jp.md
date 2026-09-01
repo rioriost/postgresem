@@ -862,6 +862,10 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 
 ### M6: 0.4 — Governed ingestionとportable Linux
 
+**実装状況:** `0.4.0` source treeへの実装は完了。release commitでPostgreSQL
+16〜18 suite、native Linux amd64/arm64 runtime gate、実装後reviewが通過した時点で
+promotionする。
+
 - LSM v1とSemantic Schemaのwritable-model projectionを仕様化する。
 - 上限付きtyped `insert`と承認済み冪等`upsert`を実装し、raw SQL、任意DML、物理identifier、
   `UPDATE`、`DELETE`、`MERGE`、`COPY`、`CALL`をpublic contract外に保つ。

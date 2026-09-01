@@ -43,6 +43,7 @@ test:
 
 test-install:
 	tests/install/security.sh
+	tests/install/success.sh
 
 test-web-demo:
 	python3 examples/web_demo/test_server.py

@@ -68,17 +68,116 @@ jobs:
               print(f"parsed {schema}")
           PY
 
-  container:
-    name: Container build
-    runs-on: ubuntu-24.04
+  linux-runtime:
+    name: Linux ${{ matrix.arch }} runtime
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    env:
+      POSTGRES_SUPERUSER_PASSWORD: ci-superuser-password
+      POSTGRESEM_RUNTIME_PASSWORD: ci-runtime-password
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: ci-audit-writer-password
+      POSTGRESEM_MUTATION_RUNTIME_PASSWORD: ci-mutation-runtime-password
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Build runtime image
-        run: docker build --file Containerfile --tag postgresem:ci .
+      - name: Build native runtime image
+        run: docker build --file Containerfile --tag postgresem:linux-${{ matrix.arch }} .
+
+      - name: Start PostgreSQL 18
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create postgresem-runtime
+          docker run --detach \
+            --name postgresem-runtime-db \
+            --network postgresem-runtime \
+            --network-alias db \
+            --env POSTGRES_DB=postgresem_dev \
+            --env POSTGRES_USER=postgres \
+            --env POSTGRES_PASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            --env POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --volume "$PWD/fixtures/postgres:/docker-entrypoint-initdb.d:ro" \
+            --volume "$PWD/migrations:/migrations:ro" \
+            --volume "$PWD/fixtures/semantic:/semantic:ro" \
+            postgres:18
+          for attempt in $(seq 1 60); do
+            if docker exec postgresem-runtime-db \
+              pg_isready -U postgres -d postgresem_dev >/dev/null 2>&1
+            then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs postgresem-runtime-db
+          exit 1
+
+      - name: Apply migrations and publish fixture
+        run: |
+          docker exec \
+            --env PGHOST=127.0.0.1 \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            postgresem-runtime-db sh /migrations/run.sh
+          docker exec \
+            --env PGHOST=127.0.0.1 \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            postgresem-runtime-db sh /semantic/run.sh
+
+      - name: Run native runtime smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-evidence
+          docker run --rm \
+            --network postgresem-runtime \
+            --entrypoint /bin/sh \
+            --env PGHOST=db \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env POSTGRESEM_EXPECTED_ARCH=${{ matrix.arch }} \
+            --env POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --volume "$PWD/tests:/tests:ro" \
+            postgresem:linux-${{ matrix.arch }} \
+            /tests/runtime/linux-smoke.sh |
+            tee "runtime-evidence/linux-${{ matrix.arch }}.json"
+
+      - name: Upload runtime evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-runtime-${{ matrix.arch }}
+          path: runtime-evidence/*.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show runtime logs after failure
+        if: failure()
+        run: docker logs postgresem-runtime-db
+
+      - name: Stop runtime services
+        if: always()
+        run: |
+          docker rm --force postgresem-runtime-db >/dev/null 2>&1 || true
+          docker network rm postgresem-runtime >/dev/null 2>&1 || true
 
   postgres:
     name: PostgreSQL ${{ matrix.postgres }}

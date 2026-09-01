@@ -46,6 +46,28 @@ END;
 $$;
 SQL
 
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "GRANT postgresem_test_bypassrls TO postgresem_order_writer"
+if postgresem mutation execute "${TEST_ROOT}/mutations/order-insert.json" \
+  --project commerce >/dev/null 2>&1
+then
+  echo "writer role inherited a BYPASSRLS role" >&2
+  exit 1
+fi
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "REVOKE postgresem_test_bypassrls FROM postgresem_order_writer"
+
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "GRANT postgresem_source_owner TO postgresem_order_writer"
+if postgresem mutation execute "${TEST_ROOT}/mutations/order-insert.json" \
+  --project commerce >/dev/null 2>&1
+then
+  echo "writer role inherited the target relation owner" >&2
+  exit 1
+fi
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c "REVOKE postgresem_source_owner FROM postgresem_order_writer"
+
 if POSTGRESEM_MUTATION_DATABASE_URL="${POSTGRESEM_MUTATION_DATABASE_URL% sslmode=disable}" \
   postgresem mutation execute "${TEST_ROOT}/mutations/order-insert.json" \
   --project commerce >/dev/null 2>&1
@@ -60,6 +82,12 @@ inserted=$(
 printf '%s\n' "$inserted" | grep -q '"replayed": false'
 printf '%s\n' "$inserted" | grep -q '"affected_rows": 1'
 printf '%s\n' "$inserted" | grep -q '"integration-order-1"'
+if printf '%s\n' "$inserted" |
+  grep -Eq '"source_columns"|"sql"|"statement"|INSERT[[:space:]]+INTO'
+then
+  echo "mutation response exposed a physical mutation surface" >&2
+  exit 1
+fi
 mutation_id=$(
   printf '%s\n' "$inserted" |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["mutation_id"])'
@@ -226,6 +254,7 @@ $$;
 
 DELETE FROM commerce.orders WHERE external_id LIKE 'integration-%';
 DELETE FROM rls_fixture.orders WHERE external_id LIKE 'integration-%';
+TRUNCATE semantic.mutation_audit, semantic.mutation_idempotency;
 SQL
 
 echo "governed mutation integration checks passed"

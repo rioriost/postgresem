@@ -3,13 +3,15 @@
 [日本語](README-jp.md)
 
 `postgresem` is a PostgreSQL-native semantic gateway for AI agents and
-applications. It accepts strict, versioned Logical Semantic Queries (LSQ),
-resolves them against an immutable published semantic revision, and executes
-deterministic parameterized `SELECT` queries through a guarded PostgreSQL
-boundary.
+applications. It accepts strict, versioned Logical Semantic Queries (LSQ) and
+Logical Semantic Mutations (LSM), resolves them against an immutable published
+semantic revision, and executes deterministic parameterized operations through
+separate guarded PostgreSQL query and mutation boundaries.
 
 The latest published release is **0.3.0-beta.1**. It is suitable for local
 evaluation and governed read-only pilots, not production deployment.
+The current source version is **0.4.0** and implements the M6 governed-mutation
+and Linux portability scope pending a tagged release.
 
 ## What problem does postgresem solve?
 
@@ -64,17 +66,18 @@ procedures over a broad abstraction across many database dialects.
 
 ## Roadmap to 1.0
 
-The current `0.3` beta is a governed read-only system. M6 will be released as
-`0.4`, not `1.0`, and is planned to add a separate typed mutation contract for
-bounded inserts and explicitly modeled idempotent upserts. It will not weaken
+The current source implements M6 as `0.4`, not `1.0`: a separate typed mutation
+contract for bounded inserts and explicitly modeled idempotent upserts. It does
+not weaken
 the existing `READ ONLY` query executor or expose raw SQL, arbitrary DML,
 physical identifiers, or request-selected database roles. PostgreSQL GRANT,
 RLS `WITH CHECK`, constraints, and triggers remain authoritative.
 
-`0.4` also makes executed Linux amd64 and arm64 runtime tests a release
-requirement rather than relying only on cross-built archives or a
-multi-architecture image manifest. The Mac Studio and Apple Container remain
-the maintainer's local reference environment, not the only supported target.
+`0.4` also adds native Linux amd64 and arm64 runtime gates for both packaged
+binaries and runtime images instead of treating cross-built archives or a
+multi-architecture manifest as execution evidence. The Mac Studio and Apple
+Container remain the maintainer's local reference environment, not the only
+supported target.
 
 After `0.4`, versions `0.5` through `0.9` will use reproducible comparisons
 with current reference implementations such as Wren AI, Cube, Malloy, and
@@ -107,24 +110,29 @@ for the M6–M12 gates.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What the beta implements
+## What 0.4 implements
 
 - LSQ v1 validation and deterministic compilation
 - Semantic Snapshot/Schema v1 backed by PostgreSQL
 - immutable published revisions with canonical hashes
 - guarded read-only execution with row and byte limits
+- LSM v1 validation and deterministic bounded insert/approved-upsert compilation
+- separate writer credentials, mapped writer roles, and guarded mutation
+  transactions with idempotent replay and reconciliation
 - fixed PostgreSQL role mapping with GRANT and RLS enforcement
-- mandatory query audit lifecycle records
+- mandatory query and mutation audit lifecycle records
 - MCP `2024-11-05` over line-delimited JSON-RPC stdio
-- five semantic-only tools and three resource URI forms
+- seven semantic-only tools and four resource URI forms
 - deterministic semantic model compatibility diffs with a breaking-change gate
 - a 100-model compiler baseline and deterministic 100-relation catalog check
 - local Apple Container Compose development stack using PostgreSQL 18
 
 The MCP tools are `list_semantic_models`, `describe_semantic_model`,
 `validate_semantic_query`, `query_semantic_model`, and
-`explain_semantic_query`. There is no raw SQL or compiler-output MCP tool, and
-MCP responses do not expose generated SQL or physical lineage.
+`explain_semantic_query`, plus `validate_semantic_mutation` and
+`mutate_semantic_model` when mutation configuration is present. There is no raw
+SQL or compiler-output MCP tool, and MCP responses do not expose generated SQL
+or physical lineage.
 
 ## Security boundary
 
@@ -134,6 +142,12 @@ override them. Execution requires a durable `started` audit row, then uses a
 `READ ONLY` transaction with `SET LOCAL ROLE` and transaction-local timeouts.
 The executor rejects missing role membership, superuser or `BYPASSRLS` roles,
 and roles that own a source relation used by the query.
+
+Mutation uses a distinct login, mapped writer role, compiler, executor,
+idempotency store, and audit lifecycle. Business DML, the committed
+idempotency result, and the terminal committed audit state share one
+transaction. PostgreSQL column GRANT, RLS `USING`/`WITH CHECK`, constraints,
+and triggers remain the final authority.
 
 Apple Container requires the gateway Compose configuration user to be root for
 its `/etc/hosts` fallback. The startup command immediately drops to
@@ -160,10 +174,12 @@ and unknown semantic objects receive the same public “not available” errors.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
   and 18 pass the Docker CI migration, integration, and recovery matrix. See the
   [compatibility matrix](docs/compatibility.md) for the exact boundary.
-- Linux amd64 CI and multi-architecture release artifacts exist today, but M6
-  adds release-blocking execution evidence for both Linux amd64 and arm64.
-- Governed writes are planned for `0.4`; no released version currently accepts
-  mutation requests.
+- Native Linux amd64/arm64 CI runtime gates execute the runtime image against
+  PostgreSQL 18; tagged releases additionally gate packaged binaries and both
+  architecture-specific images before publication.
+- Governed writes are limited to published insert/upsert projections. Update,
+  delete, merge, copy, calls, DDL, raw SQL, caller-selected conflict targets,
+  and caller-selected returning fields remain unsupported.
 
 ## Packaging status
 

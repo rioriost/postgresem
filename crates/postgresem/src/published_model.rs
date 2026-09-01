@@ -74,6 +74,20 @@ const MUTATION_MODELS_SQL: &str = r"
     ORDER BY model_id
 ";
 
+const MUTATION_SCHEMA_AVAILABLE_SQL: &str = r"
+    SELECT count(*) = 3 AS available
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'semantic'
+      AND relation.relname IN (
+        'mutation_model',
+        'mutation_field',
+        'mutation_model_role'
+      )
+      AND relation.relkind IN ('r', 'p')
+";
+
 const MUTATION_FIELDS_SQL: &str = r"
     SELECT
         mutation_field.model_id::text AS model_id,
@@ -372,22 +386,32 @@ fn load_published_internal(
             .map_err(|source| query_error("relationships", source))?,
         &mut models,
     )?;
-    load_writable_models(
-        &transaction
-            .query(MUTATION_MODELS_SQL, &[&revision_id])
-            .map_err(|source| query_error("mutation models", source))?,
-        &transaction
-            .query(MUTATION_FIELDS_SQL, &[&revision_id])
-            .map_err(|source| query_error("mutation fields", source))?,
-        &mut models,
-    )?;
-    let writable_models = if let Some(database_role) = database_role {
-        transaction
-            .query(MUTATION_CAPABILITIES_SQL, &[&revision_id, &database_role])
-            .map_err(|source| query_error("mutation capabilities", source))?
-            .into_iter()
-            .map(|row| row.get("semantic_name"))
-            .collect()
+    let mutation_schema_available: bool = transaction
+        .query_one(MUTATION_SCHEMA_AVAILABLE_SQL, &[])
+        .map_err(|source| query_error("mutation schema availability", source))?
+        .get("available");
+    if mutation_schema_available {
+        load_writable_models(
+            &transaction
+                .query(MUTATION_MODELS_SQL, &[&revision_id])
+                .map_err(|source| query_error("mutation models", source))?,
+            &transaction
+                .query(MUTATION_FIELDS_SQL, &[&revision_id])
+                .map_err(|source| query_error("mutation fields", source))?,
+            &mut models,
+        )?;
+    }
+    let writable_models = if mutation_schema_available {
+        if let Some(database_role) = database_role {
+            transaction
+                .query(MUTATION_CAPABILITIES_SQL, &[&revision_id, &database_role])
+                .map_err(|source| query_error("mutation capabilities", source))?
+                .into_iter()
+                .map(|row| row.get("semantic_name"))
+                .collect()
+        } else {
+            BTreeSet::new()
+        }
     } else {
         BTreeSet::new()
     };

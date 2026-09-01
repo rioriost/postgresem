@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "postgresem"
-version = "0.3.0-beta.1"
+version = "0.4.0"
 dependencies = [
  "clap",
  "fallible-iterator",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "postgresem-compiler"
-version = "0.3.0-beta.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",

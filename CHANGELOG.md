@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-01
+
+### Added
+
+- LSM v1 with strict typed values, duplicate-key rejection, bounded batches,
+  deterministic normalization, and mandatory idempotency keys.
+- Published writable-model projections and a deterministic compiler for
+  bounded inserts and approved idempotent upserts.
+- Separate mutation credentials, writer roles, guarded transactions,
+  PostgreSQL RLS `WITH CHECK`, atomic audit/idempotency state, replay, and
+  reconciliation.
+- CLI and capability-gated MCP mutation validation/execution surfaces without
+  raw SQL or physical identifiers.
+- Native Linux amd64/arm64 CI and release gates that execute runtime images and
+  packaged binaries against PostgreSQL 18.
+- Linux installer success and architecture-selection coverage.
+
 ### Changed
 
 - Redefine M6 as the `0.4` governed-ingestion and Linux portability milestone,
@@ -20,6 +37,8 @@
 - Require exact Sigstore workflow/tag verification before the installer trusts
   release checksums.
 - Fix the guarded transaction `search_path` to `pg_catalog`.
+- Keep query execution transaction-level `READ ONLY` while placing all writes
+  behind the separate mutation contract and credentials.
 
 ## [0.3.0-beta.1] - 2026-08-31
 

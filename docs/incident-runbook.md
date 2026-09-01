@@ -1,7 +1,7 @@
-# Beta incident runbook
+# Pre-1.0 incident runbook
 
-This runbook is for read-only pilot deployments. It does not replace an
-organization's production incident process.
+This runbook is for query and governed-mutation pilot deployments. It does not
+replace an organization's production incident process.
 
 ## Immediate priorities
 
@@ -27,6 +27,26 @@ organization's production incident process.
 - run the tenant isolation integration suite before re-enabling access.
 
 Treat any confirmed cross-tenant result as P0.
+
+## Mutation ambiguity or unexpected write
+
+- stop mutation processing while preserving read-only access only if the
+  incident scope permits it;
+- retain the mutation ID, hashed idempotency key, semantic revision, mapped
+  writer role, terminal audit status, and PostgreSQL transaction evidence;
+- do not blindly retry `MUTATION_COMMIT_INDETERMINATE`;
+- set the original key in `POSTGRESEM_IDEMPOTENCY_KEY` and run
+  `postgresem mutation reconcile --project <project>`;
+- revoke the mapped writer role from `postgresem_mutation_runtime` if GRANT or
+  RLS scope is suspect;
+- inspect PostgreSQL RLS `USING`/`WITH CHECK`, column privileges, constraints,
+  and triggers as the final authorization and integrity boundary;
+- resume only after the same-key outcome is known and insert/upsert, replay,
+  rollback, audit-failure, and cross-tenant canaries pass.
+
+Never resolve ambiguity by deleting idempotency state or issuing an ad hoc
+write. Preserve evidence and use a new reviewed request/key only after the
+original outcome is established.
 
 ## Audit lifecycle gap
 

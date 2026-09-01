@@ -3,10 +3,10 @@
 This guide describes the current local/process-oriented beta. It is not a
 production runbook.
 
-The current source executor is read-only. Do not grant business-data write
-privileges to `postgresem_runtime` or its mapped query roles. M6 (`0.4`) plans
-governed ingestion through separate writer credentials, roles, compiler, and
-audit contracts; those controls are not implemented by this guide.
+The query executor remains read-only. Do not grant business-data write
+privileges to `postgresem_runtime` or its mapped query roles. Governed
+ingestion uses separate mutation credentials, roles, compiler, idempotency,
+and audit contracts.
 
 ## Roles and credentials
 
@@ -17,18 +17,26 @@ audit contracts; those controls are not implemented by this guide.
 | `postgresem_runtime` | yes, `NOINHERIT` | loads published metadata and assumes one mapped source role |
 | `postgresem_audit_writer` | yes | member of `postgresem_auditor`; executes audit security-definer functions |
 | `postgresem_auditor` | no | can start/finish audit rows, not select the audit table |
+| `postgresem_mutation_runtime` | yes, `NOINHERIT` | loads published writable metadata and assumes one mapped writer role |
+| `postgresem_mutator` | no | claims/finalizes mutation idempotency and audit state through security-definer functions |
+| `postgresem_order_writer` | no | fixture writer with modeled column-level insert/update/select privileges |
 | `postgresem_analyst` | no | default fixture source-data role |
 | `postgresem_tenant_a` / `postgresem_tenant_b` | no | fixture roles that exercise source RLS |
 | `postgresem_editor`, `postgresem_publisher`, `postgresem_introspector` | no | schema roles reserved for controlled metadata workflows |
 
-Use distinct runtime, audit-writer, and administration credentials. Never use a
-production credential in the sample stack. MCP reads the project, conninfo
-variable names, separate passwords, and mapped role once at startup. Requests
-cannot supply or override them.
+Use distinct query-runtime, mutation-runtime, audit-writer, and administration
+credentials. Never use a production credential in the sample stack. MCP reads
+the project, conninfo variable names, separate passwords, and mapped roles once
+at startup. Requests cannot supply or override them.
 
 The executor verifies that the runtime login is a member of the mapped role.
 It rejects nonexistent roles, superusers, `BYPASSRLS` roles, and roles that own
 any source relation in compiled lineage.
+
+The mutation executor applies the same role-safety checks to the writer role
+and target relation. Query and mutation logins are not members of each other's
+mapped roles. Mutation tools are not advertised when mutation configuration is
+absent.
 
 ## Startup, checks, and shutdown
 
@@ -129,6 +137,19 @@ though raw LSQ literals, credentials, SQL text, and result rows are not stored.
 The preview has no audit retention or audit-reader provisioning automation.
 Do not grant the audit-writer login direct read access merely for convenience.
 
+Mutation audit rows use `semantic.mutation_audit`; replay payloads live in
+`semantic.mutation_idempotency`. Business DML, the committed replay result, and
+the committed audit transition share one transaction. Rejected and rolled-back
+attempts are recorded through the separate audit credential without storing
+input values. A commit-indeterminate response must be reconciled with the same
+idempotency key:
+
+```sh
+postgresem mutation reconcile --project commerce
+```
+
+The key is read from `POSTGRESEM_IDEMPOTENCY_KEY`, not a command-line value.
+
 ## Time, row, request, and result budgets
 
 | Control | Default/current bound | Behavior |
@@ -141,6 +162,12 @@ Do not grant the audit-writer login direct read access merely for convenience.
 | idle transaction timeout | 5,000 ms | transaction-local |
 | MCP input line | 1,048,576 bytes | oversized line is consumed and rejected |
 | model page | 50 default, 100 maximum | revision-bound opaque cursor |
+| LSM request | 1,048,576 bytes | larger requests are rejected before compilation |
+| LSM rows | 100 | model-specific lower limits may apply |
+| mutation result JSON bytes | 1,048,576 | mutation transaction rolls back before commit |
+| mutation statement timeout | 30,000 ms | PostgreSQL cancels and rolls back the mutation |
+| mutation lock timeout | 5,000 ms | transaction-local |
+| mutation idle transaction timeout | 5,000 ms | transaction-local |
 
 Configure the execution values with positive integer environment variables:
 `POSTGRESEM_MAX_RESULT_BYTES`, `POSTGRESEM_STATEMENT_TIMEOUT_MS`,
@@ -150,6 +177,11 @@ startup, so restart the attached MCP process after changes.
 
 There is no concurrent MCP cancellation. Narrow the LSQ or adjust a locally
 approved statement timeout; do not treat a larger timeout as a correctness fix.
+
+Mutation equivalents are `POSTGRESEM_MAX_MUTATION_RESULT_BYTES`,
+`POSTGRESEM_MUTATION_STATEMENT_TIMEOUT_MS`,
+`POSTGRESEM_MUTATION_LOCK_TIMEOUT_MS`, and
+`POSTGRESEM_MUTATION_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS`.
 
 ## RLS and source grants
 

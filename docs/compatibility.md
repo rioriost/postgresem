@@ -3,7 +3,7 @@
 ## Version policy
 
 The project uses Semantic Versioning. The latest published release is
-`0.3.0-beta.1`. Before 1.0:
+`0.3.0-beta.1`; the current source package is `0.4.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -30,9 +30,11 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | MCP protocol | `2024-11-05` | initialize returns this version; stdio JSON-RPC only |
 | MCP tool schema | `"1"` | every tool requires this exact version |
 | compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
-| database migrations | `0001`–`0004` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
-| package | `0.3.0-beta.1` | current beta package |
-| planned mutation contract | not implemented | M6/`0.4`; separate schema/capability for bounded insert and approved idempotent upsert |
+| LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
+| mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
+| database migrations | `0001`–`0005` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
+| source package | `0.4.0` | M6 governed-mutation and Linux portability package |
+| latest published package | `0.3.0-beta.1` | signed beta release; read-only public contract |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -159,10 +161,10 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 | Apple Container 1.0.0 + `container-compose` 1.1.0 on macOS arm64 | supported quickstart path |
 | locally built `gateway:latest` OCI image | supported by `make dev-up`; Apple Container runs the image in a Linux arm64 VM on the documented macOS path |
 | Docker/Docker Compose on Linux amd64 | exercised by GitHub Actions integration jobs; not yet the end-user quickstart |
-| Linux arm64 runtime execution gate | planned for M6; a published archive/manifest alone is not considered sufficient runtime evidence |
+| Linux amd64/arm64 runtime execution gate | native CI jobs execute the runtime image against PostgreSQL 18; tagged releases also execute each packaged binary and architecture-specific image before publication |
 | native binary archives | `v0.3.0-beta.1` published for Linux amd64/arm64 and macOS amd64/arm64 |
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
-| `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`, and was exercised against the published `v0.3.0-beta.1` macOS arm64 archive |
+| `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`; CI covers successful Linux architecture selection and failed-signature rejection |
 | versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.3.0-beta.1` |
 | multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:b2f67b4a8da954b129b93a47641a55810ce36772d3efc6960a39bdaaad7a282d` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
@@ -172,8 +174,9 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
 tags, requires the tag to match the workspace version, builds the four native
-archives, generates `SHA256SUMS`, publishes the multi-architecture image, then
-creates a GitHub release.
+archives, executes Linux amd64/arm64 packaged-binary smoke tests, executes both
+native runtime images, generates `SHA256SUMS`, publishes the
+multi-architecture image only after those gates, then creates a GitHub release.
 [Release run 33399332825](https://github.com/rioriost/postgresem/actions/runs/33399332825)
 completed successfully and published the
 [`v0.3.0-beta.1` pre-release](https://github.com/rioriost/postgresem/releases/tag/v0.3.0-beta.1).
@@ -194,8 +197,8 @@ supply-chain artifact.
   custom trust roots and client certificates are not yet configurable;
 - no concurrent MCP cancellation;
 - no connection pool or remote multi-user service;
-- no governed mutation contract or write-capable public operation; the current
-  query executor remains `READ ONLY`;
+- governed mutation is limited to published insert/upsert projections; no
+  arbitrary update/delete/merge/copy/call/DDL surface;
 - snapshot is reloaded per operation;
 - semantic discovery is not a full source-GRANT preflight;
 - strict subset of single-fact and safe many-to-one semantics; unsupported
@@ -203,8 +206,8 @@ supply-chain artifact.
 - query row limit and result-byte truncation, with no result pagination;
 - no down migrations, production backup retention, RPO/RTO guarantee, disaster
   recovery service, or uninstall;
-- Linux arm64 release artifacts are published, but dedicated release-blocking
-  execution coverage for both Linux architectures is an M6 requirement;
+- a tagged `0.4.0` release has not yet published the configured Linux runtime
+  evidence artifacts;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist

@@ -23,8 +23,8 @@ services:
 
   mutation-test:
     build:
-        args:
-          POSTGRES_VERSION: ${POSTGRES_VERSION}
+      args:
+        POSTGRES_VERSION: ${POSTGRES_VERSION}
 
   performance-test:
     build:

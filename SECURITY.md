@@ -3,11 +3,12 @@
 ## Supported versions and scope
 
 No production-ready version has been released. `0.3.0-beta.1` is the active
-published beta for local evaluation and governed read-only pilots. There is no
-long-term-support promise for 0.x prereleases.
+published beta; the current `0.4.0` source adds governed mutations and native
+Linux runtime gates. There is no long-term-support promise for 0.x releases.
 
-The implemented application boundary is MCP stdio and guarded read-only
-PostgreSQL execution. PostgreSQL connections require explicit
+The implemented application boundary is MCP stdio, guarded read-only query
+execution, and a separate guarded mutation path for published bounded
+insert/upsert projections. PostgreSQL connections require explicit
 `sslmode=require` or `sslmode=disable`; remote TLS uses the platform trust
 store and hostname verification. There is no HTTP service, remote
 authentication protocol, production RPO/RTO guarantee, or production
@@ -56,13 +57,15 @@ invariant:
 - protocol stdout contains only JSON-RPC messages;
 - MCP errors/logs omit credentials, SQL, rows, literals, principals, and
   private requested names.
-
-M6 (`0.4`) plans a separate governed mutation capability. It must not weaken
-the invariants above or reuse the read-only credential/executor as a writable
-path. Before mutation is exposed, the project requires a versioned typed
-contract, separate writer roles, PostgreSQL RLS `WITH CHECK` and constraints,
-idempotency, atomic audit lifecycle, rollback/reconciliation tests, and
-explicit capability negotiation. Raw SQL and arbitrary DML remain prohibited.
+- LSM accepts semantic model/field names and typed values only, never raw SQL,
+  physical identifiers, arbitrary DML, conflict expressions, or returning lists;
+- mutation uses a separate login, mapped writer role, compiler, executor,
+  idempotency store, and audit lifecycle;
+- PostgreSQL column GRANT, RLS `USING`/`WITH CHECK`, constraints, and triggers
+  remain authoritative;
+- business DML, committed replay state, and committed audit finalization are
+  atomic; ambiguous commit outcomes require same-key reconciliation;
+- mutation results and MCP logs do not expose generated SQL or input values.
 
 ## Safe evaluation
 

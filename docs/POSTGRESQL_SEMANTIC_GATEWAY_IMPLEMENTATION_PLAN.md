@@ -888,6 +888,10 @@ is not retroactively marked complete; unresolved P0/P1 findings still block a
 
 ### M6: 0.4 — Governed Ingestion and Portable Linux
 
+**Implementation status:** complete in the `0.4.0` source tree. Promotion
+requires the PostgreSQL 16–18 suite, native Linux amd64/arm64 runtime gates,
+and post-implementation review to pass on the release commit.
+
 - Specify LSM v1 and a writable-model projection in the Semantic Schema.
 - Implement bounded typed `insert` and approved idempotent `upsert`; keep raw
   SQL, arbitrary DML, physical identifiers, `UPDATE`, `DELETE`, `MERGE`,

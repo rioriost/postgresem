@@ -19,6 +19,8 @@ EXPECTED_TOOLS = [
     "validate_semantic_query",
     "query_semantic_model",
     "explain_semantic_query",
+    "validate_semantic_mutation",
+    "mutate_semantic_model",
 ]
 
 
@@ -183,6 +185,12 @@ def main() -> int:
         "--model", default="orders", help="model used for describe_semantic_model"
     )
     parser.add_argument(
+        "--lsm",
+        type=Path,
+        default=root / "examples/commerce/order-insert.json",
+        help="LSM JSON used for mutation validation and execution",
+    )
+    parser.add_argument(
         "--timeout", type=float, default=30.0, help="seconds per response/exit"
     )
     parser.add_argument(
@@ -204,6 +212,14 @@ def main() -> int:
         return 2
     if not isinstance(lsq, dict):
         print(f"FAIL: LSQ {args.lsq} is not a JSON object", file=sys.stderr)
+        return 2
+    try:
+        lsm = json.loads(args.lsm.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"FAIL: could not read LSM {args.lsm}: {error}", file=sys.stderr)
+        return 2
+    if not isinstance(lsm, dict):
+        print(f"FAIL: LSM {args.lsm} is not a JSON object", file=sys.stderr)
         return 2
 
     client: McpClient | None = None
@@ -286,6 +302,28 @@ def main() -> int:
             "query_semantic_model: "
             f"columns=[{', '.join(columns)}] rows={len(queried.get('rows', []))} "
             f"truncated={queried.get('truncated')}"
+        )
+
+        mutation_arguments = {"schema_version": "1", "lsm": lsm}
+        validated_mutation = call_tool(
+            client, "validate_semantic_mutation", mutation_arguments
+        )
+        if validated_mutation.get("valid") is not True:
+            error = validated_mutation.get("error", {})
+            raise SmokeFailure(
+                f"mutation validation rejected LSM: "
+                f"{error.get('code')}: {error.get('message')}"
+            )
+        print(
+            "validate_semantic_mutation: "
+            f"valid=True operation={validated_mutation.get('operation')} "
+            f"rows={validated_mutation.get('expected_rows')}"
+        )
+
+        mutated = call_tool(client, "mutate_semantic_model", mutation_arguments)
+        print(
+            "mutate_semantic_model: "
+            f"rows={mutated.get('affected_rows')} replayed={mutated.get('replayed')}"
         )
 
         resources = client.request("resources/list", {}).get("resources")
