@@ -238,9 +238,36 @@ controlled DBA/deployment SQL workflow. Before changing it:
 
 Never mutate the current published rows or canonical hash to force acceptance.
 
+## Catalog drift gate
+
+Use the same least-privilege introspection role to capture catalog evidence on
+both sides of a PostgreSQL schema, GRANT, or RLS change:
+
+```sh
+DATABASE_URL='postgresql://...?...&sslmode=require' \
+  postgresem catalog scan > before-catalog.json
+
+# Apply the reviewed database migration.
+
+DATABASE_URL='postgresql://...?...&sslmode=require' \
+  postgresem catalog scan > after-catalog.json
+
+postgresem catalog diff \
+  --from before-catalog.json \
+  --to after-catalog.json \
+  --fail-on-breaking
+```
+
+The command verifies snapshot fingerprints and rejects comparisons across
+different databases or introspection roles. Relation/column additions are
+compatible, comments and added constraints require review, and destructive,
+type, grant, constraint, RLS, or policy drift is breaking. Review the JSON
+evidence before building a semantic candidate; the command does not modify or
+publish Semantic Schema rows.
+
 ## Upgrade order
 
-Forward migrations `0001` through `0004`, idempotent reruns, N-1 execution, and
+Forward migrations `0001` through `0005`, idempotent reruns, N-1 execution, and
 N-1-to-current migration are tested.
 
 For a disposable/local preview upgrade:

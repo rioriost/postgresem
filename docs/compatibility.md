@@ -106,6 +106,34 @@ Performance measurements are a separate environment-specific signal. See the
 [M4 performance baseline](performance.md); passing it does not make a semantic
 change compatible.
 
+## PostgreSQL catalog drift
+
+Capture catalog evidence before and after a schema, privilege, or RLS change
+with `postgresem catalog scan`, then compare it with:
+
+```sh
+postgresem catalog diff \
+  --from BEFORE-CATALOG.json \
+  --to AFTER-CATALOG.json \
+  --fail-on-breaking
+```
+
+Catalog diff verifies both canonical snapshot fingerprints and requires the
+same database and introspection role. It reports deterministic JSON using
+JSON-pointer paths and three classifications:
+
+- `compatible`: relation or column additions;
+- `review_required`: server-version changes, comments, and newly observed
+  constraints;
+- `breaking`: removals and changes to relation kinds, column types/nullability,
+  effective grants, constraints, RLS state, or RLS policies.
+
+The conservative classifier is a publication gate, not proof that a compatible
+addition has correct business meaning. RLS and GRANT changes are always
+breaking because the same structural shape can have a different authorization
+boundary. A role change is rejected instead of being misreported as drift
+because catalog visibility is role-dependent.
+
 ## Migration and upgrade compatibility
 
 Migrations are forward-only and recorded in `semantic.schema_migration`.

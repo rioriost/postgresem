@@ -302,6 +302,10 @@ pub enum PolicyCommand {
 
 #[derive(Debug, Error)]
 pub enum CatalogError {
+    #[error("unsupported catalog snapshot schema version: {0}")]
+    UnsupportedSchemaVersion(String),
+    #[error("catalog snapshot fingerprint does not match its canonical contents")]
+    InvalidFingerprint,
     #[error("connection URL environment variable {0} is not set")]
     MissingConnectionUrl(String),
     #[error("connection URL environment variable {0} is not valid Unicode")]
@@ -671,10 +675,24 @@ impl CatalogSnapshot {
     }
 
     #[cfg(test)]
-    fn finalize(mut self) -> Result<Self, CatalogError> {
+    pub(crate) fn finalize(mut self) -> Result<Self, CatalogError> {
         self.normalize();
         self.fingerprint = self.calculate_fingerprint()?;
         Ok(self)
+    }
+
+    pub(crate) fn validated_normalized(&self) -> Result<Self, CatalogError> {
+        if self.schema_version != CATALOG_SNAPSHOT_SCHEMA_VERSION {
+            return Err(CatalogError::UnsupportedSchemaVersion(
+                self.schema_version.clone(),
+            ));
+        }
+        let mut canonical = self.clone();
+        canonical.normalize();
+        if canonical.calculate_fingerprint()? != self.fingerprint {
+            return Err(CatalogError::InvalidFingerprint);
+        }
+        Ok(canonical)
     }
 }
 

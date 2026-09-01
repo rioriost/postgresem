@@ -9,6 +9,7 @@ use serde_json::json;
 
 mod benchmark;
 mod catalog;
+mod catalog_diff;
 mod database;
 mod doctor;
 mod executor;
@@ -84,6 +85,14 @@ enum CatalogCommands {
     Scan {
         #[arg(long, default_value = "DATABASE_URL", value_name = "NAME")]
         database_url_env: String,
+    },
+    Diff {
+        #[arg(long)]
+        from: PathBuf,
+        #[arg(long)]
+        to: PathBuf,
+        #[arg(long)]
+        fail_on_breaking: bool,
     },
 }
 
@@ -266,6 +275,14 @@ fn run() -> Result<(), Box<dyn Error>> {
         Commands::Catalog {
             command: CatalogCommands::Scan { database_url_env },
         } => scan_catalog(&database_url_env),
+        Commands::Catalog {
+            command:
+                CatalogCommands::Diff {
+                    from,
+                    to,
+                    fail_on_breaking,
+                },
+        } => diff_catalogs(&from, &to, fail_on_breaking),
         Commands::Doctor { json } => doctor(json),
         Commands::Model {
             command:
@@ -532,6 +549,21 @@ fn scan_catalog(database_url_env: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn diff_catalogs(
+    from: &PathBuf,
+    to: &PathBuf,
+    fail_on_breaking: bool,
+) -> Result<(), Box<dyn Error>> {
+    let before: catalog::CatalogSnapshot = serde_json::from_slice(&fs::read(from)?)?;
+    let after: catalog::CatalogSnapshot = serde_json::from_slice(&fs::read(to)?)?;
+    let diff = catalog_diff::diff_catalogs(&before, &after)?;
+    println!("{}", serde_json::to_string_pretty(&diff)?);
+    if fail_on_breaking && diff.has_breaking_changes() {
+        return Err("catalog diff contains breaking changes".into());
+    }
+    Ok(())
+}
+
 fn hash_snapshot(path: &PathBuf) -> Result<(), Box<dyn Error>> {
     let snapshot: SemanticSnapshot = serde_json::from_slice(&fs::read(path)?)?;
     println!("{}", snapshot.calculate_revision_hash()?);
@@ -651,6 +683,31 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn catalog_diff_has_explicit_snapshot_paths_and_breaking_gate() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "catalog",
+                "diff",
+                "--from",
+                "before.json",
+                "--to",
+                "after.json",
+                "--fail-on-breaking",
+            ]),
+            Ok(Cli {
+                command: Commands::Catalog {
+                    command: CatalogCommands::Diff {
+                        from,
+                        to,
+                        fail_on_breaking: true,
+                    }
+                }
+            }) if from.to_str() == Some("before.json") && to.to_str() == Some("after.json")
+        ));
     }
 
     #[test]
