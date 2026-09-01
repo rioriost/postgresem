@@ -76,7 +76,12 @@ env["MCP_AUDIT_DATABASE_URL"] = (
 )
 env["POSTGRESEM_MAX_RESULT_BYTES"] = "12"
 
-psql("TRUNCATE semantic.query_audit")
+psql(
+    """
+TRUNCATE semantic.query_audit, semantic.mutation_audit, semantic.mutation_idempotency;
+DELETE FROM commerce.orders WHERE external_id = 'mcp-order-1';
+"""
+)
 
 process = subprocess.Popen(
     ["postgresem", "mcp", "serve"],
@@ -236,6 +241,8 @@ expected_tools = [
     "validate_semantic_query",
     "query_semantic_model",
     "explain_semantic_query",
+    "validate_semantic_mutation",
+    "mutate_semantic_model",
 ]
 if tool_names != expected_tools:
     fail(f"unexpected tools: {tool_names}")
@@ -478,6 +485,66 @@ if truncated["warnings"] != [
 ]:
     fail(f"truncated query warning is missing or unstable: {truncated}")
 
+lsm = {
+    "schema_version": "1",
+    "operation": "insert",
+    "model": "orders",
+    "idempotency_key": "mcp-order-insert",
+    "rows": [
+        {
+            "external_id": {"type": "text", "value": "mcp-order-1"},
+            "customer_id": {"type": "integer", "value": 1},
+            "ordered_at": {"type": "timestamp", "value": "2026-09-01T08:00:00Z"},
+            "status": {"type": "text", "value": "paid"},
+            "amount": {"type": "numeric", "value": "8.50"},
+        }
+    ],
+}
+validated_mutation = structured(
+    call(
+        "validate_semantic_mutation",
+        {"schema_version": "1", "lsm": lsm},
+        "validate-mutation",
+    )
+)
+if (
+    not validated_mutation["valid"]
+    or validated_mutation["operation"] != "insert"
+    or validated_mutation["expected_rows"] != 1
+):
+    fail(f"mutation validation result is incomplete: {validated_mutation}")
+if has_key(validated_mutation, {"sql", "statement", "source_columns"}):
+    fail("mutation validation exposed a physical mutation surface")
+
+mutated = structured(
+    call(
+        "mutate_semantic_model",
+        {"schema_version": "1", "lsm": lsm},
+        "mutate",
+    )
+)
+if (
+    mutated["affected_rows"] != 1
+    or mutated["replayed"]
+    or mutated["rows"][0][1] != "mcp-order-1"
+):
+    fail(f"mutation result is incorrect: {mutated}")
+if has_key(mutated, {"sql", "statement", "source_columns"}):
+    fail("mutation result exposed a physical mutation surface")
+
+replayed_mutation = structured(
+    call(
+        "mutate_semantic_model",
+        {"schema_version": "1", "lsm": lsm},
+        "mutate-replay",
+    )
+)
+if (
+    not replayed_mutation["replayed"]
+    or replayed_mutation["mutation_id"] != mutated["mutation_id"]
+):
+    fail(f"MCP mutation replay is incorrect: {replayed_mutation}")
+
 resources = send(
     {
         "jsonrpc": "2.0",
@@ -499,6 +566,7 @@ expected_uris = {
     "semantic://projects/commerce/models/subscriptions",
     "semantic://projects/commerce/models/tenant_orders",
     "semantic://schemas/lsq/v1",
+    "semantic://schemas/lsm/v1",
 }
 if {resource["uri"] for resource in resources} != expected_uris:
     fail(f"unexpected resources: {resources}")
@@ -528,6 +596,11 @@ if "internal_" in json.dumps(model_resource):
 schema_resource = read_resource("semantic://schemas/lsq/v1", 14)
 if schema_resource.get("additionalProperties") is not False:
     fail("LSQ schema resource is not the strict bundled schema")
+mutation_schema_resource = read_resource(
+    "semantic://schemas/lsm/v1", "mutation-schema"
+)
+if mutation_schema_resource.get("additionalProperties") is not False:
+    fail("LSM schema resource is not the strict bundled schema")
 
 process.stdin.close()
 try:
@@ -560,6 +633,8 @@ for forbidden_value in [
     "postgresem_runtime",
     "SELECT ",
     "mcp:stdio",
+    "mcp-order-1",
+    "8.50",
 ]:
     if forbidden_value in stderr_output:
         fail(f"sensitive request data leaked to MCP logs: {forbidden_value}")
@@ -581,6 +656,30 @@ BEGIN
       AND policy_context->>'database_role' = 'postgresem_analyst'
   ) THEN
     RAISE EXCEPTION 'MCP execution context was not audited';
+  END IF;
+END;
+$$;
+"""
+    % principal_hash
+)
+
+psql(
+    """
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM semantic.mutation_audit) <> 2 THEN
+    RAISE EXCEPTION 'unexpected MCP mutation audit count';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM semantic.mutation_audit
+    WHERE status = 'committed'
+      AND config_profile = 'mcp-stdio'
+      AND principal_subject_hash = '%s'
+      AND policy_context->>'database_role' = 'postgresem_order_writer'
+      AND replayed
+  ) THEN
+    RAISE EXCEPTION 'MCP mutation execution context or replay was not audited';
   END IF;
 END;
 $$;

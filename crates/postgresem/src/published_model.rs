@@ -1,9 +1,13 @@
-use std::{collections::BTreeMap, env};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env,
+};
 
 use postgres::{Client, IsolationLevel, Row};
 use postgresem_compiler::{
-    Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model, Relation,
-    Relationship, SemanticSnapshot,
+    Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model,
+    MutationCapabilities, Relation, Relationship, SemanticSnapshot, UpsertPolicy, WritableField,
+    WritableModel,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -48,13 +52,54 @@ const FIELDS_SQL: &str = r"
         field.source_relationship_id::text AS source_relationship_id,
         source_relationship.semantic_name AS declared_relationship_name,
         source_relationship.from_model_id::text AS relationship_from_model_id,
-        field.hidden
+        field.hidden,
+        field.nullable
     FROM semantic.field AS field
     LEFT JOIN semantic.relationship AS source_relationship
       ON source_relationship.relationship_id = field.source_relationship_id
      AND source_relationship.revision_id = field.revision_id
     WHERE field.revision_id = $1::text::uuid
     ORDER BY field.model_id, field.semantic_name
+";
+
+const MUTATION_MODELS_SQL: &str = r"
+    SELECT
+        model_id::text AS model_id,
+        insert_enabled,
+        upsert_enabled,
+        max_rows,
+        max_request_bytes
+    FROM semantic.mutation_model
+    WHERE revision_id = $1::text::uuid
+    ORDER BY model_id
+";
+
+const MUTATION_FIELDS_SQL: &str = r"
+    SELECT
+        mutation_field.model_id::text AS model_id,
+        field.semantic_name,
+        mutation_field.insertable,
+        mutation_field.required_on_insert,
+        mutation_field.updatable_on_conflict,
+        mutation_field.conflict_key_ordinal::integer AS conflict_key_ordinal,
+        mutation_field.returning_ordinal::integer AS returning_ordinal
+    FROM semantic.mutation_field
+    JOIN semantic.field
+      ON field.field_id = mutation_field.field_id
+     AND field.revision_id = mutation_field.revision_id
+    WHERE mutation_field.revision_id = $1::text::uuid
+    ORDER BY mutation_field.model_id, field.semantic_name
+";
+
+const MUTATION_CAPABILITIES_SQL: &str = r"
+    SELECT model.semantic_name
+    FROM semantic.mutation_model_role
+    JOIN semantic.model
+      ON model.model_id = mutation_model_role.model_id
+     AND model.revision_id = mutation_model_role.revision_id
+    WHERE mutation_model_role.revision_id = $1::text::uuid
+      AND mutation_model_role.database_role = $2::name
+    ORDER BY model.semantic_name
 ";
 
 const METRICS_SQL: &str = r"
@@ -193,6 +238,8 @@ pub enum PublishedModelError {
         "published semantic relationship {model}.{relationship} must have exactly one column pair"
     )]
     InvalidRelationshipColumns { model: String, relationship: String },
+    #[error("published writable semantic model metadata is invalid")]
+    InvalidWritableMetadata,
     #[error("published semantic revision hash mismatch: expected {expected}, calculated {actual}")]
     HashMismatch { expected: String, actual: String },
     #[error("failed to calculate published semantic revision hash")]
@@ -206,6 +253,12 @@ pub struct PublishedModel {
     pub project: String,
     pub revision_id: String,
     pub snapshot: SemanticSnapshot,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedMutationModel {
+    pub published: PublishedModel,
+    pub capabilities: MutationCapabilities,
 }
 
 #[derive(Debug, Deserialize)]
@@ -252,6 +305,30 @@ pub fn load_published(
     client: &mut Client,
     project: &str,
 ) -> Result<PublishedModel, PublishedModelError> {
+    Ok(load_published_internal(client, project, None)?.0)
+}
+
+pub fn load_published_for_mutation(
+    client: &mut Client,
+    project: &str,
+    database_role: &str,
+) -> Result<PublishedMutationModel, PublishedModelError> {
+    let (published, writable_models) =
+        load_published_internal(client, project, Some(database_role))?;
+    Ok(PublishedMutationModel {
+        published,
+        capabilities: MutationCapabilities {
+            profile: format!("database-role:{database_role}"),
+            writable_models,
+        },
+    })
+}
+
+fn load_published_internal(
+    client: &mut Client,
+    project: &str,
+    database_role: Option<&str>,
+) -> Result<(PublishedModel, BTreeSet<String>), PublishedModelError> {
     let mut transaction = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
@@ -295,6 +372,25 @@ pub fn load_published(
             .map_err(|source| query_error("relationships", source))?,
         &mut models,
     )?;
+    load_writable_models(
+        &transaction
+            .query(MUTATION_MODELS_SQL, &[&revision_id])
+            .map_err(|source| query_error("mutation models", source))?,
+        &transaction
+            .query(MUTATION_FIELDS_SQL, &[&revision_id])
+            .map_err(|source| query_error("mutation fields", source))?,
+        &mut models,
+    )?;
+    let writable_models = if let Some(database_role) = database_role {
+        transaction
+            .query(MUTATION_CAPABILITIES_SQL, &[&revision_id, &database_role])
+            .map_err(|source| query_error("mutation capabilities", source))?
+            .into_iter()
+            .map(|row| row.get("semantic_name"))
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
 
     let snapshot = SemanticSnapshot {
         schema_version,
@@ -305,11 +401,110 @@ pub fn load_published(
     verify_hash(&snapshot, &expected_hash)?;
 
     transaction.commit().map_err(PublishedModelError::Commit)?;
-    Ok(PublishedModel {
-        project: project.to_owned(),
-        revision_id,
-        snapshot,
-    })
+    Ok((
+        PublishedModel {
+            project: project.to_owned(),
+            revision_id,
+            snapshot,
+        },
+        writable_models,
+    ))
+}
+
+struct LoadedWritable {
+    policy: WritableModel,
+    conflict_fields: Vec<(i32, String)>,
+    returning: Vec<(i32, String)>,
+}
+
+fn load_writable_models(
+    model_rows: &[Row],
+    field_rows: &[Row],
+    models: &mut BTreeMap<String, Model>,
+) -> Result<(), PublishedModelError> {
+    let mut writable = BTreeMap::new();
+    for row in model_rows {
+        let model_id: String = row.get("model_id");
+        if !models.contains_key(&model_id) || writable.contains_key(&model_id) {
+            return Err(PublishedModelError::InvalidWritableMetadata);
+        }
+        let upsert_enabled: bool = row.get("upsert_enabled");
+        writable.insert(
+            model_id,
+            LoadedWritable {
+                policy: WritableModel {
+                    insert: row.get("insert_enabled"),
+                    upsert: upsert_enabled.then(|| UpsertPolicy {
+                        conflict_fields: vec![],
+                    }),
+                    max_rows: u32::try_from(row.get::<_, i32>("max_rows"))
+                        .map_err(|_| PublishedModelError::InvalidWritableMetadata)?,
+                    max_request_bytes: u32::try_from(row.get::<_, i32>("max_request_bytes"))
+                        .map_err(|_| PublishedModelError::InvalidWritableMetadata)?,
+                    fields: vec![],
+                    returning: vec![],
+                },
+                conflict_fields: vec![],
+                returning: vec![],
+            },
+        );
+    }
+
+    for row in field_rows {
+        let model_id: String = row.get("model_id");
+        let loaded = writable
+            .get_mut(&model_id)
+            .ok_or(PublishedModelError::InvalidWritableMetadata)?;
+        let field: String = row.get("semantic_name");
+        if row.get("insertable") {
+            let nullable = models
+                .get(&model_id)
+                .and_then(|model| {
+                    model
+                        .fields
+                        .iter()
+                        .find(|model_field| model_field.semantic_name == field)
+                })
+                .ok_or(PublishedModelError::InvalidWritableMetadata)?
+                .nullable;
+            loaded.policy.fields.push(WritableField {
+                field: field.clone(),
+                nullable,
+                required_on_insert: row.get("required_on_insert"),
+                updatable_on_conflict: row.get("updatable_on_conflict"),
+            });
+        }
+        if let Some(ordinal) = row.get("conflict_key_ordinal") {
+            loaded.conflict_fields.push((ordinal, field.clone()));
+        }
+        if let Some(ordinal) = row.get("returning_ordinal") {
+            loaded.returning.push((ordinal, field));
+        }
+    }
+
+    for (model_id, mut loaded) in writable {
+        loaded.conflict_fields.sort_by_key(|(ordinal, _)| *ordinal);
+        loaded.returning.sort_by_key(|(ordinal, _)| *ordinal);
+        if let Some(upsert) = &mut loaded.policy.upsert {
+            upsert.conflict_fields = loaded
+                .conflict_fields
+                .into_iter()
+                .map(|(_, field)| field)
+                .collect();
+        } else if !loaded.conflict_fields.is_empty() {
+            return Err(PublishedModelError::InvalidWritableMetadata);
+        }
+        loaded.policy.returning = loaded
+            .returning
+            .into_iter()
+            .map(|(_, field)| field)
+            .collect();
+        models
+            .get_mut(&model_id)
+            .ok_or(PublishedModelError::InvalidWritableMetadata)?
+            .writable = Some(loaded.policy);
+    }
+    Ok(())
 }
 
 fn load_models(rows: &[Row]) -> Result<BTreeMap<String, Model>, PublishedModelError> {
@@ -331,6 +526,7 @@ fn load_models(rows: &[Row]) -> Result<BTreeMap<String, Model>, PublishedModelEr
                 },
                 timezone: row.get("default_timezone"),
                 queryable: row.get("queryable"),
+                writable: None,
                 fields: vec![],
                 metrics: vec![],
                 relationships: vec![],
@@ -381,6 +577,7 @@ fn load_fields(
             time_dimension,
             entity_key,
             visible: !row.get::<_, bool>("hidden"),
+            nullable: row.get("nullable"),
         });
     }
     Ok(())

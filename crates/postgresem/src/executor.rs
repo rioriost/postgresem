@@ -236,6 +236,14 @@ impl ExecutionContext {
             config_profile,
         })
     }
+
+    pub(crate) fn principal_subject(&self) -> &str {
+        &self.principal_subject
+    }
+
+    pub(crate) fn config_profile(&self) -> &str {
+        &self.config_profile
+    }
 }
 
 pub fn execute(

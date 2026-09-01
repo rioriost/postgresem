@@ -14,6 +14,7 @@ COMMENT ON COLUMN commerce.customer.region IS 'Reporting region for the customer
 
 CREATE TABLE commerce.orders (
   order_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  external_id text NOT NULL UNIQUE,
   customer_id bigint NOT NULL REFERENCES commerce.customer(customer_id),
   ordered_at timestamptz NOT NULL,
   status text NOT NULL CHECK (status IN ('pending', 'paid', 'cancelled')),
@@ -36,12 +37,12 @@ VALUES
   ('Birch Retail', 'emea', 2000.00),
   ('Cedar Market', 'amer', 3000.00);
 
-INSERT INTO commerce.orders (customer_id, ordered_at, status, amount)
+INSERT INTO commerce.orders (external_id, customer_id, ordered_at, status, amount)
 VALUES
-  (1, '2026-01-15T10:00:00Z', 'paid', 120.00),
-  (1, '2026-02-10T11:30:00Z', 'paid', 80.50),
-  (2, '2026-02-12T09:15:00Z', 'pending', 45.00),
-  (3, '2026-03-01T15:45:00Z', 'cancelled', 300.00);
+  ('fixture-order-1', 1, '2026-01-15T10:00:00Z', 'paid', 120.00),
+  ('fixture-order-2', 1, '2026-02-10T11:30:00Z', 'paid', 80.50),
+  ('fixture-order-3', 2, '2026-02-12T09:15:00Z', 'pending', 45.00),
+  ('fixture-order-4', 3, '2026-03-01T15:45:00Z', 'cancelled', 300.00);
 
 INSERT INTO commerce.order_item (order_id, sku, quantity)
 VALUES
@@ -53,5 +54,16 @@ ALTER TABLE commerce.customer OWNER TO postgresem_source_owner;
 ALTER TABLE commerce.orders OWNER TO postgresem_source_owner;
 ALTER TABLE commerce.order_item OWNER TO postgresem_source_owner;
 
+GRANT USAGE ON SCHEMA commerce TO postgresem_source_owner;
 GRANT USAGE ON SCHEMA commerce TO postgresem_analyst;
 GRANT SELECT ON ALL TABLES IN SCHEMA commerce TO postgresem_analyst;
+
+GRANT USAGE ON SCHEMA commerce TO postgresem_order_writer;
+GRANT INSERT (external_id, customer_id, ordered_at, status, amount)
+  ON commerce.orders TO postgresem_order_writer;
+GRANT UPDATE (customer_id, ordered_at, status, amount)
+  ON commerce.orders TO postgresem_order_writer;
+GRANT SELECT (order_id, external_id, customer_id, ordered_at, status, amount)
+  ON commerce.orders TO postgresem_order_writer;
+GRANT USAGE, SELECT ON SEQUENCE commerce.orders_order_id_seq
+  TO postgresem_order_writer;

@@ -5,7 +5,8 @@ source_database=$PGDATABASE
 n_minus_one_database=postgresem_n_minus_one_test
 held_database=postgresem_restore_source_hold
 dump_path=/tmp/postgresem-recovery.dump
-expected_revision=sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6
+n_minus_one_revision=sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6
+current_revision=sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c
 source_held=false
 
 if [ "$source_database" != postgresem_dev ]; then
@@ -32,6 +33,7 @@ configure_gateway_urls() {
 
 verify_revision() {
   database=$1
+  expected_revision=$2
   revision=$(
     PGDATABASE=$database psql --no-psqlrc --tuples-only --no-align \
       -v ON_ERROR_STOP=1 \
@@ -84,19 +86,19 @@ then
   echo "invalid migration ceiling changed the database" >&2
   exit 1
 fi
-POSTGRESEM_MIGRATION_MAX_VERSION=0003_guarded_execution_audit \
+POSTGRESEM_MIGRATION_MAX_VERSION=0004_beta_operational_report \
   sh /migrations/run.sh
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/semantic/commerce.sql
 
 if psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
-  -c "SELECT to_regprocedure('semantic.beta_operational_report(timestamptz)')" |
-  grep -q beta_operational_report
+  -c "SELECT to_regprocedure('semantic.claim_mutation(text,text,text,text,uuid,text,text,text,text,text,text,text,text,jsonb,jsonb,jsonb,bigint,bigint,bigint)')" |
+  grep -q claim_mutation
 then
-  echo "N-1 database unexpectedly contains the current reporting function" >&2
+  echo "N-1 database unexpectedly contains the current mutation function" >&2
   exit 1
 fi
 
-verify_revision "$n_minus_one_database"
+verify_revision "$n_minus_one_database" "$n_minus_one_revision"
 run_guarded_query "$n_minus_one_database"
 
 unset POSTGRESEM_MIGRATION_MAX_VERSION
@@ -105,7 +107,7 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "4" ]; then
+if [ "$migration_count" != "5" ]; then
   echo "N-1 upgrade did not apply the complete migration set" >&2
   exit 1
 fi
@@ -113,6 +115,7 @@ postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
+verify_revision "$n_minus_one_database" "$n_minus_one_revision"
 
 incomplete_query_id=$(
   PGUSER=postgresem_audit_writer \
@@ -123,7 +126,7 @@ SELECT semantic.start_query_audit(
   '1',
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '10000000-0000-0000-0000-000000000002',
-  '$expected_revision',
+  '$n_minus_one_revision',
   '0.1.0',
   'recovery-test',
   'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -183,7 +186,7 @@ pg_restore --exit-on-error --dbname="$source_database" "$dump_path"
 
 export PGDATABASE="$source_database"
 sh /migrations/run.sh
-verify_revision "$source_database"
+verify_revision "$source_database" "$current_revision"
 run_guarded_query "$source_database"
 postgresem report beta --window-hours 1 |
   grep -q '"validation_compile_p95_under_50_ms"'

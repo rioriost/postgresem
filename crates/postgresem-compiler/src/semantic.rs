@@ -20,6 +20,8 @@ pub struct Model {
     pub timezone: Option<String>,
     #[serde(default = "visible_by_default")]
     pub queryable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub writable: Option<WritableModel>,
     pub fields: Vec<Field>,
     pub metrics: Vec<Metric>,
     #[serde(default)]
@@ -47,6 +49,37 @@ pub struct Field {
     pub entity_key: bool,
     #[serde(default = "visible_by_default")]
     pub visible: bool,
+    #[serde(default = "nullable_by_default", skip_serializing)]
+    pub nullable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WritableModel {
+    pub insert: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upsert: Option<UpsertPolicy>,
+    pub max_rows: u32,
+    pub max_request_bytes: u32,
+    pub fields: Vec<WritableField>,
+    pub returning: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WritableField {
+    pub field: String,
+    pub nullable: bool,
+    #[serde(default)]
+    pub required_on_insert: bool,
+    #[serde(default)]
+    pub updatable_on_conflict: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UpsertPolicy {
+    pub conflict_fields: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,6 +157,10 @@ const fn visible_by_default() -> bool {
     true
 }
 
+const fn nullable_by_default() -> bool {
+    true
+}
+
 #[derive(Debug, Error)]
 pub enum SnapshotHashError {
     #[error("failed to serialize semantic snapshot: {0}")]
@@ -147,6 +184,14 @@ impl SemanticSnapshot {
             model
                 .metrics
                 .sort_by(|left, right| left.semantic_name.cmp(&right.semantic_name));
+            if let Some(writable) = &mut model.writable {
+                writable
+                    .fields
+                    .sort_by(|left, right| left.field.cmp(&right.field));
+                if let Some(upsert) = &mut writable.upsert {
+                    upsert.conflict_fields.sort();
+                }
+            }
             model.relationships.sort_by(|left, right| {
                 left.semantic_name
                     .cmp(&right.semantic_name)
@@ -181,6 +226,7 @@ mod tests {
             },
             timezone: None,
             queryable: true,
+            writable: None,
             fields: vec![field("z_field"), field("a_field")],
             metrics: vec![metric("z_metric"), metric("a_metric")],
             relationships: vec![
@@ -201,6 +247,7 @@ mod tests {
                     },
                     timezone: None,
                     queryable: false,
+                    writable: None,
                     fields: vec![],
                     metrics: vec![],
                     relationships: vec![],
@@ -238,6 +285,7 @@ mod tests {
             time_dimension: false,
             entity_key: false,
             visible: true,
+            nullable: true,
         }
     }
 

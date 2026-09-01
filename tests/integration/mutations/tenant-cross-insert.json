@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "operation": "insert",
+  "model": "tenant_orders",
+  "idempotency_key": "integration-tenant-cross-insert",
+  "rows": [
+    {
+      "external_id": {"type": "text", "value": "integration-tenant-cross-1"},
+      "tenant_id": {"type": "text", "value": "tenant_b"},
+      "amount": {"type": "numeric", "value": "999.00"}
+    }
+  ]
+}

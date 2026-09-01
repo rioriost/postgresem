@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-db test-execution test-mcp test-performance test-recovery preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -107,6 +107,26 @@ test-mcp:
 	echo "MCP integration test timed out" >&2; \
 	exit 1
 
+test-mutation:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	container-compose up --env-file .env -d --build mutation-test
+	@attempt=0; \
+	while [ $$attempt -lt 60 ]; do \
+		logs="$$(container logs postgresem-mutation-test 2>&1)"; \
+		if printf '%s\n' "$$logs" | grep -q "governed mutation integration checks passed"; then \
+			printf '%s\n' "$$logs"; \
+			exit 0; \
+		fi; \
+		if container inspect postgresem-mutation-test 2>/dev/null | grep -q '"state" : "stopped"'; then \
+			printf '%s\n' "$$logs" >&2; \
+			exit 1; \
+		fi; \
+		attempt=$$((attempt + 1)); \
+		sleep 1; \
+	done; \
+	echo "mutation integration test timed out" >&2; \
+	exit 1
+
 test-performance:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
 	container-compose up --env-file .env -d --build performance-test
@@ -147,6 +167,6 @@ test-recovery:
 	echo "recovery integration test timed out" >&2; \
 	exit 1
 
-preview-check: fmt check test test-db test-execution test-mcp test-performance
+preview-check: fmt check test test-db test-execution test-mcp test-mutation test-performance
 
 beta-check: preview-check test-install test-web-demo test-recovery

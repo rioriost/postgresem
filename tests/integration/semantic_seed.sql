@@ -13,7 +13,7 @@ BEGIN
     AND revision.status = 'published'
     AND revision.schema_version = '1'
     AND revision.canonical_hash =
-      'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6';
+      'sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c';
 
   IF (
     SELECT count(*)
@@ -27,7 +27,7 @@ BEGIN
   IF (SELECT count(*) FROM semantic.model WHERE revision_id = v_revision_id) <> 4 THEN
     RAISE EXCEPTION 'semantic seed model count is incorrect';
   END IF;
-  IF (SELECT count(*) FROM semantic.field WHERE revision_id = v_revision_id) <> 20 THEN
+  IF (SELECT count(*) FROM semantic.field WHERE revision_id = v_revision_id) <> 22 THEN
     RAISE EXCEPTION 'semantic seed field count is incorrect';
   END IF;
   IF (SELECT count(*) FROM semantic.metric WHERE revision_id = v_revision_id) <> 9 THEN
@@ -73,6 +73,12 @@ BEGIN
       )
   ) THEN
     RAISE EXCEPTION 'semantic seed contains invalid metric metadata';
+  END IF;
+  IF (SELECT count(*) FROM semantic.mutation_model WHERE revision_id = v_revision_id) <> 2
+    OR (SELECT count(*) FROM semantic.mutation_field WHERE revision_id = v_revision_id) <> 10
+    OR (SELECT count(*) FROM semantic.mutation_model_role WHERE revision_id = v_revision_id) <> 3
+  THEN
+    RAISE EXCEPTION 'semantic seed mutation metadata is incorrect';
   END IF;
 END;
 $$;

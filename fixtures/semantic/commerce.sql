@@ -7,8 +7,14 @@ DO $$
 DECLARE
   v_project_id uuid := '10000000-0000-0000-0000-000000000001';
   v_revision_id uuid := '10000000-0000-0000-0000-000000000002';
-  v_hash text := 'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6';
+  v_mutation_supported boolean := to_regclass('semantic.mutation_model') IS NOT NULL;
+  v_hash text;
 BEGIN
+  v_hash := CASE
+    WHEN v_mutation_supported
+      THEN 'sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c'
+    ELSE 'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6'
+  END;
   INSERT INTO semantic.project (project_id, semantic_name, display_name, description)
   VALUES (
     v_project_id,
@@ -148,6 +154,48 @@ BEGIN
      '{"version":"1","kind":"aggregation","aggregation":"count","field":"subscription_id"}', NULL, 'additive', false),
     ('10000000-0000-0000-0000-000000000322', v_revision_id, '10000000-0000-0000-0000-000000000014', 'mrr', 'MRR', 'numeric',
      '{"version":"1","kind":"aggregation","aggregation":"sum","field":"monthly_amount"}', '{"field":"active","value":{"type":"boolean","value":true}}', 'additive', false);
+
+  IF v_mutation_supported THEN
+    INSERT INTO semantic.field (
+      field_id, revision_id, model_id, semantic_name, display_name, field_kind,
+      logical_type, source_column, nullable, hidden
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000109', v_revision_id, '10000000-0000-0000-0000-000000000010', 'external_id', 'External ID', 'dimension', 'text', 'external_id', false, false),
+      ('10000000-0000-0000-0000-000000000134', v_revision_id, '10000000-0000-0000-0000-000000000013', 'external_id', 'External ID', 'dimension', 'text', 'external_id', false, false);
+
+    INSERT INTO semantic.mutation_model (
+    model_id, revision_id, insert_enabled, upsert_enabled, max_rows,
+    max_request_bytes
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, true, true, 25, 65536),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, true, true, 25, 65536);
+
+    INSERT INTO semantic.mutation_field (
+    model_id, revision_id, field_id, insertable, required_on_insert,
+    updatable_on_conflict, conflict_key_ordinal, returning_ordinal
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, '10000000-0000-0000-0000-000000000101', false, false, false, NULL, 1),
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, '10000000-0000-0000-0000-000000000109', true, true, false, 1, 2),
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, '10000000-0000-0000-0000-000000000102', true, true, true, NULL, NULL),
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, '10000000-0000-0000-0000-000000000103', true, true, true, NULL, 3),
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, '10000000-0000-0000-0000-000000000104', true, true, true, NULL, 4),
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, '10000000-0000-0000-0000-000000000105', true, true, true, NULL, 5),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, '10000000-0000-0000-0000-000000000131', false, false, false, NULL, 1),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, '10000000-0000-0000-0000-000000000132', true, true, false, 1, 3),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, '10000000-0000-0000-0000-000000000134', true, true, false, 2, 2),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, '10000000-0000-0000-0000-000000000133', true, true, true, NULL, 4);
+
+    INSERT INTO semantic.mutation_model_role (
+      model_id, revision_id, database_role
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000010', v_revision_id, 'postgresem_order_writer'),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, 'postgresem_tenant_a_writer'),
+      ('10000000-0000-0000-0000-000000000013', v_revision_id, 'postgresem_tenant_b_writer');
+  END IF;
 
   UPDATE semantic.revision
   SET status = 'published', published_at = clock_timestamp()

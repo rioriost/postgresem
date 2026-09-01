@@ -221,7 +221,8 @@ fn model_metadata(model: &Model) -> Value {
     json!({
         "source": model.source,
         "timezone": model.timezone,
-        "queryable": model.queryable
+        "queryable": model.queryable,
+        "writable": model.writable
     })
 }
 
@@ -229,6 +230,7 @@ fn model_compatibility(before: &Model, after: &Model) -> Compatibility {
     if before.source != after.source
         || before.timezone != after.timezone
         || (before.queryable && !after.queryable)
+        || (before.writable.is_some() && before.writable != after.writable)
     {
         Compatibility::Breaking
     } else {
@@ -434,6 +436,7 @@ mod tests {
             time_dimension: false,
             entity_key: false,
             visible: true,
+            nullable: true,
         });
         after.models[0].metrics.clear();
         after.models[0].relationships.clear();
@@ -445,6 +448,7 @@ mod tests {
             },
             timezone: None,
             queryable: true,
+            writable: None,
             fields: vec![],
             metrics: vec![],
             relationships: vec![],
@@ -512,6 +516,7 @@ mod tests {
                 },
                 timezone: Some("UTC".to_owned()),
                 queryable: true,
+                writable: None,
                 fields: vec![Field {
                     semantic_name: "order_id".to_owned(),
                     data_type: DataType::Integer,
@@ -520,6 +525,7 @@ mod tests {
                     time_dimension: false,
                     entity_key: true,
                     visible: true,
+                    nullable: false,
                 }],
                 metrics: vec![Metric {
                     semantic_name: "order_count".to_owned(),

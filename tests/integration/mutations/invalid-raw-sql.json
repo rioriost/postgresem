@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "operation": "insert",
+  "model": "orders",
+  "idempotency_key": "integration-raw-sql",
+  "rows": [
+    {
+      "external_id": {"type": "text", "value": "integration-raw-sql"},
+      "customer_id": {"type": "integer", "value": 1},
+      "ordered_at": {"type": "timestamp", "value": "2026-09-01T07:00:00Z"},
+      "status": {"type": "text", "value": "paid"},
+      "amount": {"type": "numeric", "value": "4.00"}
+    }
+  ],
+  "sql": "INSERT INTO commerce.orders DEFAULT VALUES"
+}

@@ -96,6 +96,7 @@ jobs:
       POSTGRES_SUPERUSER_PASSWORD: ci-superuser-password
       POSTGRESEM_RUNTIME_PASSWORD: ci-runtime-password
       POSTGRESEM_AUDIT_WRITER_PASSWORD: ci-audit-writer-password
+      POSTGRESEM_MUTATION_RUNTIME_PASSWORD: ci-mutation-runtime-password
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,7 +110,7 @@ jobs:
         run: docker compose up --detach --wait --wait-timeout 120 db
 
       - name: Build integration images
-        run: docker compose build execution-test mcp-test performance-test recovery-test
+        run: docker compose build execution-test mcp-test mutation-test performance-test recovery-test
 
       - name: Apply migrations
         run: docker compose run --rm --no-deps migrate
@@ -125,6 +126,9 @@ jobs:
 
       - name: Run MCP integration checks
         run: docker compose run --rm --no-deps mcp-test
+
+      - name: Run governed mutation integration checks
+        run: docker compose run --rm --no-deps mutation-test
 
       - name: Run developer-preview performance checks
         if: matrix.postgres == '18'

@@ -110,6 +110,7 @@ fn synthetic_snapshot(model_count: usize) -> Result<SemanticSnapshot, BenchmarkE
                     },
                     timezone: Some("UTC".to_owned()),
                     queryable: true,
+                    writable: None,
                     fields: vec![
                         Field {
                             semantic_name: "id".to_owned(),
@@ -119,6 +120,7 @@ fn synthetic_snapshot(model_count: usize) -> Result<SemanticSnapshot, BenchmarkE
                             time_dimension: false,
                             entity_key: true,
                             visible: true,
+                            nullable: false,
                         },
                         Field {
                             semantic_name: "created_at".to_owned(),
@@ -128,6 +130,7 @@ fn synthetic_snapshot(model_count: usize) -> Result<SemanticSnapshot, BenchmarkE
                             time_dimension: true,
                             entity_key: false,
                             visible: true,
+                            nullable: false,
                         },
                     ],
                     metrics: vec![Metric {

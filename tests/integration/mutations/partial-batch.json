@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "operation": "insert",
+  "model": "orders",
+  "idempotency_key": "integration-partial-batch",
+  "rows": [
+    {
+      "external_id": {"type": "text", "value": "integration-batch-valid"},
+      "customer_id": {"type": "integer", "value": 1},
+      "ordered_at": {"type": "timestamp", "value": "2026-09-01T02:00:00Z"},
+      "status": {"type": "text", "value": "paid"},
+      "amount": {"type": "numeric", "value": "10.00"}
+    },
+    {
+      "external_id": {"type": "text", "value": "integration-batch-invalid"},
+      "customer_id": {"type": "integer", "value": 1},
+      "ordered_at": {"type": "timestamp", "value": "2026-09-01T02:01:00Z"},
+      "status": {"type": "text", "value": "not-a-status"},
+      "amount": {"type": "numeric", "value": "11.00"}
+    }
+  ]
+}

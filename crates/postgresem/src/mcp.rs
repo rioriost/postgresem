@@ -6,8 +6,10 @@ use std::{
 };
 
 use postgresem_compiler::{
-    CompileError, CompilerOptions, DataType, Lineage, LogicalSemanticQuery, LsqError, Model,
-    NormalizedLsq, OutputColumn, SemanticSnapshot, compile_lsq, normalize_lsq,
+    CompileError, CompilerOptions, DataType, Lineage, LogicalSemanticMutation,
+    LogicalSemanticQuery, LsmError, LsqError, Model, MutationCompileError, MutationCompilerOptions,
+    NormalizedLsm, NormalizedLsq, OutputColumn, SemanticSnapshot, compile_lsm, compile_lsq,
+    normalize_lsm, normalize_lsq,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -15,6 +17,7 @@ use thiserror::Error;
 
 use crate::{
     executor::{self, ExecutionContext, ExecutorConfig, QueryResult},
+    mutation_executor::{self, MutationExecutorConfig, MutationResult},
     published_model,
 };
 
@@ -25,6 +28,7 @@ const DEFAULT_PAGE_LIMIT: usize = 50;
 const MAX_PAGE_LIMIT: usize = 100;
 const MAX_MODEL_CURSOR_LENGTH: usize = 128;
 const LSQ_SCHEMA: &str = include_str!("../../../schemas/lsq/v1.schema.json");
+const LSM_SCHEMA: &str = include_str!("../../../schemas/lsm/v1.schema.json");
 
 #[derive(Debug, Error)]
 pub enum McpServerError {
@@ -36,6 +40,8 @@ pub enum McpServerError {
     InvalidProject,
     #[error(transparent)]
     ExecutorConfiguration(#[from] executor::ExecuteError),
+    #[error(transparent)]
+    MutationExecutorConfiguration(#[from] mutation_executor::MutationExecuteError),
     #[error("MCP stdio I/O failed")]
     Io(#[from] io::Error),
     #[error("failed to serialize an MCP protocol message")]
@@ -45,6 +51,7 @@ pub enum McpServerError {
 struct McpConfig {
     project: String,
     executor: ExecutorConfig,
+    mutation_executor: Option<MutationExecutorConfig>,
     execution_context: ExecutionContext,
 }
 
@@ -77,10 +84,36 @@ impl McpConfig {
             Some(&audit_password_environment),
             &database_role_environment,
         )?;
+        let mutation_executor = match env::var("POSTGRESEM_MCP_MUTATION_URL_ENV") {
+            Ok(mutation_url_environment) => {
+                let mutation_password_environment = environment_or(
+                    "POSTGRESEM_MCP_MUTATION_PASSWORD_ENV",
+                    "POSTGRESEM_MUTATION_RUNTIME_PASSWORD",
+                )?;
+                let mutation_role_environment = environment_or(
+                    "POSTGRESEM_MCP_MUTATION_DB_ROLE_ENV",
+                    "POSTGRESEM_MUTATION_DB_ROLE",
+                )?;
+                Some(MutationExecutorConfig::from_environment_with_passwords(
+                    &mutation_url_environment,
+                    Some(&mutation_password_environment),
+                    &audit_url_environment,
+                    Some(&audit_password_environment),
+                    &mutation_role_environment,
+                )?)
+            }
+            Err(env::VarError::NotPresent) => None,
+            Err(env::VarError::NotUnicode(_)) => {
+                return Err(McpServerError::InvalidEnvironment(
+                    "POSTGRESEM_MCP_MUTATION_URL_ENV".to_owned(),
+                ));
+            }
+        };
         let execution_context = ExecutionContext::new("mcp:stdio", "mcp-stdio")?;
         Ok(Self {
             project,
             executor,
+            mutation_executor,
             execution_context,
         })
     }
@@ -305,7 +338,9 @@ impl McpServer {
             "tools/list" => {
                 let params = parse_params::<PaginationParams>(params)?;
                 reject_protocol_cursor(params.cursor.as_deref())?;
-                Ok(json!({"tools": tool_definitions()}))
+                Ok(json!({
+                    "tools": tool_definitions(self.config.mutation_executor.is_some())
+                }))
             }
             "tools/call" => self.call_tool(parse_params(params)?),
             "resources/list" => {
@@ -344,6 +379,16 @@ impl McpServer {
                 let params = parse_tool_arguments(&request.arguments)
                     .map_err(|_| RpcFailure::invalid_tool_arguments())?;
                 self.explain_semantic_query(params)
+            }
+            "validate_semantic_mutation" => {
+                let params = parse_tool_arguments(&request.arguments)
+                    .map_err(|_| RpcFailure::invalid_tool_arguments())?;
+                self.validate_semantic_mutation(params)
+            }
+            "mutate_semantic_model" => {
+                let params = parse_tool_arguments(&request.arguments)
+                    .map_err(|_| RpcFailure::invalid_tool_arguments())?;
+                self.mutate_semantic_model(params)
             }
             _ => return Err(RpcFailure::tool_not_found()),
         };
@@ -477,6 +522,66 @@ impl McpServer {
         Ok(public_query_result(result, &normalized.query))
     }
 
+    fn validate_semantic_mutation(&self, params: MutationToolParams) -> Result<Value, ToolFailure> {
+        validate_tool_version(&params.schema_version)?;
+        let published = self.load_published_mutation()?;
+        let normalized = match normalize_mutation_value(&params.lsm) {
+            Ok(normalized) => normalized,
+            Err(error) => {
+                return Ok(mutation_validation_failure(
+                    error.code(),
+                    public_lsm_message(&error),
+                    None,
+                    &published.published.snapshot.revision_hash,
+                ));
+            }
+        };
+        match compile_lsm(
+            &normalized,
+            &published.published.snapshot,
+            &published.capabilities,
+            MutationCompilerOptions::default(),
+        ) {
+            Ok(compiled) => Ok(json!({
+                "schema_version": TOOL_SCHEMA_VERSION,
+                "valid": true,
+                "normalized_lsm_hash": normalized.hash,
+                "semantic_revision": published.published.snapshot.revision_hash,
+                "operation": compiled.operation,
+                "model": compiled.model,
+                "expected_rows": compiled.expected_rows,
+                "returning_schema": public_output_schema(&compiled.returning_schema),
+                "lineage": public_mutation_lineage(&normalized.mutation),
+                "warnings": []
+            })),
+            Err(error) => Ok(mutation_validation_failure(
+                error.code(),
+                public_mutation_compile_message(&error),
+                Some(&normalized.hash),
+                &published.published.snapshot.revision_hash,
+            )),
+        }
+    }
+
+    fn mutate_semantic_model(&self, params: MutationToolParams) -> Result<Value, ToolFailure> {
+        validate_tool_version(&params.schema_version)?;
+        let input = serde_json::to_vec(&params.lsm).map_err(|_| ToolFailure::internal())?;
+        let config = self.config.mutation_executor.as_ref().ok_or_else(|| {
+            ToolFailure::new(
+                "MUTATION_CAPABILITY_DISABLED",
+                "semantic mutation capability is not enabled",
+            )
+        })?;
+        let result = mutation_executor::execute(
+            &input,
+            &self.config.project,
+            config,
+            &self.config.execution_context,
+        )
+        .map_err(ToolFailure::from_mutation_execute)?;
+        Ok(public_mutation_result(result))
+    }
+
     fn list_resources(&self) -> Result<Value, RpcFailure> {
         let published = self
             .load_published()
@@ -493,6 +598,13 @@ impl McpServer {
                 "mimeType": "application/schema+json"
             }),
         ];
+        if self.config.mutation_executor.is_some() {
+            resources.push(json!({
+                "uri": "semantic://schemas/lsm/v1",
+                "name": "Logical Semantic Mutation v1 schema",
+                "mimeType": "application/schema+json"
+            }));
+        }
         resources.extend(
             queryable_models(&published.snapshot)
                 .into_iter()
@@ -510,6 +622,12 @@ impl McpServer {
     fn read_resource(&self, params: ResourceReadParams) -> Result<Value, RpcFailure> {
         if params.uri == "semantic://schemas/lsq/v1" {
             let schema: Value = serde_json::from_str(LSQ_SCHEMA).map_err(|_| {
+                RpcFailure::resource("MCP_INTERNAL_ERROR", "resource is unavailable")
+            })?;
+            return resource_contents(&params.uri, "application/schema+json", schema);
+        }
+        if params.uri == "semantic://schemas/lsm/v1" && self.config.mutation_executor.is_some() {
+            let schema: Value = serde_json::from_str(LSM_SCHEMA).map_err(|_| {
                 RpcFailure::resource("MCP_INTERNAL_ERROR", "resource is unavailable")
             })?;
             return resource_contents(&params.uri, "application/schema+json", schema);
@@ -560,6 +678,34 @@ impl McpServer {
             )
         })?;
         published_model::load_published(&mut runtime, &self.config.project).map_err(|_| {
+            ToolFailure::new(
+                "SEMANTIC_SNAPSHOT_UNAVAILABLE",
+                "current semantic snapshot is unavailable",
+            )
+        })
+    }
+
+    fn load_published_mutation(
+        &self,
+    ) -> Result<published_model::PublishedMutationModel, ToolFailure> {
+        let config = self.config.mutation_executor.as_ref().ok_or_else(|| {
+            ToolFailure::new(
+                "MUTATION_CAPABILITY_DISABLED",
+                "semantic mutation capability is not enabled",
+            )
+        })?;
+        let mut mutation = config.connect_mutation().map_err(|_| {
+            ToolFailure::new(
+                "SEMANTIC_SNAPSHOT_UNAVAILABLE",
+                "current semantic snapshot is unavailable",
+            )
+        })?;
+        published_model::load_published_for_mutation(
+            &mut mutation,
+            &self.config.project,
+            config.database_role(),
+        )
+        .map_err(|_| {
             ToolFailure::new(
                 "SEMANTIC_SNAPSHOT_UNAVAILABLE",
                 "current semantic snapshot is unavailable",
@@ -665,6 +811,32 @@ impl ToolFailure {
                 "semantic query result could not be serialized",
             ),
             _ => Self::new("EXECUTOR_QUERY_FAILED", "semantic query execution failed"),
+        }
+    }
+
+    fn from_mutation_execute(error: mutation_executor::MutationExecuteError) -> Self {
+        match error {
+            mutation_executor::MutationExecuteError::Lsm(error) => {
+                Self::new(error.code(), public_lsm_message(&error))
+            }
+            mutation_executor::MutationExecuteError::Compile(error) => {
+                Self::new(error.code(), public_mutation_compile_message(&error))
+            }
+            mutation_executor::MutationExecuteError::IdempotencyConflict => Self::new(
+                "MUTATION_IDEMPOTENCY_CONFLICT",
+                "idempotency key was already used for a different mutation",
+            ),
+            mutation_executor::MutationExecuteError::CommitIndeterminate(_) => Self::new(
+                "MUTATION_COMMIT_INDETERMINATE",
+                "mutation outcome is indeterminate; retry with the same idempotency key",
+            ),
+            mutation_executor::MutationExecuteError::Cancelled(_) => {
+                Self::new("MUTATION_CANCELLED", "semantic mutation was cancelled")
+            }
+            error => Self::new(
+                mutation_executor::mutation_error_code(&error),
+                "semantic mutation failed",
+            ),
         }
     }
 }
@@ -781,6 +953,13 @@ struct QueryToolParams {
     lsq: Value,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MutationToolParams {
+    schema_version: String,
+    lsm: Value,
+}
+
 fn empty_object() -> Value {
     json!({})
 }
@@ -830,6 +1009,11 @@ fn normalize_value(value: &Value) -> Result<NormalizedLsq, LsqError> {
     normalize_lsq(&bytes)
 }
 
+fn normalize_mutation_value(value: &Value) -> Result<NormalizedLsm, LsmError> {
+    let bytes = serde_json::to_vec(value).map_err(LsmError::InvalidJson)?;
+    normalize_lsm(&bytes)
+}
+
 fn validation_failure(
     code: &'static str,
     message: &'static str,
@@ -842,6 +1026,27 @@ fn validation_failure(
         "normalized_lsq_hash": normalized_lsq_hash,
         "semantic_revision": semantic_revision,
         "output_schema": [],
+        "lineage": null,
+        "error": {"code": code, "message": message},
+        "warnings": []
+    })
+}
+
+fn mutation_validation_failure(
+    code: &'static str,
+    message: &'static str,
+    normalized_lsm_hash: Option<&str>,
+    semantic_revision: &str,
+) -> Value {
+    json!({
+        "schema_version": TOOL_SCHEMA_VERSION,
+        "valid": false,
+        "normalized_lsm_hash": normalized_lsm_hash,
+        "semantic_revision": semantic_revision,
+        "operation": null,
+        "model": null,
+        "expected_rows": 0,
+        "returning_schema": [],
         "lineage": null,
         "error": {"code": code, "message": message},
         "warnings": []
@@ -885,6 +1090,43 @@ fn public_compile_message(error: &CompileError) -> &'static str {
         }
         CompileError::LimitExceeded => "query limit exceeds the configured maximum",
         _ => "semantic query is not valid for the current revision",
+    }
+}
+
+fn public_lsm_message(error: &LsmError) -> &'static str {
+    match error {
+        LsmError::InputTooLarge => "semantic mutation document is too large",
+        LsmError::InvalidJson(_) => "LSM document is invalid",
+        LsmError::UnsupportedSchemaVersion(_) => "LSM schema version is not supported",
+        LsmError::InvalidModel => "semantic mutation model is invalid",
+        LsmError::InvalidIdempotencyKey => "idempotency key is invalid",
+        LsmError::InvalidRowCount => "mutation row count is invalid",
+        LsmError::InvalidFieldCount => "mutation field count is invalid",
+        LsmError::InvalidFieldName => "semantic mutation field name is invalid",
+        LsmError::InconsistentRowFields => "mutation rows must contain the same fields",
+        LsmError::InvalidValue => "mutation value is invalid",
+    }
+}
+
+fn public_mutation_compile_message(error: &MutationCompileError) -> &'static str {
+    match error {
+        MutationCompileError::ModelNotWritable => "semantic model is not writable",
+        MutationCompileError::OperationNotEnabled => "mutation operation is not enabled",
+        MutationCompileError::RowLimitExceeded => "mutation row limit was exceeded",
+        MutationCompileError::RequestByteLimitExceeded => "mutation byte limit was exceeded",
+        MutationCompileError::FieldNotWritable(_) => "semantic mutation field is not writable",
+        MutationCompileError::RequiredFieldMissing(_) => {
+            "required semantic mutation field is missing"
+        }
+        MutationCompileError::FieldTypeMismatch(_) => {
+            "mutation value is not compatible with the semantic field"
+        }
+        MutationCompileError::NullNotAllowed(_) => "semantic mutation field does not accept null",
+        MutationCompileError::ConflictFieldMissing(_) => {
+            "approved upsert conflict field is missing"
+        }
+        MutationCompileError::NoUpdatableField => "upsert requires an approved mutable field",
+        _ => "semantic mutation is not valid for the current revision",
     }
 }
 
@@ -944,6 +1186,33 @@ fn public_query_result(result: QueryResult, query: &LogicalSemanticQuery) -> Val
         "rows": result.rows,
         "truncated": result.truncated,
         "lineage": public_lineage(query, &result.lineage),
+        "warnings": result.warnings
+    })
+}
+
+fn public_mutation_lineage(mutation: &LogicalSemanticMutation) -> Value {
+    json!({
+        "model": mutation.model,
+        "fields": mutation.rows[0].keys().collect::<Vec<_>>()
+    })
+}
+
+fn public_mutation_result(result: MutationResult) -> Value {
+    json!({
+        "schema_version": result.schema_version,
+        "mutation_id": result.mutation_id,
+        "semantic_revision": result.semantic_revision,
+        "operation": result.operation,
+        "model": result.model,
+        "columns": public_output_schema(&result.columns),
+        "rows": result.rows,
+        "affected_rows": result.affected_rows,
+        "replayed": result.replayed,
+        "lineage": {
+            "model": result.lineage.model,
+            "fields": result.lineage.fields,
+            "returning_fields": result.lineage.returning_fields
+        },
         "warnings": result.warnings
     })
 }
@@ -1131,8 +1400,8 @@ fn environment_or(variable: &str, default: &str) -> Result<String, McpServerErro
     }
 }
 
-fn tool_definitions() -> Vec<Value> {
-    vec![
+fn tool_definitions(mutation_enabled: bool) -> Vec<Value> {
+    let mut tools = vec![
         json!({
             "name": "list_semantic_models",
             "description": "List queryable semantic models in the current published revision.",
@@ -1172,7 +1441,18 @@ fn tool_definitions() -> Vec<Value> {
             "explain_semantic_query",
             "Explain normalized semantic references, output shape, and limits for an LSQ.",
         ),
-    ]
+    ];
+    if mutation_enabled {
+        tools.push(mutation_tool_definition(
+            "validate_semantic_mutation",
+            "Validate and type-check an LSM against the current writable revision.",
+        ));
+        tools.push(mutation_tool_definition(
+            "mutate_semantic_model",
+            "Execute an LSM through the guarded semantic mutation executor.",
+        ));
+    }
+    tools
 }
 
 fn query_tool_definition(name: &str, description: &str) -> Value {
@@ -1184,39 +1464,55 @@ fn query_tool_definition(name: &str, description: &str) -> Value {
 }
 
 fn query_tool_schema() -> Value {
-    let mut lsq_schema: Value =
-        serde_json::from_str(LSQ_SCHEMA).unwrap_or_else(|_| json!({"type": "object"}));
-    if let Some(object) = lsq_schema.as_object_mut() {
+    embedded_document_tool_schema(LSQ_SCHEMA, "lsq")
+}
+
+fn mutation_tool_definition(name: &str, description: &str) -> Value {
+    json!({
+        "name": name,
+        "description": description,
+        "inputSchema": mutation_tool_schema()
+    })
+}
+
+fn mutation_tool_schema() -> Value {
+    embedded_document_tool_schema(LSM_SCHEMA, "lsm")
+}
+
+fn embedded_document_tool_schema(schema: &str, property: &str) -> Value {
+    let mut document_schema: Value =
+        serde_json::from_str(schema).unwrap_or_else(|_| json!({"type": "object"}));
+    if let Some(object) = document_schema.as_object_mut() {
         object.remove("$schema");
         object.remove("$id");
     }
-    rewrite_schema_references(&mut lsq_schema);
+    rewrite_schema_references(&mut document_schema, property);
     json!({
         "type": "object",
         "additionalProperties": false,
-        "required": ["schema_version", "lsq"],
+        "required": ["schema_version", property],
         "properties": {
             "schema_version": {"const": TOOL_SCHEMA_VERSION},
-            "lsq": lsq_schema
+            (property): document_schema
         }
     })
 }
 
-fn rewrite_schema_references(value: &mut Value) {
+fn rewrite_schema_references(value: &mut Value, property: &str) {
     match value {
         Value::Object(object) => {
             if let Some(Value::String(reference)) = object.get_mut("$ref") {
                 if let Some(suffix) = reference.strip_prefix("#/$defs/") {
-                    *reference = format!("#/properties/lsq/$defs/{suffix}");
+                    *reference = format!("#/properties/{property}/$defs/{suffix}");
                 }
             }
             for child in object.values_mut() {
-                rewrite_schema_references(child);
+                rewrite_schema_references(child, property);
             }
         }
         Value::Array(values) => {
             for child in values {
-                rewrite_schema_references(child);
+                rewrite_schema_references(child, property);
             }
         }
         _ => {}
@@ -1286,15 +1582,17 @@ mod tests {
 
     use super::{
         EmptyParams, InitializeParams, LineRead, MAX_REQUEST_LINE_BYTES, PaginationParams,
-        ResourceReadParams, TOOL_SCHEMA_VERSION, ToolCallParams, model_cursor, parse_cursor,
-        parse_params, parse_tool_arguments, public_output_schema, query_tool_schema,
-        read_bounded_line, supported_time_grains, tool_definitions, valid_request_id,
+        ResourceReadParams, TOOL_SCHEMA_VERSION, ToolCallParams, model_cursor,
+        mutation_tool_schema, parse_cursor, parse_params, parse_tool_arguments,
+        public_output_schema, query_tool_schema, read_bounded_line, supported_time_grains,
+        tool_definitions, valid_request_id,
     };
     use postgresem_compiler::{DataType, OutputColumn};
 
     #[test]
-    fn tool_contract_exposes_exactly_five_versioned_non_extensible_tools() {
-        let tools = tool_definitions();
+    fn tool_contract_gates_mutation_without_exposing_sql() {
+        assert_eq!(tool_definitions(false).len(), 5);
+        let tools = tool_definitions(true);
         let names = tools
             .iter()
             .filter_map(|tool| tool.get("name").and_then(Value::as_str))
@@ -1306,7 +1604,9 @@ mod tests {
                 "describe_semantic_model",
                 "validate_semantic_query",
                 "query_semantic_model",
-                "explain_semantic_query"
+                "explain_semantic_query",
+                "validate_semantic_mutation",
+                "mutate_semantic_model"
             ]
         );
         let serialized = serde_json::to_string(&tools).expect("tools serialize");
@@ -1328,6 +1628,15 @@ mod tests {
         assert_eq!(schema["properties"]["lsq"]["additionalProperties"], false);
         let serialized = serde_json::to_string(&schema).expect("schema serializes");
         assert!(serialized.contains("#/properties/lsq/$defs/semanticName"));
+        assert!(!serialized.contains("\"sql\""));
+    }
+
+    #[test]
+    fn nested_lsm_schema_keeps_strict_properties_and_resolves_local_definitions() {
+        let schema = mutation_tool_schema();
+        assert_eq!(schema["properties"]["lsm"]["additionalProperties"], false);
+        let serialized = serde_json::to_string(&schema).expect("schema serializes");
+        assert!(serialized.contains("#/properties/lsm/$defs/semanticName"));
         assert!(!serialized.contains("\"sql\""));
     }
 
@@ -1356,6 +1665,34 @@ mod tests {
                 .expect("test arguments are an object")
                 .insert(forbidden.to_owned(), json!("not-allowed"));
             assert!(parse_tool_arguments::<super::QueryToolParams>(&arguments).is_err());
+        }
+        for forbidden in [
+            "principal",
+            "role",
+            "project",
+            "connection_url",
+            "password",
+            "sql",
+            "conflict_target",
+            "returning",
+        ] {
+            let mut arguments = json!({
+                "schema_version": TOOL_SCHEMA_VERSION,
+                "lsm": {
+                    "schema_version": "1",
+                    "operation": "insert",
+                    "model": "orders",
+                    "idempotency_key": "request-1",
+                    "rows": [{
+                        "amount": {"type": "numeric", "value": "1.00"}
+                    }]
+                }
+            });
+            arguments
+                .as_object_mut()
+                .expect("test arguments are an object")
+                .insert(forbidden.to_owned(), json!("not-allowed"));
+            assert!(parse_tool_arguments::<super::MutationToolParams>(&arguments).is_err());
         }
     }
 

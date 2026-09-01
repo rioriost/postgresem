@@ -193,7 +193,7 @@ BEGIN
       AND canonical_lsq_hash =
         'sha256:6811641914fa00468a5e8dcc52dd725815974bdcc1791b927a8381d07a3c7c8b'
       AND semantic_revision_hash =
-        'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6'
+        'sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c'
       AND generated_sql_hash =
         'sha256:b18e050abd61f49a7f0960ffb58c5648c7af8e1d29c4c046e8d9cfadb280ec8f'
   ) THEN

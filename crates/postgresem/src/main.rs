@@ -1,9 +1,11 @@
-use std::{error::Error, fs, path::PathBuf, process::ExitCode};
+use std::{collections::BTreeSet, env, error::Error, fs, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 use postgresem_compiler::{
-    CompilerOptions, SemanticSnapshot, compile_lsq, diff_snapshots, normalize_lsq,
+    CompilerOptions, MutationCapabilities, MutationCompilerOptions, SemanticSnapshot, compile_lsm,
+    compile_lsq, diff_snapshots, normalize_lsm, normalize_lsq,
 };
+use serde_json::json;
 
 mod benchmark;
 mod catalog;
@@ -12,6 +14,7 @@ mod doctor;
 mod executor;
 mod hash;
 mod mcp;
+mod mutation_executor;
 mod published_model;
 mod report;
 
@@ -39,6 +42,10 @@ enum Commands {
     Model {
         #[command(subcommand)]
         command: ModelCommands,
+    },
+    Mutation {
+        #[command(subcommand)]
+        command: MutationCommands,
     },
     Mcp {
         #[command(subcommand)]
@@ -137,6 +144,73 @@ enum ModelCommands {
 }
 
 #[derive(Debug, Subcommand)]
+enum MutationCommands {
+    Validate {
+        path: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+    Execute {
+        path: PathBuf,
+        #[arg(long)]
+        project: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_MUTATION_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_MUTATION_DB_ROLE",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        db_role_env: String,
+    },
+    Reconcile {
+        #[arg(long)]
+        project: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_IDEMPOTENCY_KEY",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        idempotency_key_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_MUTATION_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_MUTATION_DB_ROLE",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        db_role_env: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum McpCommands {
     Serve,
 }
@@ -208,6 +282,41 @@ fn run() -> Result<(), Box<dyn Error>> {
                     database_url_env,
                 },
         } => export_model(&database_url_env, &project),
+        Commands::Mutation {
+            command: MutationCommands::Validate { path, snapshot },
+        } => validate_mutation(&path, &snapshot),
+        Commands::Mutation {
+            command:
+                MutationCommands::Execute {
+                    path,
+                    project,
+                    database_url_env,
+                    audit_database_url_env,
+                    db_role_env,
+                },
+        } => execute_mutation(
+            &path,
+            &project,
+            &database_url_env,
+            &audit_database_url_env,
+            &db_role_env,
+        ),
+        Commands::Mutation {
+            command:
+                MutationCommands::Reconcile {
+                    project,
+                    idempotency_key_env,
+                    database_url_env,
+                    audit_database_url_env,
+                    db_role_env,
+                },
+        } => reconcile_mutation(
+            &project,
+            &idempotency_key_env,
+            &database_url_env,
+            &audit_database_url_env,
+            &db_role_env,
+        ),
         Commands::Mcp {
             command: McpCommands::Serve,
         } => mcp::serve().map_err(Into::into),
@@ -307,6 +416,91 @@ fn execute_query(
     Ok(())
 }
 
+fn validate_mutation(path: &PathBuf, snapshot_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    let normalized = normalize_lsm(&fs::read(path)?)?;
+    let snapshot: SemanticSnapshot = serde_json::from_slice(&fs::read(snapshot_path)?)?;
+    let capabilities = MutationCapabilities {
+        profile: "local-validation".to_owned(),
+        writable_models: snapshot
+            .models
+            .iter()
+            .filter(|model| model.writable.is_some())
+            .map(|model| model.semantic_name.clone())
+            .collect::<BTreeSet<_>>(),
+    };
+    let compiled = compile_lsm(
+        &normalized,
+        &snapshot,
+        &capabilities,
+        MutationCompilerOptions::default(),
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema_version": normalized.mutation.schema_version,
+            "valid": true,
+            "normalized_lsm_hash": normalized.hash,
+            "semantic_revision": snapshot.revision_hash,
+            "operation": compiled.operation,
+            "model": compiled.model,
+            "expected_rows": compiled.expected_rows,
+            "returning_schema": compiled.returning_schema,
+            "lineage": {
+                "model": compiled.lineage.model,
+                "fields": compiled.lineage.fields,
+                "returning_fields": compiled.lineage.returning_fields,
+            }
+        }))?
+    );
+    Ok(())
+}
+
+fn execute_mutation(
+    path: &PathBuf,
+    project: &str,
+    database_url_env: &str,
+    audit_database_url_env: &str,
+    db_role_env: &str,
+) -> Result<(), Box<dyn Error>> {
+    let config = mutation_executor::MutationExecutorConfig::from_environment(
+        database_url_env,
+        audit_database_url_env,
+        db_role_env,
+    )?;
+    let context = executor::ExecutionContext::new(
+        format!("database-role:{}", config.database_role()),
+        "cli",
+    )?;
+    let result = mutation_executor::execute(&fs::read(path)?, project, &config, &context)?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
+fn reconcile_mutation(
+    project: &str,
+    idempotency_key_env: &str,
+    database_url_env: &str,
+    audit_database_url_env: &str,
+    db_role_env: &str,
+) -> Result<(), Box<dyn Error>> {
+    let config = mutation_executor::MutationExecutorConfig::from_environment(
+        database_url_env,
+        audit_database_url_env,
+        db_role_env,
+    )?;
+    let idempotency_key = env::var(idempotency_key_env)?;
+    let state = mutation_executor::reconcile(project, &idempotency_key, &config)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema_version": "1",
+            "idempotency_key_hash": hash::sha256(&idempotency_key),
+            "state": state
+        }))?
+    );
+    Ok(())
+}
+
 fn export_model(database_url_env: &str, project: &str) -> Result<(), Box<dyn Error>> {
     let snapshot = published_model::load_from_env(database_url_env, project)?;
     println!("{}", serde_json::to_string_pretty(&snapshot)?);
@@ -390,7 +584,7 @@ mod tests {
 
     use super::{
         BenchmarkCommands, CatalogCommands, Cli, Commands, McpCommands, ModelCommands,
-        QueryCommands,
+        MutationCommands, QueryCommands,
     };
 
     #[test]
@@ -611,6 +805,81 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn mutation_commands_do_not_accept_connections_roles_or_keys_as_values() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "mutation",
+                "validate",
+                "mutation.json",
+                "--snapshot",
+                "snapshot.json"
+            ]),
+            Ok(Cli {
+                command: Commands::Mutation {
+                    command: MutationCommands::Validate { .. }
+                }
+            })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "mutation",
+                "execute",
+                "mutation.json",
+                "--project",
+                "commerce"
+            ]),
+            Ok(Cli {
+                command: Commands::Mutation {
+                    command: MutationCommands::Execute {
+                        database_url_env,
+                        audit_database_url_env,
+                        db_role_env,
+                        ..
+                    }
+                }
+            }) if database_url_env == "POSTGRESEM_MUTATION_DATABASE_URL"
+                && audit_database_url_env == "POSTGRESEM_AUDIT_DATABASE_URL"
+                && db_role_env == "POSTGRESEM_MUTATION_DB_ROLE"
+        ));
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "mutation",
+                "reconcile",
+                "--project",
+                "commerce"
+            ]),
+            Ok(Cli {
+                command: Commands::Mutation {
+                    command: MutationCommands::Reconcile {
+                        idempotency_key_env,
+                        ..
+                    }
+                }
+            }) if idempotency_key_env == "POSTGRESEM_IDEMPOTENCY_KEY"
+        ));
+
+        for forbidden in [
+            vec!["--database-url", "postgresql://localhost/app"],
+            vec!["--db-role", "postgresem_order_writer"],
+            vec!["--idempotency-key", "secret-key"],
+        ] {
+            let mut arguments = vec![
+                "postgresem",
+                "mutation",
+                "execute",
+                "mutation.json",
+                "--project",
+                "commerce",
+            ];
+            arguments.extend(forbidden);
+            assert!(Cli::try_parse_from(arguments).is_err());
+        }
     }
 
     #[test]
