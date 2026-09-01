@@ -44,6 +44,12 @@ jobs:
       - name: Run workspace tests
         run: cargo test --locked --workspace --all-features
 
+      - name: Run installer trust-boundary tests
+        run: make test-install
+
+      - name: Run Web demo tests
+        run: make test-web-demo
+
       - name: Parse JSON schemas
         run: |
           python3 - <<'PY'
