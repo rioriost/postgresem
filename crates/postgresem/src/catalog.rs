@@ -26,11 +26,25 @@ const RELATIONS_SQL: &str = r"
         END AS view_definition,
         CASE
             WHEN c.relkind = 'v'
-            THEN COALESCE('security_invoker=true' = ANY(c.reloptions), false)
+            THEN COALESCE(
+                (
+                    SELECT option_value::boolean
+                    FROM pg_catalog.pg_options_to_table(c.reloptions)
+                    WHERE option_name = 'security_invoker'
+                ),
+                false
+            )
         END AS view_security_invoker,
         CASE
             WHEN c.relkind = 'v'
-            THEN COALESCE('security_barrier=true' = ANY(c.reloptions), false)
+            THEN COALESCE(
+                (
+                    SELECT option_value::boolean
+                    FROM pg_catalog.pg_options_to_table(c.reloptions)
+                    WHERE option_name = 'security_barrier'
+                ),
+                false
+            )
         END AS view_security_barrier,
         obj_description(c.oid, 'pg_class') AS relation_comment,
         c.relrowsecurity AS rls_enabled,

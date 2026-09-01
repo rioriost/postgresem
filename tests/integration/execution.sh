@@ -29,6 +29,58 @@ END;
 $$;
 SQL
 
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DROP VIEW IF EXISTS commerce.catalog_security_view;
+CREATE VIEW commerce.catalog_security_view
+WITH (security_invoker = on, security_barrier = 1)
+AS SELECT amount FROM commerce.orders;
+SQL
+postgresem catalog scan > /tmp/catalog-view-before.json
+python3 - /tmp/catalog-view-before.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    snapshot = json.load(stream)
+view = next(
+    relation["view"]
+    for relation in snapshot["relations"]
+    if relation["schema"] == "commerce"
+    and relation["name"] == "catalog_security_view"
+)
+if not view["security_invoker"] or not view["security_barrier"]:
+    raise SystemExit("catalog scan did not normalize PostgreSQL view booleans")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+ALTER VIEW commerce.catalog_security_view
+  RESET (security_invoker, security_barrier);
+SQL
+postgresem catalog scan > /tmp/catalog-view-after.json
+if postgresem catalog diff \
+  --from /tmp/catalog-view-before.json \
+  --to /tmp/catalog-view-after.json \
+  --fail-on-breaking >/tmp/catalog-view-diff.json 2>/dev/null
+then
+  echo "catalog diff missed view security option drift" >&2
+  exit 1
+fi
+python3 - /tmp/catalog-view-diff.json <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    diff = json.load(stream)
+view_changes = [
+    change
+    for change in diff["changes"]
+    if change["path"] == "/relations/commerce/catalog_security_view/view"
+]
+if diff["compatibility"] != "breaking" or len(view_changes) != 1:
+    raise SystemExit("view security drift was not classified as breaking")
+PY
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -c 'DROP VIEW commerce.catalog_security_view'
+
 export POSTGRESEM_DB_ROLE=postgresem_analyst
 if DATABASE_URL="${DATABASE_URL% sslmode=disable}" \
   postgresem query execute "${TEST_ROOT}/queries/commerce-revenue.json" \
