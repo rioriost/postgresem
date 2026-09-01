@@ -502,8 +502,8 @@ const fn change_order(change: CatalogChangeKind) -> u8 {
 mod tests {
     use super::{CatalogCompatibility, CatalogDiffError, diff_catalogs};
     use crate::catalog::{
-        CatalogColumn, CatalogRelation, CatalogRoleContext, CatalogSnapshot, RelationGrantHints,
-        RelationKind, RowLevelSecurity,
+        CatalogColumn, CatalogConstraint, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
+        RelationGrantHints, RelationKind, RowLevelSecurity,
     };
 
     #[test]
@@ -581,6 +581,42 @@ mod tests {
                 .iter()
                 .any(|change| change.path.ends_with("/owner"))
         );
+    }
+
+    #[test]
+    fn classifies_unique_null_semantics_as_breaking() {
+        let mut before_relation = relation();
+        before_relation.constraints.push(CatalogConstraint::Unique {
+            name: "orders_external_id_key".to_owned(),
+            columns: vec!["external_id".to_owned()],
+            nulls_not_distinct: false,
+            deferrable: false,
+            initially_deferred: false,
+            validated: true,
+        });
+        let before = snapshot(before_relation).expect("valid source snapshot");
+        let mut after = before.clone();
+        let nulls_not_distinct = after.relations[0]
+            .constraints
+            .iter_mut()
+            .find_map(|constraint| match constraint {
+                CatalogConstraint::Unique {
+                    nulls_not_distinct, ..
+                } => Some(nulls_not_distinct),
+                _ => None,
+            });
+        assert!(nulls_not_distinct.is_some());
+        if let Some(nulls_not_distinct) = nulls_not_distinct {
+            *nulls_not_distinct = true;
+        }
+        after.fingerprint.clear();
+        let after = after.finalize().expect("valid target snapshot");
+
+        let diff = diff_catalogs(&before, &after).expect("snapshots are comparable");
+
+        assert_eq!(diff.compatibility, CatalogCompatibility::Breaking);
+        assert_eq!(diff.summary.breaking, 1);
+        assert!(diff.changes[0].path.contains("/constraints/unique"));
     }
 
     fn snapshot(

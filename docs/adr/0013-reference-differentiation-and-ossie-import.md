@@ -36,6 +36,9 @@ publication authority.
    also binds the scanning role's inheritance, superuser, `BYPASSRLS`,
    effective/settable role closure, and each relation owner so authorization
    drift cannot hide behind an unchanged role name.
+   Unique constraints include PostgreSQL `NULLS NOT DISTINCT` semantics so a
+   conflict and data-integrity behavior change cannot retain the same
+   fingerprint.
 3. Add a one-way Apache Ossie importer pinned to core specification `0.1.1`.
    The current `0.2.0.dev0` draft is intentionally rejected until a stable
    specification is published and reviewed.

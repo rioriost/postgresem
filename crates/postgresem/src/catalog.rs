@@ -51,7 +51,7 @@ const ROLE_CONTEXT_SQL: &str = r"
         ARRAY(
             SELECT candidate.rolname
             FROM pg_catalog.pg_roles AS candidate
-            WHERE pg_catalog.pg_has_role(current_user, candidate.oid, 'MEMBER')
+            WHERE pg_catalog.pg_has_role(current_user, candidate.oid, 'SET')
             ORDER BY candidate.rolname
         ) AS settable_roles
     FROM pg_catalog.pg_roles AS current_role_attributes
@@ -111,6 +111,8 @@ const CONSTRAINTS_SQL: &str = r"
         con.connoinherit AS no_inherit,
         con.condeferrable AS deferrable,
         con.condeferred AS initially_deferred,
+        COALESCE(backing_index.indnullsnotdistinct, false)
+            AS nulls_not_distinct,
         CASE con.confmatchtype
             WHEN 'f' THEN 'full'
             WHEN 'p' THEN 'partial'
@@ -137,6 +139,8 @@ const CONSTRAINTS_SQL: &str = r"
       ON referenced_class.oid = con.confrelid
     LEFT JOIN pg_catalog.pg_namespace AS referenced_namespace
       ON referenced_namespace.oid = referenced_class.relnamespace
+    LEFT JOIN pg_catalog.pg_index AS backing_index
+      ON backing_index.indexrelid = con.conindid
     WHERE n.nspname = $1
       AND c.relname = $2
       AND con.contype IN ('p', 'u', 'f', 'c')
@@ -264,6 +268,7 @@ pub enum CatalogConstraint {
     Unique {
         name: String,
         columns: Vec<String>,
+        nulls_not_distinct: bool,
         deferrable: bool,
         initially_deferred: bool,
         validated: bool,
@@ -522,6 +527,7 @@ fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
         "unique" => Ok(CatalogConstraint::Unique {
             name,
             columns,
+            nulls_not_distinct: row.get("nulls_not_distinct"),
             deferrable,
             initially_deferred,
             validated,

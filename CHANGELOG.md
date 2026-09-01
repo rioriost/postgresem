@@ -37,6 +37,9 @@
   timezone-qualified.
 - Treat relation-owner, role-membership, inheritance, superuser, and
   `BYPASSRLS` drift as breaking authorization evidence.
+- Capture PostgreSQL membership `SET` capability separately from inherited
+  privileges and treat unique-constraint `NULLS NOT DISTINCT` changes as
+  breaking.
 - Keep external models and reference runtimes outside the postgresem runtime,
   publication, credential, GRANT, RLS, and audit authority.
 

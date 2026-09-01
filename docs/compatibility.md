@@ -124,8 +124,10 @@ same database and introspection role. Snapshot v2 records the role's
 inheritance, superuser and `BYPASSRLS` flags, effective and settable role
 closure, and every relation owner. Scanning fixes the transaction-local
 `search_path` to `pg_catalog` so type and expression deparsing does not change
-with connection defaults. It reports deterministic JSON using JSON-pointer
-paths and three classifications:
+with connection defaults. Effective inherited roles and roles available
+through `SET ROLE` are captured separately. Unique constraints also record
+PostgreSQL `NULLS NOT DISTINCT`. It reports deterministic JSON using
+JSON-pointer paths and three classifications:
 
 - `compatible`: relation or column additions;
 - `review_required`: server-version changes, comments, and newly observed
