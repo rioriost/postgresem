@@ -472,7 +472,11 @@ LSQ JSON
 
 - relationshipに`one_to_one`、`many_to_one`、`one_to_many`、`many_to_many`とjoin keyを明示する。
 - MVP compilerはfact→many-to-one/one-to-oneだけを自動選択する。
-- one-to-many先のdimensionや複数factを要求された場合は、fan-out riskとして拒否する。
+- M8では、projectされた全metricが共通のdirect root entity-key aggregation anchorを
+  宣言する場合だけ、明示的にbindされたdirect one-to-many dimension/filterを許可する。
+  宣言済みouter aggregateの前にdimension-plus-anchor grainでduplicate child rowを除去する。
+- 複数fact、many-to-many、reverse/multi-hop routing、joined metric input/filter、
+  anchor欠落・混在、semi-additive fan-outは引き続き拒否する。
 - metricごとにadditivity（時間、entity、全dimension）を保持し、非加法軸での集計を拒否または警告する。
 - `count_distinct`は明示されたentity keyだけで許可する。
 - NULL join semantics、timezone、week start、currency/unitをmodel contractに含める。
@@ -918,6 +922,11 @@ release workflow
 PostgreSQLを唯一のexecution engineかつsemantic authorityとして維持する。
 
 ### M8: 0.6 — Semantic・Mutation coverage
+
+**実装status:** `0.6.0` source treeで完了。ADR 0014、Semantic Snapshot v2、
+compiler semantics `0.2.0`、migration 0006-0007、accepted/rejectedを均衡させたcompiler
+evaluation、duplicate-child/multi-branch PostgreSQL oracle、root/child RLS実行evidenceで
+bounded fan-out contractを実装し、LSQ v1とSnapshot v1の読み込みを維持した。
 
 - ADR 0014に従い、Semantic Snapshot v2の明示的aggregation anchorと、directな
   one-to-many dimension/filter向けの決定的な二段階PostgreSQL aggregationを追加する。

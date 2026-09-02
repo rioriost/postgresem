@@ -47,69 +47,81 @@ fn m8_queries_compile_or_fail_closed_as_expected() {
     let snapshot = load_snapshot();
 
     for case in suite.cases {
-        assert!(
-            !case.question.trim().is_empty(),
-            "{} has no question",
-            case.id
-        );
-        let input = serde_json::to_vec(&case.lsq).expect("LSQ serializes");
-        let normalized = normalize_lsq(&input).expect("M8 LSQ shape is valid");
-        match (
-            compile_lsq(&normalized, &snapshot, CompilerOptions::default()),
-            case.expect,
-        ) {
-            (
-                Ok(compiled),
-                Expectation::Accept {
-                    output,
-                    parameter_count,
-                },
-            ) => {
-                assert_eq!(
-                    compiled
-                        .output_schema
-                        .iter()
-                        .map(|column| column.name.clone())
-                        .collect::<Vec<_>>(),
-                    output,
-                    "{} output mismatch",
-                    case.id
-                );
-                assert_eq!(
-                    compiled.parameters.len(),
-                    parameter_count,
-                    "{} parameter count mismatch",
-                    case.id
-                );
-                assert!(
-                    compiled
-                        .sql
-                        .starts_with("WITH \"__postgresem_anchor_groups\""),
-                    "{} did not use the anchored plan",
-                    case.id
-                );
-                assert!(
-                    !compiled.sql.contains(';'),
-                    "{} emitted a semicolon",
-                    case.id
-                );
-                assert_eq!(
-                    compiled,
-                    compile_lsq(&normalized, &snapshot, CompilerOptions::default())
-                        .expect("repeated compilation succeeds"),
-                    "{} compilation is not deterministic",
-                    case.id
-                );
+        assert_eq!(evaluate_case(&case, &snapshot), Ok(()));
+    }
+}
+
+fn evaluate_case(case: &EvalCase, snapshot: &SemanticSnapshot) -> Result<(), String> {
+    if case.question.trim().is_empty() {
+        return Err(format!("{} has no question", case.id));
+    }
+    let input = serde_json::to_vec(&case.lsq).map_err(|error| error.to_string())?;
+    let normalized = normalize_lsq(&input).map_err(|error| error.to_string())?;
+    match (
+        compile_lsq(&normalized, snapshot, CompilerOptions::default()),
+        &case.expect,
+    ) {
+        (
+            Ok(compiled),
+            Expectation::Accept {
+                output,
+                parameter_count,
+            },
+        ) => {
+            assert_eq!(
+                compiled
+                    .output_schema
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                output.as_slice(),
+                "{} output mismatch",
+                case.id
+            );
+            assert_eq!(
+                compiled.parameters.len(),
+                *parameter_count,
+                "{} parameter count mismatch",
+                case.id
+            );
+            assert!(
+                compiled
+                    .sql
+                    .starts_with("WITH \"__postgresem_anchor_groups\""),
+                "{} did not use the anchored plan",
+                case.id
+            );
+            assert!(
+                !compiled.sql.contains(';'),
+                "{} emitted a semicolon",
+                case.id
+            );
+            assert_eq!(
+                compiled,
+                compile_lsq(&normalized, snapshot, CompilerOptions::default())
+                    .expect("repeated compilation succeeds"),
+                "{} compilation is not deterministic",
+                case.id
+            );
+            Ok(())
+        }
+        (Err(error), Expectation::Reject { code }) => {
+            if error.code() == code {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{} rejected with {}, expected {code}",
+                    case.id,
+                    error.code()
+                ))
             }
-            (Err(error), Expectation::Reject { code }) => {
-                assert_eq!(error.code(), code, "{} rejection mismatch", case.id);
-            }
-            (Ok(_), Expectation::Reject { code }) => {
-                panic!("{} compiled but expected {code}", case.id);
-            }
-            (Err(error), Expectation::Accept { .. }) => {
-                panic!("{} failed unexpectedly: {error}", case.id);
-            }
+        }
+        (Ok(_), Expectation::Reject { code }) => {
+            Err(format!("{} compiled but expected {code}", case.id))
+        }
+        (Err(error), Expectation::Accept { .. }) => {
+            Err(format!("{} failed unexpectedly: {error}", case.id))
         }
     }
 }

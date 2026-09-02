@@ -295,7 +295,7 @@ writable projections must be authored and reviewed separately.
 
 ## Upgrade order
 
-Forward migrations `0001` through `0005`, idempotent reruns, N-1 execution, and
+Forward migrations `0001` through `0007`, idempotent reruns, N-1 execution, and
 N-1-to-current migration are tested.
 
 For a disposable/local preview upgrade:

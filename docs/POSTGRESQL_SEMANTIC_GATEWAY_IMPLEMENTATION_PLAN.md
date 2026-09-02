@@ -486,7 +486,13 @@ Stable alias, join order, projection order, parameter numbering, and predicate n
 
 - Relationships explicitly declare `one_to_one`, `many_to_one`, `one_to_many`, `many_to_many`, and join keys.
 - The MVP compiler auto-selects only fact-to-many-to-one/one-to-one paths.
-- Requests for dimensions on the one-to-many side or multiple facts are rejected as fan-out risks.
+- M8 permits explicitly bound direct one-to-many dimensions and filters only
+  when every projected metric declares one shared direct root entity-key
+  aggregation anchor. Duplicate child rows are removed at dimension-plus-anchor
+  grain before the declared outer aggregate.
+- Multiple facts, many-to-many, reverse/multi-hop routing, joined metric
+  inputs/filters, missing or mixed anchors, and semi-additive fan-out remain
+  rejected.
 - Additivity (across time, entity, all dimensions) is maintained per metric; aggregation along non-additive axes is rejected or warned.
 - `count_distinct` is permitted only on explicitly declared entity keys.
 - NULL join semantics, timezone, week start, and currency/unit are included in the model contract.
@@ -950,6 +956,12 @@ users and fixtures, and every accepted feature preserves PostgreSQL as the only
 execution engine and semantic authority.
 
 ### M8: 0.6 — Semantic and Mutation Coverage
+
+**Implementation status:** complete in the `0.6.0` source tree. ADR 0014,
+Semantic Snapshot v2, compiler semantics `0.2.0`, migrations 0006-0007, balanced
+compiler evaluations, duplicate-child and multi-branch PostgreSQL oracles, and
+root/child RLS execution evidence implement the bounded fan-out contract while
+LSQ v1 and Snapshot v1 loading remain supported.
 
 - Add Semantic Snapshot v2 explicit aggregation anchors and deterministic
   two-stage PostgreSQL aggregation for direct one-to-many dimensions and

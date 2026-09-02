@@ -8,10 +8,10 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-最新の公開リリースと現在のsource versionは**0.5.0**です。このpreviewでは
-catalog-boundなApache Ossie import、authorization-awareなcatalog drift、
-再現可能なreference runtime evidenceを追加しました。production readinessや
-long-term supportを保証するものではありません。
+最新の公開リリースは**0.5.0**、現在のsource versionは**0.6.0**です。0.6 sourceでは、
+明示的なaggregation anchorと、承認済みのdirect one-to-many relationshipに対する
+決定的なfan-out-safe aggregationを追加しました。production readinessやlong-term
+supportを保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -63,7 +63,7 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 
 ## 1.0までのロードマップ
 
-現在のsourceはM7を`1.0`ではなく`0.5`として完了しています。M6の独立した型付き
+現在のsourceはM8を`1.0`ではなく`0.6`として完了しています。M6の独立した型付き
 mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
 です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
 authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` query executor
@@ -78,10 +78,11 @@ authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` 
 
 M7では、固定したWren AI、Cube、Malloy、MetricFlowのOSS runtimeを同一PostgreSQL 18
 datasetに対して実行しました。全referenceが同じ期待aggregateを返すことを確認しつつ、
-異なるtrust boundaryを明示しています。`0.6`から`0.9`では、このevidenceを基に不足する
-semantic、integration、operations機能を選びます。feature数のparityは目的とせず、
-`1.0`までPostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持
-します。
+異なるtrust boundaryを明示しています。M8ではこのevidenceを基に、明示的なmetric
+aggregation anchorと、要求されたaggregateを適用する前に宣言済みroot entity grainで
+duplicate child rowを除去する二段階PostgreSQL planを追加しました。`0.7`から`0.9`では
+integration、operationsのgapへ進みます。feature数のparityは目的とせず、`1.0`まで
+PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
 
 M6〜M12のgateは
 [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
@@ -111,10 +112,14 @@ M6〜M12のgateは
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## 0.5で実装されているもの
+## 0.6で実装されているもの
 
 - LSQ v1 validationと決定的compile
-- PostgreSQLをbacking storeとするSemantic Snapshot/Schema v1
+- PostgreSQLをbacking storeとするSemantic Snapshot/Schema v2。Snapshot v1の読み込みと
+  canonical hash互換性を維持
+- 明示的なmetric additivityとroot entity-key aggregation anchor
+- 承認済みdirect one-to-many dimension/filterに対する決定的な二段階aggregation。
+  duplicate childとmulti-branch fan-outを保護
 - canonical hashを持つimmutableな公開済みrevision
 - row数とbyte数に上限を設けた保護された読み取り専用実行
 - LSM v1 validationと、上限付きinsert/承認済みupsertの決定的compile
@@ -135,6 +140,7 @@ M6〜M12のgateは
   machine-readable evidence
 - 100 modelのcompiler baselineと決定的な100 relation catalog check
 - PostgreSQL 18を使用するローカルApple Container Compose開発stack
+- Linux Docker Composeとrootless Podman Quadlet deployment path
 
 MCP toolは`list_semantic_models`、`describe_semantic_model`、
 `validate_semantic_query`、`query_semantic_model`、
@@ -185,6 +191,9 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 - governed writeは公開済みinsert/upsert projectionに限定されます。update、delete、
   merge、copy、call、DDL、raw SQL、caller-selected conflict target/returning fieldは
   未対応です。
+- fan-out-safe aggregationは、単一root model、direct one-to-many relationship、
+  共通のroot entity-key anchor、root-localなmetric input/filterに限定されます。
+  group間のfact allocation、multi-fact、bridge、reverse、multi-hop planningは未対応です。
 - Ossie importは意図的に一方向で、direct ANSI field、single-column key-backed
   relationship、承認済みsingle-field aggregateだけを扱います。未対応またはlossyな
   semanticsはfail closedします。

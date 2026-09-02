@@ -8,10 +8,10 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The latest published release and current source version are **0.5.0**. This
-preview adds catalog-bound Apache Ossie import,
-authorization-aware catalog drift, and reproducible reference-runtime
-evidence. It is not a production-readiness or long-term-support promise.
+The latest published release is **0.5.0** and the current source version is
+**0.6.0**. The 0.6 source adds explicit aggregation anchors and deterministic
+fan-out-safe aggregation for approved direct one-to-many relationships. It is
+not a production-readiness or long-term-support promise.
 
 ## What problem does postgresem solve?
 
@@ -66,7 +66,7 @@ procedures over a broad abstraction across many database dialects.
 
 ## Roadmap to 1.0
 
-The current source completes M7 as `0.5`, not `1.0`. M6's separate typed
+The current source completes M8 as `0.6`, not `1.0`. M6's separate typed
 mutation contract remains limited to bounded inserts and explicitly modeled
 idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
 and authorization-aware catalog drift without weakening the existing
@@ -83,10 +83,12 @@ supported target.
 M7 ran pinned Wren AI, Cube, Malloy, and MetricFlow OSS runtimes against one
 PostgreSQL 18 dataset. Every reference produced the same expected aggregate,
 while the comparison kept their materially different trust boundaries
-explicit. Versions `0.6` through `0.9` will use that evidence to select missing
-semantic, integration, and operational features. Feature-count parity is not
-the objective: PostgreSQL remains the only execution engine and semantic
-source of truth through `1.0`.
+explicit. M8 uses that evidence to add explicit metric aggregation anchors and
+a two-stage PostgreSQL plan that removes duplicate child rows at the declared
+root entity grain before applying the requested aggregate. Versions `0.7`
+through `0.9` continue with integration and operational gaps. Feature-count
+parity is not the objective: PostgreSQL remains the only execution engine and
+semantic source of truth through `1.0`.
 
 See the [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 for the M6–M12 gates.
@@ -115,10 +117,14 @@ for the M6–M12 gates.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What 0.5 implements
+## What 0.6 implements
 
 - LSQ v1 validation and deterministic compilation
-- Semantic Snapshot/Schema v1 backed by PostgreSQL
+- Semantic Snapshot/Schema v2 backed by PostgreSQL, with Snapshot v1 loading
+  and canonical-hash compatibility
+- explicit metric additivity and root entity-key aggregation anchors
+- deterministic two-stage aggregation across approved direct one-to-many
+  dimensions and filters, with duplicate-child and multi-branch protection
 - immutable published revisions with canonical hashes
 - guarded read-only execution with row and byte limits
 - LSM v1 validation and deterministic bounded insert/approved-upsert compilation
@@ -139,6 +145,7 @@ for the M6–M12 gates.
   PostgreSQL 18 task, with machine-readable evidence
 - a 100-model compiler baseline and deterministic 100-relation catalog check
 - local Apple Container Compose development stack using PostgreSQL 18
+- Linux Docker Compose and rootless Podman Quadlet deployment paths
 
 The MCP tools are `list_semantic_models`, `describe_semantic_model`,
 `validate_semantic_query`, `query_semantic_model`, and
@@ -193,6 +200,10 @@ and unknown semantic objects receive the same public “not available” errors.
 - Governed writes are limited to published insert/upsert projections. Update,
   delete, merge, copy, calls, DDL, raw SQL, caller-selected conflict targets,
   and caller-selected returning fields remain unsupported.
+- Fan-out-safe aggregation is limited to one root model, direct one-to-many
+  relationships, one shared root entity-key anchor, and root-local metric
+  inputs/filters. It does not allocate facts across groups or support
+  multi-fact, bridge, reverse, or multi-hop planning.
 - Ossie import is intentionally one-way and supports only direct ANSI fields,
   single-column key-backed relationships, and approved single-field
   aggregates. Unsupported or lossy semantics fail closed.

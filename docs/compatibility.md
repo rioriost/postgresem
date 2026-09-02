@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The latest published release and current
-source package are `0.5.0`. Before 1.0:
+The project uses Semantic Versioning. The latest published release is `0.5.0`
+and the current source package is `0.6.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -26,15 +26,15 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | Contract | Current | Compatibility boundary |
 |---|---|---|
 | LSQ | `schema_version: "1"` | strict JSON; unknown fields rejected; only v1 accepted |
-| Semantic Snapshot/Schema | `schema_version: "1"` | loader/compiler reject other snapshot versions |
+| Semantic Snapshot/Schema | `schema_version: "2"` | v1 and v2 load/compile; v1 hashes remain stable; anchors and additivity require v2 |
 | PostgreSQL catalog snapshot | `schema_version: "2"` | fingerprint includes database, complete role attributes/membership graph, scanning-role authorization, security-definer view/function owner authorization, normalized database/schema/relation/sequence/routine ACL evidence, non-system function/window/aggregate definitions and owners, relation ownership, and normalized catalog evidence |
 | MCP protocol | `2024-11-05` | initialize returns this version; stdio JSON-RPC only |
 | MCP tool schema | `"1"` | every tool requires this exact version |
-| compiler semantics | `0.1.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
+| compiler semantics | `0.2.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
-| database migrations | `0001`–`0005` | forward-only; N-1 upgrade and same-name restore are tested; no down migrations |
-| source package | `0.5.0` | M7 catalog drift, catalog-bound Ossie import, and reference evidence |
+| database migrations | `0001`–`0007` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
+| source package | `0.6.0` | M8 explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
 | latest published package | `0.5.0` | signed M7 preview release with catalog-bound interoperability and authorization-aware drift |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
@@ -42,10 +42,11 @@ LSQ v1 names the serialized shape and current type/time/null semantics. Before
 version or be called out as a preview-breaking correction. The current binary
 does not negotiate or run multiple LSQ versions.
 
-Semantic Schema v1 is both normalized PostgreSQL metadata and its strict
-`SemanticSnapshot` projection. Published revisions are immutable and
-hash-verified. Unsupported normalized features fail closed rather than being
-silently ignored.
+Semantic Schema v2 adds a normalized metric-to-field aggregation anchor.
+Published revisions remain immutable and hash-verified. Snapshot v1 revisions
+remain loadable and retain their previous hashes because absent v2 metric
+metadata is not serialized. Unsupported normalized features fail closed rather
+than being silently ignored.
 
 MCP tool additions are compatible when existing request/response meanings do
 not change. Removing/renaming a tool, changing strict arguments, changing
@@ -96,7 +97,8 @@ command.
 
 The implemented diff marks removal of a visible model/field/metric, source or
 timezone changes, queryable-to-nonqueryable changes, visible object
-modifications, and relationship modifications as breaking. Additions and
+modifications, aggregation-anchor/additivity changes, and relationship
+modifications as breaking. Additions and
 changes involving only previously hidden objects can be compatible. This is a
 preview classifier, not a complete business-semantic proof.
 
@@ -301,8 +303,10 @@ supply-chain artifact.
   arbitrary update/delete/merge/copy/call/DDL surface;
 - snapshot is reloaded per operation;
 - semantic discovery is not a full source-GRANT preflight;
-- strict subset of single-fact and safe many-to-one semantics; unsupported
-  relationships/metrics fail closed;
+- strict subset of single-fact semantics: safe many-to-one/one-to-one plus
+  explicitly anchored direct one-to-many paths. Multi-fact, many-to-many,
+  reverse, multi-hop, allocation, joined metric inputs/filters, and
+  semi-additive fan-out fail closed;
 - query row limit and result-byte truncation, with no result pagination;
 - no down migrations, production backup retention, RPO/RTO guarantee, disaster
   recovery service, or uninstall;

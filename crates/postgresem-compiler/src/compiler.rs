@@ -89,7 +89,7 @@ pub enum CompileError {
     UnknownOrderReference(String),
     #[error("relationship is not defined: {0}")]
     UnknownRelationship(String),
-    #[error("relationship cardinality is unsafe for MVP: {0}")]
+    #[error("relationship cardinality is outside the supported safety contract: {0}")]
     UnsafeRelationship(String),
     #[error("semantic snapshot v2 metric metadata is missing: {0}")]
     MissingMetricMetadata(String),
@@ -105,7 +105,7 @@ pub enum CompileError {
     UnsupportedFanoutAdditivity(String),
     #[error("metric source field is invalid: {0}")]
     InvalidMetricField(String),
-    #[error("metric cannot aggregate a joined field in MVP: {0}")]
+    #[error("metric cannot aggregate a joined field: {0}")]
     JoinedMetricField(String),
     #[error("count_distinct requires an entity key: {0}")]
     CountDistinctRequiresEntityKey(String),

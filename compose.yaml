@@ -97,6 +97,7 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
     volumes:
+      - ./migrations:/migrations:ro
       - ./tests/integration:/tests:ro
     entrypoint: ["/bin/sh", "/tests/run.sh"]
 

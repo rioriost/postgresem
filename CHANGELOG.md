@@ -2,13 +2,44 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-02
+
 ### Added
 
+- Semantic Snapshot v2 metric additivity and explicit aggregation anchors,
+  while preserving loading and canonical hashes for existing Snapshot v1
+  revisions.
+- Deterministic two-stage PostgreSQL aggregation for direct one-to-many
+  dimensions and filters without `SUM(DISTINCT ...)` or inferred grain.
+- Balanced accepted/rejected compiler evaluations plus PostgreSQL oracle,
+  duplicate-child, multi-branch fan-out, and root/child RLS execution fixtures.
 - A Docker-standard `Dockerfile` kept in parity with the Apple Container
   definition, a nonroot Linux Compose overlay, and rootless Podman Quadlet
   units for PostgreSQL migration, fixture publication, and gateway startup.
 - CI gates that build and run the image with Docker and Podman, start the
   Docker Compose stack, verify UID 10001, and reject invalid Quadlet units.
+
+### Changed
+
+- Advance query compiler semantics to `0.2.0` and database migrations through
+  `0007_fanout_anchor_invariants`.
+- Expose metric additivity and aggregation anchors through semantic discovery
+  and public semantic lineage without exposing generated SQL or physical
+  relation names.
+- Keep LSQ v1 and LSM v1 unchanged; Snapshot v2 remains valid for the existing
+  bounded insert/approved-upsert mutation compiler.
+- Serialize semantic child authoring with revision publication and enforce
+  anchor eligibility through concurrency-safe PostgreSQL foreign keys.
+
+### Security
+
+- Reject missing, invalid, or mixed anchors, joined metric inputs or filters,
+  semi-additive fan-out, many-to-many relationships, and dimension-only
+  one-to-many traversal.
+- Keep every fan-out source relation in guarded-execution lineage so ownership,
+  GRANT, and RLS checks cover both root and child relations.
+- Validate database-authored anchors as direct entity keys in the same
+  schema-v2 model and immutable draft revision.
 
 ## [0.5.0] - 2026-09-01
 

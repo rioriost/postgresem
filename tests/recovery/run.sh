@@ -3,9 +3,10 @@ set -eu
 
 source_database=$PGDATABASE
 n_minus_one_database=postgresem_n_minus_one_test
+legacy_v1_database=postgresem_v1_upgrade_test
 held_database=postgresem_restore_source_hold
 dump_path=/tmp/postgresem-recovery.dump
-n_minus_one_revision=sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6
+legacy_v1_revision=sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c
 current_revision=sha256:dc6fe2f9a25e995dc1bf8a8d156ea245e05e2a9232b2613d9e960dd63b11150f
 source_held=false
 
@@ -65,7 +66,7 @@ restore_original_database() {
   fi
 }
 
-trap 'drop_database "$n_minus_one_database"; restore_original_database; drop_database "$held_database"; rm -f "$dump_path"' 0
+trap 'drop_database "$n_minus_one_database"; drop_database "$legacy_v1_database"; restore_original_database; drop_database "$held_database"; rm -f "$dump_path"' 0
 
 drop_database "$n_minus_one_database"
 create_database "$n_minus_one_database"
@@ -86,19 +87,19 @@ then
   echo "invalid migration ceiling changed the database" >&2
   exit 1
 fi
-POSTGRESEM_MIGRATION_MAX_VERSION=0004_beta_operational_report \
+POSTGRESEM_MIGRATION_MAX_VERSION=0006_fanout_aggregation_anchor \
   sh /migrations/run.sh
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/semantic/commerce.sql
 
 if psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
-  -c "SELECT to_regprocedure('semantic.claim_mutation(text,text,text,text,text,uuid,text,text,text,text,text,text,text,text,jsonb,jsonb,jsonb,bigint,bigint,bigint)')" |
-  grep -q claim_mutation
+  -c "SELECT count(*) FROM pg_catalog.pg_constraint WHERE conname = 'metric_aggregation_anchor_model_fkey'" |
+  grep -q '^1$'
 then
-  echo "N-1 database unexpectedly contains the current mutation function" >&2
+  echo "N-1 database unexpectedly contains the current anchor repair" >&2
   exit 1
 fi
 
-verify_revision "$n_minus_one_database" "$n_minus_one_revision"
+verify_revision "$n_minus_one_database" "$current_revision"
 run_guarded_query "$n_minus_one_database"
 
 unset POSTGRESEM_MIGRATION_MAX_VERSION
@@ -107,7 +108,7 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "6" ]; then
+if [ "$migration_count" != "7" ]; then
   echo "N-1 upgrade did not apply the complete migration set" >&2
   exit 1
 fi
@@ -115,7 +116,25 @@ postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
-verify_revision "$n_minus_one_database" "$n_minus_one_revision"
+verify_revision "$n_minus_one_database" "$current_revision"
+
+drop_database "$legacy_v1_database"
+create_database "$legacy_v1_database"
+export PGDATABASE=$legacy_v1_database
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/10-commerce.sql
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/20-rls-multitenant.sql
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/30-subscriptions.sql
+POSTGRESEM_MIGRATION_MAX_VERSION=0005_governed_mutation \
+  sh /migrations/run.sh
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/semantic/commerce.sql
+verify_revision "$legacy_v1_database" "$legacy_v1_revision"
+run_guarded_query "$legacy_v1_database"
+unset POSTGRESEM_MIGRATION_MAX_VERSION
+sh /migrations/run.sh
+verify_revision "$legacy_v1_database" "$legacy_v1_revision"
+
+export PGDATABASE=$n_minus_one_database
+configure_gateway_urls "$n_minus_one_database"
 
 incomplete_query_id=$(
   PGUSER=postgresem_audit_writer \
@@ -126,8 +145,8 @@ SELECT semantic.start_query_audit(
   '1',
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '10000000-0000-0000-0000-000000000002',
-  '$n_minus_one_revision',
-  '0.1.0',
+  '$current_revision',
+  '0.2.0',
   'recovery-test',
   'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
   'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',

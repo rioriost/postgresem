@@ -1,6 +1,6 @@
 # Error reference
 
-This is the public/stored taxonomy implemented through the current `0.5.0`
+This is the public/stored taxonomy implemented through the current `0.6.0`
 source. Codes are stable within this pre-1.0 contract but remain
 subject to the pre-1.0 compatibility policy.
 
@@ -85,6 +85,12 @@ Unknown and hidden fields/metrics intentionally share the same public codes.
 | `SEMANTIC_ORDER_REFERENCE_NOT_PROJECTED` | No | order reference is not a projected output |
 | `SEMANTIC_RELATIONSHIP_NOT_AVAILABLE` | No | required relationship is unavailable |
 | `SEMANTIC_UNSAFE_RELATIONSHIP` | No | relationship cardinality/direction is outside compiler safety rules |
+| `SEMANTIC_MISSING_METRIC_METADATA` | No | Snapshot v2 metric omits required typed metadata |
+| `SEMANTIC_INVALID_AGGREGATION_ANCHOR` | No | metric anchor is missing, joined, or not an entity key in the root model |
+| `SEMANTIC_MISSING_AGGREGATION_ANCHOR` | No | one-to-many aggregation uses an unanchored metric |
+| `SEMANTIC_MIXED_AGGREGATION_ANCHORS` | No | one query mixes metrics declared at different anchors |
+| `SEMANTIC_JOINED_METRIC_FILTER` | No | anchored metric filter depends on a joined field |
+| `SEMANTIC_UNSUPPORTED_FANOUT_ADDITIVITY` | No | semi-additive metric lacks a supported modeled fan-out axis |
 | `SEMANTIC_INVALID_METRIC_FIELD` | No | metric refers to an invalid field |
 | `SEMANTIC_JOINED_METRIC_FIELD` | No | preview compiler refuses aggregation of a joined field |
 | `SEMANTIC_COUNT_DISTINCT_REQUIRES_ENTITY_KEY` | No | distinct-count source is not an entity key |
