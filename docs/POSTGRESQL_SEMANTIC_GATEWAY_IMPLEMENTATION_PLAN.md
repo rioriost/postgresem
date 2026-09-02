@@ -3,7 +3,7 @@
 - Project name: `postgresem` / PostgreSQL Semantic Gateway
 - Document status: Living implementation and release plan
 - Created: 2026-08-31
-- Last revised: 2026-09-01
+- Last revised: 2026-09-02
 - Target environments: Linux amd64 and arm64 for required runtime support; macOS amd64 and arm64 for development and native archives; Apple silicon Mac Studio with Apple Container as the maintainer reference environment; PostgreSQL 16–18
 - Translations: [Japanese](POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
@@ -951,12 +951,20 @@ execution engine and semantic authority.
 
 ### M8: 0.6 — Semantic and Mutation Coverage
 
-- Implement the highest-value safe semantic gaps, such as explicitly modeled
-  time comparisons, cumulative metrics, or additional relationship patterns.
-- Extend mutations to typed `update`/`delete` only if an ADR defines bounded
-  semantic predicates, optimistic concurrency, affected-row expectations,
-  immutable fields, and recovery behavior.
-- Expand known-answer and rejection suites before expanding operators.
+- Add Semantic Snapshot v2 explicit aggregation anchors and deterministic
+  two-stage PostgreSQL aggregation for direct one-to-many dimensions and
+  filters, as defined by ADR 0014.
+- Keep LSQ v1 supported. Reject missing or mixed anchors, joined metric inputs
+  or metric filters, many-to-many relationships, multi-hop/reverse routing, and
+  allocation ambiguity rather than inferring grain.
+- Preserve Snapshot v1 revision hashes and loading compatibility, and classify
+  anchor changes as breaking model changes.
+- Keep typed `update`/`delete`, multi-fact planning, cumulative metrics, time
+  spines, and custom calendars deferred until separate ADRs define their
+  bounded semantics.
+- Expand known-answer and rejection suites before expanding operators,
+  including duplicate-child, multi-branch fan-out, RLS, and PostgreSQL 16–18
+  execution evidence.
 
 **Exit gate**: New query and mutation semantics reach 100% correctness on their
 supported fixtures, with ambiguous or unsafe cases rejected and no weakening of

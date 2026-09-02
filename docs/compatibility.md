@@ -306,8 +306,8 @@ supply-chain artifact.
 - query row limit and result-byte truncation, with no result pagination;
 - no down migrations, production backup retention, RPO/RTO guarantee, disaster
   recovery service, or uninstall;
-- `0.5.0` release artifacts and signatures are pending the tag-triggered
-  release gates;
+- no `0.6.0` release artifacts exist until the M8 tag-triggered release gates
+  complete;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist

@@ -3,7 +3,7 @@
 - プロジェクト名: `postgresem` / PostgreSQL Semantic Gateway
 - 文書ステータス: 継続更新する実装・リリース計画
 - 作成日: 2026-08-31
-- 最終改訂日: 2026-09-01
+- 最終改訂日: 2026-09-02
 - 対象環境: 必須runtimeとしてLinux amd64/arm64、開発・native archiveとしてmacOS amd64/arm64、maintainer reference環境としてApple silicon Mac Studio + Apple Container、PostgreSQL 16–18
 - 翻訳: [English](POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
@@ -919,12 +919,16 @@ PostgreSQLを唯一のexecution engineかつsemantic authorityとして維持す
 
 ### M8: 0.6 — Semantic・Mutation coverage
 
-- 明示的にmodel化されたtime comparison、cumulative metric、追加relationship pattern等、
-  価値が高く安全なsemantic gapを実装する。
-- bounded semantic predicate、optimistic concurrency、affected-row expectation、
-  immutable field、recovery behaviorをADRで定義できた場合だけtyped `update`/`delete`へ
-  mutationを拡張する。
-- operator追加前にknown-answer/rejection suiteを拡張する。
+- ADR 0014に従い、Semantic Snapshot v2の明示的aggregation anchorと、directな
+  one-to-many dimension/filter向けの決定的な二段階PostgreSQL aggregationを追加する。
+- LSQ v1を維持する。anchor欠落・混在、joined metric input/filter、many-to-many、
+  multi-hop/reverse routing、allocationの曖昧性はgrainを推測せず拒否する。
+- Snapshot v1のrevision hashと読み込み互換性を維持し、anchor変更をbreakingな
+  model changeとして分類する。
+- typed `update`/`delete`、multi-fact planning、cumulative metric、time spine、
+  custom calendarは、bounded semanticsを定義する個別ADRまで延期する。
+- operator追加前にknown-answer/rejection suiteを拡張し、duplicate child、
+  multi-branch fan-out、RLS、PostgreSQL 16–18実行evidenceを含める。
 
 **Exit gate**: 新query/mutation semanticsが対応fixtureで正答100%となり、曖昧・unsafe caseを
 拒否し、GRANT/RLSを弱めない。
