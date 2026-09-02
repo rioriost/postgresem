@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The latest published release is `0.5.0`
-and the current source package is `0.6.0`. Before 1.0:
+The project uses Semantic Versioning. The latest published release and current
+source package are `0.6.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -35,7 +35,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
 | database migrations | `0001`–`0007` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
 | source package | `0.6.0` | M8 explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
-| latest published package | `0.5.0` | signed M7 preview release with catalog-bound interoperability and authorization-aware drift |
+| latest published package | `0.6.0` | signed M8 release with explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -264,14 +264,14 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 | Docker/Docker Compose on Linux amd64 | documented local evaluation path; CI builds `Dockerfile`, starts the Compose stack, and verifies the nonroot gateway |
 | Podman on Linux amd64 | CI builds and runs `Dockerfile`; rootless Quadlet units are generator-validated |
 | Linux amd64/arm64 runtime execution gate | native CI jobs execute the runtime image against PostgreSQL 18; tagged releases also execute each packaged binary and architecture-specific image before publication |
-| native binary archives | `v0.5.0` published for Linux amd64/arm64 and macOS amd64/arm64 |
+| native binary archives | `v0.6.0` published for Linux amd64/arm64 and macOS amd64/arm64 |
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
 | `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`; CI covers successful Linux architecture selection and failed-signature rejection |
-| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.5.0` |
-| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:8377a791b66f27d2179e201b3cb7b8bf4e852f192a54d97e8dcf17bdc3782d66` |
+| versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.6.0` |
+| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:d70fb5b8e4ca7f09abd5b85a781cb2cb353d8e141163fe980e15698257f813c1` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
-| cryptographic release signatures | `v0.5.0` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
+| cryptographic release signatures | `v0.6.0` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
 | MCP HTTP/server artifact | not implemented; the loopback Web demo is a sample adapter over stdio |
 
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
@@ -279,9 +279,9 @@ tags, requires the tag to match the workspace version, builds the four native
 archives, executes Linux amd64/arm64 packaged-binary smoke tests, executes both
 native runtime images, generates `SHA256SUMS`, publishes the
 multi-architecture image only after those gates, then creates a GitHub release.
-[Release run 33526980637](https://github.com/rioriost/postgresem/actions/runs/33526980637)
+[Release run 33582815691](https://github.com/rioriost/postgresem/actions/runs/33582815691)
 completed successfully and published the
-[`v0.5.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.5.0).
+[`v0.6.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.6.0).
 
 The installer uses HTTPS, requires Cosign, verifies the signed checksum against
 the exact repository release workflow and tag identity, verifies SHA-256
@@ -310,8 +310,6 @@ supply-chain artifact.
 - query row limit and result-byte truncation, with no result pagination;
 - no down migrations, production backup retention, RPO/RTO guarantee, disaster
   recovery service, or uninstall;
-- no `0.6.0` release artifacts exist until the M8 tag-triggered release gates
-  complete;
 - external feedback from two independent users remains an M4 exit dependency.
 
 ## Breaking-change checklist
