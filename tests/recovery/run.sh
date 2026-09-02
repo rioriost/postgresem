@@ -3,6 +3,7 @@ set -eu
 
 source_database=$PGDATABASE
 n_minus_one_database=postgresem_n_minus_one_test
+legacy_authority_database=postgresem_legacy_authority_test
 legacy_v1_database=postgresem_v1_upgrade_test
 held_database=postgresem_restore_source_hold
 dump_path=/tmp/postgresem-recovery.dump
@@ -74,11 +75,122 @@ restore_original_database() {
   fi
 }
 
-trap 'drop_database "$n_minus_one_database"; drop_database "$legacy_v1_database"; restore_original_database; drop_database "$held_database"; rm -f "$dump_path"' 0
+trap 'drop_database "$n_minus_one_database"; drop_database "$legacy_authority_database"; drop_database "$legacy_v1_database"; restore_original_database; drop_database "$held_database"; rm -f "$dump_path"' 0
 
 drop_database "$n_minus_one_database"
 create_database "$n_minus_one_database"
 export PGDATABASE=$n_minus_one_database
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/10-commerce.sql
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/20-rls-multitenant.sql
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/30-subscriptions.sql
+POSTGRESEM_MIGRATION_MAX_VERSION=0008_mutation_authority_idempotency \
+  sh /migrations/run.sh
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/semantic/commerce.sql
+
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  v_revision_id uuid;
+  v_revision_hash text;
+BEGIN
+  SELECT revision_id, canonical_hash
+  INTO STRICT v_revision_id, v_revision_hash
+  FROM semantic.revision AS revision
+  JOIN semantic.project AS project
+    ON project.project_id = revision.project_id
+  WHERE project.semantic_name = 'commerce'
+    AND revision.status = 'published';
+
+  PERFORM semantic.claim_mutation(
+    'commerce',
+    'sha256:' || repeat('3', 64),
+    'sha256:' || repeat('4', 64),
+    '1',
+    'sha256:' || repeat('5', 64),
+    v_revision_id,
+    v_revision_hash,
+    'sha256:' || repeat('6', 64),
+    '0.1.0',
+    'mcp-http',
+    'insert',
+    'tenant_orders',
+    'sha256:' || repeat('7', 64),
+    'sha256:' || repeat('8', 64),
+    '[]'::jsonb,
+    '{}'::jsonb,
+    (
+      '{"database_role":"postgresem_tenant_a_writer",'
+      '"legacy_authority_hash":"sha256:' || repeat('9', 64) || '"}'
+    )::jsonb,
+    1,
+    0,
+    0
+  );
+
+  INSERT INTO semantic.mutation_idempotency (
+    project, idempotency_key_hash, authority_hash, lsm_hash, revision_id,
+    semantic_revision_hash, mutation_id, status, result, affected_rows,
+    replay_count, created_at, committed_at, last_replayed_at, database_role,
+    authority_scheme
+  )
+  SELECT
+    project, idempotency_key_hash, 'sha256:' || repeat('9', 64), lsm_hash,
+    revision_id, semantic_revision_hash, gen_random_uuid(), status, result,
+    affected_rows, replay_count, created_at, committed_at, last_replayed_at,
+    database_role, 'legacy-v1'
+  FROM semantic.mutation_idempotency
+  WHERE project = 'commerce'
+    AND authority_hash = 'sha256:' || repeat('4', 64)
+    AND idempotency_key_hash = 'sha256:' || repeat('3', 64);
+END;
+$$;
+SQL
+
+unset POSTGRESEM_MIGRATION_MAX_VERSION
+sh /migrations/run.sh
+if [ "$(
+  psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
+    -c 'SELECT count(*) FROM semantic.schema_migration'
+)" != "9" ]; then
+  echo "N-1 upgrade did not apply migration 0009" >&2
+  exit 1
+fi
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  v_expected uuid;
+  v_actual uuid;
+BEGIN
+  SELECT mutation_id
+  INTO STRICT v_expected
+  FROM semantic.mutation_idempotency
+  WHERE project = 'commerce'
+    AND authority_scheme = 'principal-v1'
+    AND authority_hash = 'sha256:' || repeat('4', 64)
+    AND idempotency_key_hash = 'sha256:' || repeat('3', 64);
+
+  SELECT (
+    semantic.lookup_mutation_idempotency(
+      'commerce',
+      'sha256:' || repeat('4', 64),
+      'sha256:' || repeat('9', 64),
+      'sha256:' || repeat('3', 64)
+    ) ->> 'mutation_id'
+  )::uuid
+  INTO STRICT v_actual;
+
+  IF v_actual <> v_expected THEN
+    RAISE EXCEPTION 'principal-v1 reconciliation did not take precedence';
+  END IF;
+END;
+$$;
+SQL
+verify_revision "$n_minus_one_database" "$current_revision"
+run_guarded_query "$n_minus_one_database"
+
+drop_database "$legacy_authority_database"
+create_database "$legacy_authority_database"
+export PGDATABASE=$legacy_authority_database
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/10-commerce.sql
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/20-rls-multitenant.sql
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/postgres/30-subscriptions.sql
@@ -161,12 +273,12 @@ if psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
   -c "SELECT count(*) FROM pg_catalog.pg_proc WHERE proname = 'lookup_mutation_idempotency' AND pronargs = 4" |
   grep -q '^1$'
 then
-  echo "N-1 database unexpectedly contains authority-scoped idempotency" >&2
+  echo "pre-0008 database unexpectedly contains authority-scoped idempotency" >&2
   exit 1
 fi
 
-verify_revision "$n_minus_one_database" "$current_revision"
-run_guarded_query "$n_minus_one_database"
+verify_revision "$legacy_authority_database" "$current_revision"
+run_guarded_query "$legacy_authority_database"
 
 unset POSTGRESEM_MIGRATION_MAX_VERSION
 sh /migrations/run.sh
@@ -174,19 +286,23 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "8" ]; then
-  echo "N-1 upgrade did not apply the complete migration set" >&2
+if [ "$migration_count" != "9" ]; then
+  echo "pre-0008 upgrade did not apply the complete migration set" >&2
   exit 1
 fi
 postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
-verify_revision "$n_minus_one_database" "$current_revision"
-configure_mutation_urls "$n_minus_one_database"
+verify_revision "$legacy_authority_database" "$current_revision"
+configure_mutation_urls "$legacy_authority_database"
 export POSTGRESEM_IDEMPOTENCY_KEY=recovery-legacy-idempotency
-postgresem mutation reconcile --project commerce |
-  grep -q '"status": "committed"'
+legacy_reconciled=$(postgresem mutation reconcile --project commerce)
+if ! printf '%s\n' "$legacy_reconciled" | grep -q '"status": "committed"'; then
+  echo "pre-0008 mutation state was not reconciled after upgrade" >&2
+  printf '%s\n' "$legacy_reconciled" >&2
+  exit 1
+fi
 TEST_ROOT=/tests/integration sh /tests/integration/mutation.sh
 
 drop_database "$legacy_v1_database"

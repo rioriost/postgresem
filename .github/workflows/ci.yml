@@ -263,6 +263,38 @@ jobs:
             /tests/runtime/linux-smoke.sh |
             tee "runtime-evidence/linux-${{ matrix.arch }}.json"
 
+      - name: Run native authenticated MCP HTTP integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --file IntegrationContainerfile \
+            --tag postgresem:mcp-http-${{ matrix.arch }} .
+          docker run --rm \
+            --network postgresem-runtime \
+            --entrypoint python3 \
+            --env PGHOST=db \
+            --env PGPORT=5432 \
+            --env PGDATABASE=postgresem_dev \
+            --env PGUSER=postgres \
+            --env PGPASSWORD="${POSTGRES_SUPERUSER_PASSWORD}" \
+            --env POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --env 'MCP_RUNTIME_DATABASE_URL=host=db port=5432 dbname=postgresem_dev user=postgresem_runtime sslmode=disable' \
+            --env 'MCP_AUDIT_DATABASE_URL=host=db port=5432 dbname=postgresem_dev user=postgresem_audit_writer sslmode=disable' \
+            --env 'MCP_MUTATION_DATABASE_URL=host=db port=5432 dbname=postgresem_dev user=postgresem_mutation_runtime sslmode=disable' \
+            --env POSTGRESEM_MCP_PROJECT=commerce \
+            --env POSTGRESEM_MCP_RUNTIME_URL_ENV=MCP_RUNTIME_DATABASE_URL \
+            --env POSTGRESEM_MCP_RUNTIME_PASSWORD_ENV=POSTGRESEM_RUNTIME_PASSWORD \
+            --env POSTGRESEM_MCP_AUDIT_URL_ENV=MCP_AUDIT_DATABASE_URL \
+            --env POSTGRESEM_MCP_AUDIT_PASSWORD_ENV=POSTGRESEM_AUDIT_WRITER_PASSWORD \
+            --env POSTGRESEM_MCP_MUTATION_URL_ENV=MCP_MUTATION_DATABASE_URL \
+            --env POSTGRESEM_MCP_MUTATION_PASSWORD_ENV=POSTGRESEM_MUTATION_RUNTIME_PASSWORD \
+            --volume "$PWD/tests/integration:/tests:ro" \
+            postgresem:mcp-http-${{ matrix.arch }} \
+            /tests/mcp_http.py
+
       - name: Upload runtime evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -311,7 +343,7 @@ jobs:
         run: docker compose up --detach --wait --wait-timeout 120 db
 
       - name: Build integration images
-        run: docker compose build execution-test mcp-test mutation-test performance-test recovery-test
+        run: docker compose build execution-test mcp-test mcp-http-test mutation-test performance-test recovery-test
 
       - name: Apply migrations
         run: docker compose run --rm --no-deps migrate
@@ -327,6 +359,9 @@ jobs:
 
       - name: Run MCP integration checks
         run: docker compose run --rm --no-deps mcp-test
+
+      - name: Run authenticated MCP HTTP integration checks
+        run: docker compose run --rm --no-deps mcp-http-test
 
       - name: Run governed mutation integration checks
         run: docker compose run --rm --no-deps mutation-test

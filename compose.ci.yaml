@@ -21,6 +21,11 @@ services:
       args:
         POSTGRES_VERSION: ${POSTGRES_VERSION}
 
+  mcp-http-test:
+    build:
+      args:
+        POSTGRES_VERSION: ${POSTGRES_VERSION}
+
   mutation-test:
     build:
       args:

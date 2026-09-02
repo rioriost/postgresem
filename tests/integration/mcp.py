@@ -247,6 +247,7 @@ expected_tools = [
     "explain_semantic_query",
     "validate_semantic_mutation",
     "mutate_semantic_model",
+    "reconcile_semantic_mutation",
 ]
 if tool_names != expected_tools:
     fail(f"unexpected tools: {tool_names}")
@@ -305,16 +306,20 @@ listed = structured(
 )
 if [model["name"] for model in listed["models"]] != ["orders", "subscriptions"]:
     fail(f"model pagination is not deterministic: {listed}")
+stdio_authority_hash = "sha256:" + hashlib.sha256(b"mcp:stdio").hexdigest()
 if not listed["next_cursor"].startswith(
-    f"v1:{listed['semantic_revision']}:"
-) or not listed["next_cursor"].endswith(":2"):
+    f"v2|{listed['semantic_revision']}|{stdio_authority_hash}|"
+) or not listed["next_cursor"].endswith("|2"):
     fail("model pagination cursor is missing")
 stale_cursor = call(
     "list_semantic_models",
     {
         "schema_version": "1",
         "limit": 2,
-        "cursor": "v1:sha256:0000000000000000000000000000000000000000000000000000000000000000:2",
+        "cursor": (
+            "v2|sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            f"|{stdio_authority_hash}|2"
+        ),
     },
     "stale-cursor",
 )
@@ -579,6 +584,19 @@ if (
     or replayed_mutation["mutation_id"] != mutated["mutation_id"]
 ):
     fail(f"MCP mutation replay is incorrect: {replayed_mutation}")
+
+reconciled_mutation = structured(
+    call(
+        "reconcile_semantic_mutation",
+        {
+            "schema_version": "1",
+            "idempotency_key": lsm["idempotency_key"],
+        },
+        "mutation-reconcile",
+    )
+)
+if reconciled_mutation["state"]["mutation_id"] != mutated["mutation_id"]:
+    fail(f"MCP mutation reconciliation is incorrect: {reconciled_mutation}")
 
 resources = send(
     {
