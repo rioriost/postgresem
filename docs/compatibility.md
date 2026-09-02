@@ -282,7 +282,7 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |
 | `scripts/install.sh` | supports macOS/Linux amd64/arm64, requires Cosign, verifies the exact release workflow/tag identity and `SHA256SUMS`; CI covers successful Linux architecture selection and failed-signature rejection |
 | versioned GHCR image | public as `ghcr.io/rioriost/postgresem:0.7.0` |
-| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; immutable index digest is recorded after release verification |
+| multi-architecture OCI manifest | published for `linux/amd64` and `linux/arm64`; index digest `sha256:c7abc628545b106c2da510d61d1b01f5fa3760fe30130b5ff6b665534c1b0533` |
 | image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
 | cryptographic release signatures | `v0.7.0` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
@@ -293,8 +293,9 @@ tags, requires the tag to match the workspace version, builds the four native
 archives, executes Linux amd64/arm64 packaged-binary smoke tests, executes both
 native runtime images, generates `SHA256SUMS`, publishes the
 multi-architecture image only after those gates, then creates a GitHub release.
-The completed release run and immutable image digest are recorded on `main`
-after publication evidence is available.
+[Release run 33601752099](https://github.com/rioriost/postgresem/actions/runs/33601752099)
+completed successfully and published the
+[`v0.7.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.7.0).
 
 The installer uses HTTPS, requires Cosign, verifies the signed checksum against
 the exact repository release workflow and tag identity, verifies SHA-256
