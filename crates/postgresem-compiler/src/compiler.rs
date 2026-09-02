@@ -4,11 +4,12 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::{
-    Aggregation, Cardinality, DataType, Field, Filter, JoinType, Literal, Metric, Model,
-    NormalizedLsq, OrderBy, Relationship, SemanticSnapshot, SortDirection, TimeGrain, hash::sha256,
+    Additivity, Aggregation, Cardinality, DataType, Field, Filter, JoinType, Literal, Metric,
+    Model, NormalizedLsq, OrderBy, Relationship, SemanticSnapshot, SortDirection, TimeGrain,
+    hash::sha256,
 };
 
-pub const COMPILER_SEMANTIC_VERSION: &str = "0.1.0";
+pub const COMPILER_SEMANTIC_VERSION: &str = "0.2.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CompilerOptions {
@@ -52,8 +53,16 @@ pub struct OutputColumn {
 pub struct Lineage {
     pub models: Vec<String>,
     pub metrics: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub aggregation_anchors: Vec<AggregationAnchorLineage>,
     pub relationships: Vec<String>,
     pub source_columns: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AggregationAnchorLineage {
+    pub metric: String,
+    pub field: String,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -82,6 +91,18 @@ pub enum CompileError {
     UnknownRelationship(String),
     #[error("relationship cardinality is unsafe for MVP: {0}")]
     UnsafeRelationship(String),
+    #[error("semantic snapshot v2 metric metadata is missing: {0}")]
+    MissingMetricMetadata(String),
+    #[error("metric aggregation anchor is invalid: {0}")]
+    InvalidAggregationAnchor(String),
+    #[error("fan-out aggregation requires an explicit metric anchor: {0}")]
+    MissingAggregationAnchor(String),
+    #[error("fan-out aggregation metrics must use one anchor")]
+    MixedAggregationAnchors,
+    #[error("fan-out aggregation does not support a joined metric filter: {0}")]
+    JoinedMetricFilter(String),
+    #[error("fan-out aggregation does not support semi-additive metric: {0}")]
+    UnsupportedFanoutAdditivity(String),
     #[error("metric source field is invalid: {0}")]
     InvalidMetricField(String),
     #[error("metric cannot aggregate a joined field in MVP: {0}")]
@@ -122,6 +143,12 @@ impl CompileError {
             Self::UnknownOrderReference(_) => "SEMANTIC_ORDER_REFERENCE_NOT_PROJECTED",
             Self::UnknownRelationship(_) => "SEMANTIC_RELATIONSHIP_NOT_AVAILABLE",
             Self::UnsafeRelationship(_) => "SEMANTIC_UNSAFE_RELATIONSHIP",
+            Self::MissingMetricMetadata(_) => "SEMANTIC_MISSING_METRIC_METADATA",
+            Self::InvalidAggregationAnchor(_) => "SEMANTIC_INVALID_AGGREGATION_ANCHOR",
+            Self::MissingAggregationAnchor(_) => "SEMANTIC_MISSING_AGGREGATION_ANCHOR",
+            Self::MixedAggregationAnchors => "SEMANTIC_MIXED_AGGREGATION_ANCHORS",
+            Self::JoinedMetricFilter(_) => "SEMANTIC_JOINED_METRIC_FILTER",
+            Self::UnsupportedFanoutAdditivity(_) => "SEMANTIC_UNSUPPORTED_FANOUT_ADDITIVITY",
             Self::InvalidMetricField(_) => "SEMANTIC_INVALID_METRIC_FIELD",
             Self::JoinedMetricField(_) => "SEMANTIC_JOINED_METRIC_FIELD",
             Self::CountDistinctRequiresEntityKey(_) => {
@@ -149,6 +176,7 @@ struct ValidatedQuery {
     filter: Option<ResolvedFilter>,
     order_by: Vec<OrderBy>,
     relationships: BTreeMap<String, Relationship>,
+    aggregation_anchor: Option<Field>,
     limit: u32,
 }
 
@@ -163,6 +191,7 @@ struct ResolvedMetric {
     metric: Metric,
     field: Field,
     filter: Option<(Field, Literal)>,
+    aggregation_anchor: Option<Field>,
 }
 
 #[derive(Debug, Clone)]
@@ -207,7 +236,7 @@ fn validate(
     snapshot: &SemanticSnapshot,
     options: CompilerOptions,
 ) -> Result<ValidatedQuery, CompileError> {
-    if snapshot.schema_version != "1" {
+    if !matches!(snapshot.schema_version.as_str(), "1" | "2") {
         return Err(CompileError::UnsupportedSnapshotVersion(
             snapshot.schema_version.clone(),
         ));
@@ -314,11 +343,39 @@ fn validate(
                     Ok((filter_field, filter.value.clone()))
                 })
                 .transpose()?;
+            if snapshot.schema_version == "1"
+                && (metric.additivity.is_some() || metric.aggregation_anchor.is_some())
+            {
+                return Err(CompileError::InvalidAggregationAnchor(
+                    metric.semantic_name.clone(),
+                ));
+            }
+            if snapshot.schema_version == "2" && metric.additivity.is_none() {
+                return Err(CompileError::MissingMetricMetadata(
+                    metric.semantic_name.clone(),
+                ));
+            }
+            let aggregation_anchor = metric
+                .aggregation_anchor
+                .as_ref()
+                .map(|anchor| {
+                    let anchor_field = resolve_field(&model, anchor).map_err(|_| {
+                        CompileError::InvalidAggregationAnchor(metric.semantic_name.clone())
+                    })?;
+                    if anchor_field.relationship.is_some() || !anchor_field.entity_key {
+                        return Err(CompileError::InvalidAggregationAnchor(
+                            metric.semantic_name.clone(),
+                        ));
+                    }
+                    Ok(anchor_field)
+                })
+                .transpose()?;
 
             Ok(ResolvedMetric {
                 metric,
                 field,
                 filter,
+                aggregation_anchor,
             })
         })
         .collect::<Result<Vec<_>, CompileError>>()?;
@@ -352,10 +409,7 @@ fn validate(
                 .find(|relationship| relationship.semantic_name == name)
                 .cloned()
                 .ok_or_else(|| CompileError::UnknownRelationship(name.clone()))?;
-            if !matches!(
-                relationship.cardinality,
-                Cardinality::ManyToOne | Cardinality::OneToOne
-            ) {
+            if relationship.cardinality == Cardinality::ManyToMany {
                 return Err(CompileError::UnsafeRelationship(name));
             }
             let target_model = snapshot
@@ -370,18 +424,78 @@ fn validate(
                     relationship.semantic_name.clone(),
                 ));
             }
-            if !target_model.fields.iter().any(|field| {
-                field.column == relationship.to_column
-                    && field.relationship.is_none()
-                    && field.entity_key
-            }) {
-                return Err(CompileError::RelationshipTargetNotEntityKey(
-                    relationship.semantic_name.clone(),
-                ));
+            match relationship.cardinality {
+                Cardinality::ManyToOne | Cardinality::OneToOne => {
+                    if !target_model.fields.iter().any(|field| {
+                        field.column == relationship.to_column
+                            && field.relationship.is_none()
+                            && field.entity_key
+                    }) {
+                        return Err(CompileError::RelationshipTargetNotEntityKey(
+                            relationship.semantic_name.clone(),
+                        ));
+                    }
+                }
+                Cardinality::OneToMany => {
+                    if !model.fields.iter().any(|field| {
+                        field.column == relationship.from_column
+                            && field.relationship.is_none()
+                            && field.entity_key
+                    }) {
+                        return Err(CompileError::InvalidAggregationAnchor(
+                            relationship.semantic_name.clone(),
+                        ));
+                    }
+                }
+                Cardinality::ManyToMany => {
+                    return Err(CompileError::UnsafeRelationship(name));
+                }
             }
             Ok((relationship.semantic_name.clone(), relationship))
         })
         .collect::<Result<BTreeMap<_, _>, CompileError>>()?;
+    let fanout_relationship = relationships
+        .values()
+        .find(|relationship| relationship.cardinality == Cardinality::OneToMany);
+    let aggregation_anchor = if let Some(relationship) = fanout_relationship {
+        if metrics.is_empty() {
+            return Err(CompileError::UnsafeRelationship(
+                relationship.semantic_name.clone(),
+            ));
+        }
+        let mut anchor_name: Option<String> = None;
+        let mut anchor_field: Option<Field> = None;
+        for metric in &metrics {
+            let anchor = metric.aggregation_anchor.as_ref().ok_or_else(|| {
+                CompileError::MissingAggregationAnchor(metric.metric.semantic_name.clone())
+            })?;
+            if metric
+                .filter
+                .as_ref()
+                .is_some_and(|(field, _)| field.relationship.is_some())
+            {
+                return Err(CompileError::JoinedMetricFilter(
+                    metric.metric.semantic_name.clone(),
+                ));
+            }
+            if metric.metric.additivity == Some(Additivity::SemiAdditive) {
+                return Err(CompileError::UnsupportedFanoutAdditivity(
+                    metric.metric.semantic_name.clone(),
+                ));
+            }
+            if anchor_name
+                .as_ref()
+                .is_some_and(|name| name != &anchor.semantic_name)
+            {
+                return Err(CompileError::MixedAggregationAnchors);
+            }
+            anchor_name = Some(anchor.semantic_name.clone());
+            anchor_field = Some(anchor.clone());
+        }
+        anchor_field
+    } else {
+        None
+    };
 
     Ok(ValidatedQuery {
         model,
@@ -390,6 +504,7 @@ fn validate(
         filter,
         order_by: query.order_by.clone(),
         relationships,
+        aggregation_anchor,
         limit,
     })
 }
@@ -537,118 +652,39 @@ fn render(
         .collect::<BTreeMap<_, _>>();
     let mut parameters = Vec::new();
     let mut source_columns = BTreeSet::new();
-    let mut select = Vec::new();
-    let mut output_schema = Vec::new();
-
-    for dimension in &validated.dimensions {
-        let expression = render_dimension(
-            &validated.model,
-            dimension,
-            &relationship_aliases,
-            &mut parameters,
-            &mut source_columns,
-        )?;
-        select.push(format!(
-            "{expression} AS {}",
-            quote_identifier(&dimension.field.semantic_name)
-        ));
-        output_schema.push(OutputColumn {
+    let output_schema = validated
+        .dimensions
+        .iter()
+        .map(|dimension| OutputColumn {
             name: dimension.field.semantic_name.clone(),
             data_type: if dimension.time_grain.is_some() {
                 DataType::Date
             } else {
                 dimension.field.data_type
             },
-        });
-    }
-
-    for metric in &validated.metrics {
-        let expression = render_metric(
-            &validated.model,
-            metric,
-            &relationship_aliases,
-            &mut parameters,
-            &mut source_columns,
-        )?;
-        select.push(format!(
-            "{expression} AS {}",
-            quote_identifier(&metric.metric.semantic_name)
-        ));
-        output_schema.push(OutputColumn {
+        })
+        .chain(validated.metrics.iter().map(|metric| OutputColumn {
             name: metric.metric.semantic_name.clone(),
             data_type: metric.metric.data_type,
-        });
-    }
-
-    let mut sql = format!(
-        "SELECT {}\nFROM {}.{} AS t0",
-        select.join(", "),
-        quote_identifier(&validated.model.source.schema),
-        quote_identifier(&validated.model.source.relation)
-    );
-
-    for (name, relationship) in &validated.relationships {
-        let alias = relationship_aliases
-            .get(name)
-            .ok_or_else(|| CompileError::UnknownRelationship(name.clone()))?;
-        let join = match relationship.join_type {
-            JoinType::Inner => "INNER JOIN",
-            JoinType::Left => "LEFT JOIN",
-        };
-        sql.push_str(&format!(
-            "\n{join} {}.{} AS {alias} ON t0.{} = {alias}.{}",
-            quote_identifier(&relationship.target.schema),
-            quote_identifier(&relationship.target.relation),
-            quote_identifier(&relationship.from_column),
-            quote_identifier(&relationship.to_column)
-        ));
-        source_columns.insert(source_column(
-            &validated.model.source,
-            &relationship.from_column,
-        ));
-        source_columns.insert(source_column(&relationship.target, &relationship.to_column));
-    }
-
-    if let Some(filter) = &validated.filter {
-        let predicate = render_filter(
-            &validated.model,
-            filter,
+        }))
+        .collect();
+    let mut sql = if let Some(anchor) = &validated.aggregation_anchor {
+        render_anchored_sql(
+            &validated,
+            anchor,
             &relationship_aliases,
             &mut parameters,
             &mut source_columns,
-        )?;
-        sql.push_str("\nWHERE ");
-        sql.push_str(&predicate);
-    }
-
-    if !validated.dimensions.is_empty() {
-        let positions = (1..=validated.dimensions.len())
-            .map(|position| position.to_string())
-            .collect::<Vec<_>>();
-        sql.push_str(&format!("\nGROUP BY {}", positions.join(", ")));
-    }
-
-    if !validated.order_by.is_empty() {
-        let order_by = validated
-            .order_by
-            .iter()
-            .map(|order| {
-                let direction = match order.direction {
-                    SortDirection::Asc => "ASC",
-                    SortDirection::Desc => "DESC",
-                };
-                format!("{} {direction}", quote_identifier(&order.output_reference))
-            })
-            .collect::<Vec<_>>();
-        sql.push_str(&format!("\nORDER BY {}", order_by.join(", ")));
-    }
-
-    let limit_position = push_parameter(
-        &mut parameters,
-        DataType::Integer,
-        Literal::Integer(i64::from(validated.limit)),
-    );
-    sql.push_str(&format!("\nLIMIT ${limit_position}::text::bigint"));
+        )?
+    } else {
+        render_flat_sql(
+            &validated,
+            &relationship_aliases,
+            &mut parameters,
+            &mut source_columns,
+        )?
+    };
+    append_order_and_limit(&mut sql, &validated, &mut parameters);
 
     let sql_hash = hash(&sql);
     let parameter_hash_input =
@@ -682,12 +718,267 @@ fn render(
                 .iter()
                 .map(|metric| metric.metric.semantic_name.clone())
                 .collect(),
+            aggregation_anchors: validated
+                .metrics
+                .iter()
+                .filter_map(|metric| {
+                    metric
+                        .aggregation_anchor
+                        .as_ref()
+                        .map(|anchor| AggregationAnchorLineage {
+                            metric: metric.metric.semantic_name.clone(),
+                            field: anchor.semantic_name.clone(),
+                        })
+                })
+                .collect(),
             relationships: validated.relationships.keys().cloned().collect(),
             source_columns: source_columns.into_iter().collect(),
         },
         query_hash,
         sql_hash,
     })
+}
+
+fn render_flat_sql(
+    validated: &ValidatedQuery,
+    relationship_aliases: &BTreeMap<String, String>,
+    parameters: &mut Vec<CompiledParameter>,
+    source_columns: &mut BTreeSet<String>,
+) -> Result<String, CompileError> {
+    let mut select = Vec::new();
+    for dimension in &validated.dimensions {
+        let expression = render_dimension(
+            &validated.model,
+            dimension,
+            relationship_aliases,
+            parameters,
+            source_columns,
+        )?;
+        select.push(format!(
+            "{expression} AS {}",
+            quote_identifier(&dimension.field.semantic_name)
+        ));
+    }
+    for metric in &validated.metrics {
+        let expression = render_metric(
+            &validated.model,
+            metric,
+            relationship_aliases,
+            parameters,
+            source_columns,
+        )?;
+        select.push(format!(
+            "{expression} AS {}",
+            quote_identifier(&metric.metric.semantic_name)
+        ));
+    }
+
+    let from =
+        render_from_joins_and_filter(validated, relationship_aliases, parameters, source_columns)?;
+    let mut sql = format!("SELECT {}\n{from}", select.join(", "));
+    if !validated.dimensions.is_empty() {
+        sql.push_str(&format!(
+            "\nGROUP BY {}",
+            positional_group_by(validated.dimensions.len(), 1)
+        ));
+    }
+    Ok(sql)
+}
+
+fn render_anchored_sql(
+    validated: &ValidatedQuery,
+    anchor: &Field,
+    relationship_aliases: &BTreeMap<String, String>,
+    parameters: &mut Vec<CompiledParameter>,
+    source_columns: &mut BTreeSet<String>,
+) -> Result<String, CompileError> {
+    let mut inner_select = Vec::new();
+    for (index, dimension) in validated.dimensions.iter().enumerate() {
+        let expression = render_dimension(
+            &validated.model,
+            dimension,
+            relationship_aliases,
+            parameters,
+            source_columns,
+        )?;
+        inner_select.push(format!(
+            "{expression} AS {}",
+            quote_identifier(&format!("__d{index}"))
+        ));
+    }
+    inner_select.push(format!(
+        "{} AS \"__anchor\"",
+        render_field(
+            &validated.model,
+            anchor,
+            relationship_aliases,
+            source_columns,
+        )?
+    ));
+    for (index, metric) in validated.metrics.iter().enumerate() {
+        inner_select.push(format!(
+            "{} AS {}",
+            render_anchor_metric_input(
+                &validated.model,
+                metric,
+                relationship_aliases,
+                parameters,
+                source_columns,
+            )?,
+            quote_identifier(&format!("__m{index}"))
+        ));
+    }
+
+    let from =
+        render_from_joins_and_filter(validated, relationship_aliases, parameters, source_columns)?;
+    let inner_group_count = validated.dimensions.len() + 1;
+    let mut outer_select = validated
+        .dimensions
+        .iter()
+        .enumerate()
+        .map(|(index, dimension)| {
+            format!(
+                "a.{} AS {}",
+                quote_identifier(&format!("__d{index}")),
+                quote_identifier(&dimension.field.semantic_name)
+            )
+        })
+        .collect::<Vec<_>>();
+    outer_select.extend(validated.metrics.iter().enumerate().map(|(index, metric)| {
+        format!(
+            "{} AS {}",
+            render_outer_metric(metric.metric.aggregation, index),
+            quote_identifier(&metric.metric.semantic_name)
+        )
+    }));
+
+    let indented_from = from.replace('\n', "\n  ");
+    let mut sql = format!(
+        "WITH \"__postgresem_anchor_groups\" AS (\n  SELECT {}\n  {}\n  GROUP BY {}\n)\nSELECT {}\nFROM \"__postgresem_anchor_groups\" AS a",
+        inner_select.join(", "),
+        indented_from,
+        positional_group_by(inner_group_count, 1),
+        outer_select.join(", ")
+    );
+    if !validated.dimensions.is_empty() {
+        sql.push_str(&format!(
+            "\nGROUP BY {}",
+            positional_group_by(validated.dimensions.len(), 1)
+        ));
+    }
+    Ok(sql)
+}
+
+fn render_from_joins_and_filter(
+    validated: &ValidatedQuery,
+    relationship_aliases: &BTreeMap<String, String>,
+    parameters: &mut Vec<CompiledParameter>,
+    source_columns: &mut BTreeSet<String>,
+) -> Result<String, CompileError> {
+    let mut sql = format!(
+        "FROM {}.{} AS t0",
+        quote_identifier(&validated.model.source.schema),
+        quote_identifier(&validated.model.source.relation)
+    );
+    for (name, relationship) in &validated.relationships {
+        let alias = relationship_aliases
+            .get(name)
+            .ok_or_else(|| CompileError::UnknownRelationship(name.clone()))?;
+        let join = match relationship.join_type {
+            JoinType::Inner => "INNER JOIN",
+            JoinType::Left => "LEFT JOIN",
+        };
+        sql.push_str(&format!(
+            "\n{join} {}.{} AS {alias} ON t0.{} = {alias}.{}",
+            quote_identifier(&relationship.target.schema),
+            quote_identifier(&relationship.target.relation),
+            quote_identifier(&relationship.from_column),
+            quote_identifier(&relationship.to_column)
+        ));
+        source_columns.insert(source_column(
+            &validated.model.source,
+            &relationship.from_column,
+        ));
+        source_columns.insert(source_column(&relationship.target, &relationship.to_column));
+    }
+    if let Some(filter) = &validated.filter {
+        let predicate = render_filter(
+            &validated.model,
+            filter,
+            relationship_aliases,
+            parameters,
+            source_columns,
+        )?;
+        sql.push_str("\nWHERE ");
+        sql.push_str(&predicate);
+    }
+    Ok(sql)
+}
+
+fn render_anchor_metric_input(
+    model: &Model,
+    metric: &ResolvedMetric,
+    aliases: &BTreeMap<String, String>,
+    parameters: &mut Vec<CompiledParameter>,
+    source_columns: &mut BTreeSet<String>,
+) -> Result<String, CompileError> {
+    let field = render_field(model, &metric.field, aliases, source_columns)?;
+    if let Some((filter_field, value)) = &metric.filter {
+        let filter_expression = render_field(model, filter_field, aliases, source_columns)?;
+        let position = push_parameter(parameters, filter_field.data_type, value.clone());
+        Ok(format!(
+            "max(CASE WHEN {filter_expression} = {} THEN {field} END)",
+            render_parameter(position, filter_field.data_type)
+        ))
+    } else {
+        Ok(format!("max({field})"))
+    }
+}
+
+fn render_outer_metric(aggregation: Aggregation, index: usize) -> String {
+    let field = format!("a.{}", quote_identifier(&format!("__m{index}")));
+    match aggregation {
+        Aggregation::Count => format!("count({field})"),
+        Aggregation::CountDistinct => format!("count(DISTINCT {field})"),
+        Aggregation::Sum => format!("sum({field})"),
+        Aggregation::Min => format!("min({field})"),
+        Aggregation::Max => format!("max({field})"),
+        Aggregation::Avg => format!("avg({field})"),
+    }
+}
+
+fn append_order_and_limit(
+    sql: &mut String,
+    validated: &ValidatedQuery,
+    parameters: &mut Vec<CompiledParameter>,
+) {
+    if !validated.order_by.is_empty() {
+        let order_by = validated
+            .order_by
+            .iter()
+            .map(|order| {
+                let direction = match order.direction {
+                    SortDirection::Asc => "ASC",
+                    SortDirection::Desc => "DESC",
+                };
+                format!("{} {direction}", quote_identifier(&order.output_reference))
+            })
+            .collect::<Vec<_>>();
+        sql.push_str(&format!("\nORDER BY {}", order_by.join(", ")));
+    }
+    let limit_position = push_parameter(
+        parameters,
+        DataType::Integer,
+        Literal::Integer(i64::from(validated.limit)),
+    );
+    sql.push_str(&format!("\nLIMIT ${limit_position}::text::bigint"));
+}
+
+fn positional_group_by(count: usize, start: usize) -> String {
+    (start..start + count)
+        .map(|position| position.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn render_dimension(

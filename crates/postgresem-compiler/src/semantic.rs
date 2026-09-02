@@ -91,6 +91,10 @@ pub struct Metric {
     pub field: String,
     #[serde(default)]
     pub filter: Option<MetricFilter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub additivity: Option<Additivity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregation_anchor: Option<String>,
     #[serde(default = "visible_by_default")]
     pub visible: bool,
 }
@@ -135,6 +139,14 @@ pub enum Aggregation {
     Min,
     Max,
     Avg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Additivity {
+    Additive,
+    SemiAdditive,
+    NonAdditive,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -276,6 +288,20 @@ mod tests {
         );
     }
 
+    #[test]
+    fn snapshot_v1_hash_is_unchanged_by_optional_v2_fields() {
+        let snapshot: SemanticSnapshot = serde_json::from_str(include_str!(
+            "../../../fixtures/evals/m0-semantic-snapshot.json"
+        ))
+        .expect("valid v1 snapshot");
+        assert_eq!(
+            snapshot
+                .calculate_revision_hash()
+                .expect("snapshot is serializable"),
+            snapshot.revision_hash
+        );
+    }
+
     fn field(semantic_name: &str) -> Field {
         Field {
             semantic_name: semantic_name.to_owned(),
@@ -296,6 +322,8 @@ mod tests {
             aggregation: Aggregation::Count,
             field: "a_field".to_owned(),
             filter: None,
+            additivity: None,
+            aggregation_anchor: None,
             visible: true,
         }
     }

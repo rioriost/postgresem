@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::{Field, Metric, Model, Relationship, SemanticSnapshot};
 
 const DIFF_SCHEMA_VERSION: &str = "1";
-const SUPPORTED_SNAPSHOT_VERSION: &str = "1";
+const SUPPORTED_SNAPSHOT_VERSIONS: [&str; 2] = ["1", "2"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -179,7 +179,7 @@ pub fn diff_snapshots(
 }
 
 fn validate_version(snapshot: &SemanticSnapshot) -> Result<(), DiffError> {
-    if snapshot.schema_version != SUPPORTED_SNAPSHOT_VERSION {
+    if !SUPPORTED_SNAPSHOT_VERSIONS.contains(&snapshot.schema_version.as_str()) {
         return Err(DiffError::UnsupportedSnapshotVersion(
             snapshot.schema_version.clone(),
         ));
@@ -378,7 +378,9 @@ fn metric_compatibility(before: &Metric, after: &Metric) -> Compatibility {
         && before.data_type == after.data_type
         && before.aggregation == after.aggregation
         && before.field == after.field
-        && before.filter == after.filter;
+        && before.filter == after.filter
+        && before.additivity == after.additivity
+        && before.aggregation_anchor == after.aggregation_anchor;
     if only_became_visible {
         Compatibility::Compatible
     } else {
@@ -415,8 +417,8 @@ const fn change_rank(change: ChangeKind) -> u8 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Aggregation, Cardinality, DataType, Field, JoinType, Metric, Model, Relation, Relationship,
-        SemanticSnapshot,
+        Additivity, Aggregation, Cardinality, DataType, Field, JoinType, Metric, Model, Relation,
+        Relationship, SemanticSnapshot,
     };
 
     use super::{ChangeKind, Compatibility, SemanticObjectKind, diff_snapshots};
@@ -504,6 +506,24 @@ mod tests {
         assert!(error.to_string().contains("duplicate field name"));
     }
 
+    #[test]
+    fn snapshot_v2_anchor_metadata_changes_are_breaking() {
+        let before = snapshot();
+        let mut after = before.clone();
+        after.schema_version = "2".to_owned();
+        after.revision_hash = "sha256:after".to_owned();
+        after.models[0].metrics[0].additivity = Some(Additivity::Additive);
+        after.models[0].metrics[0].aggregation_anchor = Some("order_id".to_owned());
+
+        let diff = diff_snapshots(&before, &after).expect("v1 and v2 snapshots can be diffed");
+        assert_eq!(diff.compatibility, Compatibility::Breaking);
+        assert!(diff.changes.iter().any(|change| {
+            change.path == "models.orders.metrics.order_count"
+                && change.change == ChangeKind::Modified
+                && change.compatibility == Compatibility::Breaking
+        }));
+    }
+
     fn snapshot() -> SemanticSnapshot {
         SemanticSnapshot {
             schema_version: "1".to_owned(),
@@ -533,6 +553,8 @@ mod tests {
                     aggregation: Aggregation::Count,
                     field: "order_id".to_owned(),
                     filter: None,
+                    additivity: None,
+                    aggregation_anchor: None,
                     visible: true,
                 }],
                 relationships: vec![Relationship {

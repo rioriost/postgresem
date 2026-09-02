@@ -813,6 +813,7 @@ mod tests {
             lineage: Lineage {
                 models: vec![],
                 metrics: vec![],
+                aggregation_anchors: vec![],
                 relationships: vec![],
                 source_columns: vec![],
             },

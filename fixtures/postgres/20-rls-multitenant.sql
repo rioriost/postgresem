@@ -10,8 +10,22 @@ CREATE TABLE rls_fixture.orders (
   UNIQUE (tenant_id, external_id)
 );
 
+ALTER TABLE rls_fixture.orders
+  ADD UNIQUE (tenant_id, order_id);
+
+CREATE TABLE rls_fixture.order_item (
+  order_item_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id text NOT NULL,
+  order_id bigint NOT NULL,
+  sku text NOT NULL,
+  FOREIGN KEY (tenant_id, order_id)
+    REFERENCES rls_fixture.orders(tenant_id, order_id)
+);
+
 ALTER TABLE rls_fixture.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rls_fixture.orders FORCE ROW LEVEL SECURITY;
+ALTER TABLE rls_fixture.order_item ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rls_fixture.order_item FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_a_orders ON rls_fixture.orders
   FOR SELECT
@@ -19,6 +33,16 @@ CREATE POLICY tenant_a_orders ON rls_fixture.orders
   USING (tenant_id = 'tenant_a');
 
 CREATE POLICY tenant_b_orders ON rls_fixture.orders
+  FOR SELECT
+  TO postgresem_tenant_b
+  USING (tenant_id = 'tenant_b');
+
+CREATE POLICY tenant_a_order_items ON rls_fixture.order_item
+  FOR SELECT
+  TO postgresem_tenant_a
+  USING (tenant_id = 'tenant_a');
+
+CREATE POLICY tenant_b_order_items ON rls_fixture.order_item
   FOR SELECT
   TO postgresem_tenant_b
   USING (tenant_id = 'tenant_b');
@@ -41,6 +65,7 @@ GRANT USAGE ON SCHEMA rls_fixture TO
   postgresem_tenant_a_writer,
   postgresem_tenant_b_writer;
 GRANT SELECT ON rls_fixture.orders TO postgresem_tenant_a, postgresem_tenant_b;
+GRANT SELECT ON rls_fixture.order_item TO postgresem_tenant_a, postgresem_tenant_b;
 GRANT SELECT (order_id, external_id, tenant_id, amount),
   INSERT (external_id, tenant_id, amount),
   UPDATE (amount)
@@ -54,5 +79,13 @@ VALUES
   ('fixture-a-2', 'tenant_a', 150.00),
   ('fixture-b-1', 'tenant_b', 999.00);
 
+INSERT INTO rls_fixture.order_item (tenant_id, order_id, sku)
+VALUES
+  ('tenant_a', 1, 'SKU-RED'),
+  ('tenant_a', 1, 'SKU-RED'),
+  ('tenant_a', 2, 'SKU-BLUE'),
+  ('tenant_b', 3, 'SKU-RED');
+
 ALTER TABLE rls_fixture.orders OWNER TO postgresem_source_owner;
+ALTER TABLE rls_fixture.order_item OWNER TO postgresem_source_owner;
 GRANT USAGE ON SCHEMA rls_fixture TO postgresem_source_owner;

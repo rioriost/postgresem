@@ -1,0 +1,19 @@
+{
+  "schema_version": "1",
+  "model": "orders",
+  "dimensions": [
+    {"field": "item_sku"}
+  ],
+  "metrics": [
+    {"metric": "revenue"}
+  ],
+  "filters": {
+    "op": "eq",
+    "field": "order_tag",
+    "value": {"type": "text", "value": "priority"}
+  },
+  "order_by": [
+    {"ref": "item_sku", "direction": "asc"}
+  ],
+  "limit": 100
+}

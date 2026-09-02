@@ -262,7 +262,7 @@ pub fn compile_lsm(
 }
 
 fn validate_snapshot(snapshot: &SemanticSnapshot) -> Result<(), MutationCompileError> {
-    if snapshot.schema_version != "1" {
+    if !matches!(snapshot.schema_version.as_str(), "1" | "2") {
         return Err(MutationCompileError::UnsupportedSnapshotVersion(
             snapshot.schema_version.clone(),
         ));
@@ -636,6 +636,30 @@ mod tests {
         assert!(compiled.statement.contains("$1::text::numeric"));
         assert_eq!(compiled.expected_rows, 1);
         assert_eq!(compiled.returning_schema[0].name, "order_id");
+    }
+
+    #[test]
+    fn snapshot_v2_keeps_the_typed_mutation_contract() {
+        let mut snapshot = snapshot();
+        snapshot.schema_version = "2".to_owned();
+        snapshot.revision_hash = snapshot
+            .calculate_revision_hash()
+            .expect("snapshot is serializable");
+        let normalized = normalize_lsm(&mutation(
+            "insert",
+            r#"[{"amount":{"type":"numeric","value":"12.50"},"external_id":{"type":"text","value":"a"}}]"#,
+        ))
+        .expect("valid mutation");
+
+        assert!(
+            compile_lsm(
+                &normalized,
+                &snapshot,
+                &capabilities(),
+                MutationCompilerOptions::default(),
+            )
+            .is_ok()
+        );
     }
 
     #[test]

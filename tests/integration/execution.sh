@@ -339,6 +339,41 @@ printf '%s\n' "$commerce" | grep -q '"semantic_revision": "sha256:'
 printf '%s\n' "$commerce" | grep -q '"200.50"'
 printf '%s\n' "$commerce" | grep -q '"truncated": false'
 
+fanout=$(
+  postgresem query execute "${TEST_ROOT}/queries/fanout-revenue-by-sku.json" \
+    --project commerce
+)
+priority_fanout=$(
+  postgresem query execute \
+    "${TEST_ROOT}/queries/fanout-priority-revenue-by-sku.json" \
+    --project commerce
+)
+python3 - "$fanout" "$priority_fanout" <<'PY'
+import json
+import sys
+
+fanout = json.loads(sys.argv[1])
+priority = json.loads(sys.argv[2])
+if fanout["rows"] != [
+    ["SKU-BLUE", "120.00", 1],
+    ["SKU-GREEN", "80.50", 1],
+    ["SKU-RED", "200.50", 3],
+    [None, None, 1],
+]:
+    raise SystemExit(f"fan-out-safe result mismatch: {fanout['rows']!r}")
+if priority["rows"] != [
+    ["SKU-BLUE", "120.00"],
+    ["SKU-RED", "120.00"],
+]:
+    raise SystemExit(f"multi-branch fan-out result mismatch: {priority['rows']!r}")
+anchors = fanout["lineage"].get("aggregation_anchors", {})
+if anchors != [
+    {"metric": "revenue", "field": "order_id"},
+    {"metric": "order_count", "field": "order_id"},
+]:
+    raise SystemExit(f"aggregation anchor lineage mismatch: {anchors!r}")
+PY
+
 typed_order=$(
   postgresem query execute "${TEST_ROOT}/queries/typed-order.json" --project commerce
 )
@@ -362,6 +397,18 @@ if printf '%s\n' "$tenant_a" | grep -q '"999.00"'; then
   echo "tenant A execution leaked tenant B rows" >&2
   exit 1
 fi
+tenant_a_fanout=$(
+  postgresem query execute "${TEST_ROOT}/queries/tenant-revenue-by-sku.json" \
+    --project commerce
+)
+python3 - "$tenant_a_fanout" <<'PY'
+import json
+import sys
+
+result = json.loads(sys.argv[1])
+if result["rows"] != [["SKU-BLUE", "150.00", 1], ["SKU-RED", "100.00", 1]]:
+    raise SystemExit(f"tenant A fan-out RLS mismatch: {result['rows']!r}")
+PY
 
 export POSTGRESEM_DB_ROLE=postgresem_tenant_b
 tenant_b=$(
@@ -372,6 +419,18 @@ if printf '%s\n' "$tenant_b" | grep -q '"250.00"'; then
   echo "tenant B execution leaked tenant A rows" >&2
   exit 1
 fi
+tenant_b_fanout=$(
+  postgresem query execute "${TEST_ROOT}/queries/tenant-revenue-by-sku.json" \
+    --project commerce
+)
+python3 - "$tenant_b_fanout" <<'PY'
+import json
+import sys
+
+result = json.loads(sys.argv[1])
+if result["rows"] != [["SKU-RED", "999.00", 1]]:
+    raise SystemExit(f"tenant B fan-out RLS mismatch: {result['rows']!r}")
+PY
 
 for unsafe_role in \
   postgresem_source_owner \
@@ -439,7 +498,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'audit writer does not have the audit lifecycle functions';
   END IF;
-  IF (SELECT count(*) FROM semantic.query_audit) <> 12 THEN
+  IF (SELECT count(*) FROM semantic.query_audit) <> 16 THEN
     RAISE EXCEPTION 'unexpected guarded execution audit count';
   END IF;
   IF EXISTS (
@@ -460,7 +519,7 @@ BEGIN
     SELECT count(*)
     FROM semantic.query_audit
     WHERE status = 'succeeded'
-  ) <> 7 THEN
+  ) <> 11 THEN
     RAISE EXCEPTION 'unexpected successful guarded execution audit count';
   END IF;
   IF (
@@ -478,7 +537,7 @@ BEGIN
       AND canonical_lsq_hash =
         'sha256:6811641914fa00468a5e8dcc52dd725815974bdcc1791b927a8381d07a3c7c8b'
       AND semantic_revision_hash =
-        'sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c'
+        'sha256:dc6fe2f9a25e995dc1bf8a8d156ea245e05e2a9232b2613d9e960dd63b11150f'
       AND generated_sql_hash =
         'sha256:b18e050abd61f49a7f0960ffb58c5648c7af8e1d29c4c046e8d9cfadb280ec8f'
   ) THEN

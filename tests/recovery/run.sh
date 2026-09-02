@@ -6,7 +6,7 @@ n_minus_one_database=postgresem_n_minus_one_test
 held_database=postgresem_restore_source_hold
 dump_path=/tmp/postgresem-recovery.dump
 n_minus_one_revision=sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6
-current_revision=sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c
+current_revision=sha256:dc6fe2f9a25e995dc1bf8a8d156ea245e05e2a9232b2613d9e960dd63b11150f
 source_held=false
 
 if [ "$source_database" != postgresem_dev ]; then
@@ -107,7 +107,7 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "5" ]; then
+if [ "$migration_count" != "6" ]; then
   echo "N-1 upgrade did not apply the complete migration set" >&2
   exit 1
 fi

@@ -7,8 +7,8 @@ mod mutation;
 mod semantic;
 
 pub use compiler::{
-    COMPILER_SEMANTIC_VERSION, CompileError, CompiledParameter, CompiledQuery, CompilerOptions,
-    Lineage, OutputColumn, compile_lsq,
+    AggregationAnchorLineage, COMPILER_SEMANTIC_VERSION, CompileError, CompiledParameter,
+    CompiledQuery, CompilerOptions, Lineage, OutputColumn, compile_lsq,
 };
 pub use diff::{
     ChangeKind, Compatibility, DiffError, DiffSummary, SemanticChange, SemanticDiff,
@@ -27,6 +27,7 @@ pub use mutation::{
     MutationCompileError, MutationCompilerOptions, MutationLineage, MutationParameter, compile_lsm,
 };
 pub use semantic::{
-    Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model, Relation,
-    Relationship, SemanticSnapshot, SnapshotHashError, UpsertPolicy, WritableField, WritableModel,
+    Additivity, Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model,
+    Relation, Relationship, SemanticSnapshot, SnapshotHashError, UpsertPolicy, WritableField,
+    WritableModel,
 };

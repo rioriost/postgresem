@@ -666,6 +666,8 @@ fn import_metric(
         aggregation: parsed.aggregation,
         field: parsed.field.to_owned(),
         filter: None,
+        additivity: None,
+        aggregation_anchor: None,
         visible: true,
     });
     Ok(())

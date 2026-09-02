@@ -5,7 +5,7 @@ use std::{
 
 use postgres::{Client, IsolationLevel, Row};
 use postgresem_compiler::{
-    Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model,
+    Additivity, Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model,
     MutationCapabilities, Relation, Relationship, SemanticSnapshot, UpsertPolicy, WritableField,
     WritableModel,
 };
@@ -118,15 +118,50 @@ const MUTATION_CAPABILITIES_SQL: &str = r"
 
 const METRICS_SQL: &str = r"
     SELECT
+        metric.model_id::text AS model_id,
+        metric.semantic_name,
+        metric.result_type,
+        metric.expression::text AS expression,
+        metric.metric_filter::text AS metric_filter,
+        metric.additivity,
+        anchor.semantic_name AS aggregation_anchor,
+        metric.hidden
+    FROM semantic.metric AS metric
+    LEFT JOIN semantic.field AS anchor
+      ON anchor.field_id = metric.aggregation_anchor_field_id
+     AND anchor.revision_id = metric.revision_id
+    WHERE metric.revision_id = $1::text::uuid
+    ORDER BY metric.model_id, metric.semantic_name
+";
+
+const LEGACY_METRICS_SQL: &str = r"
+    SELECT
         model_id::text AS model_id,
         semantic_name,
         result_type,
         expression::text AS expression,
         metric_filter::text AS metric_filter,
+        additivity,
+        NULL::text AS aggregation_anchor,
         hidden
     FROM semantic.metric
     WHERE revision_id = $1::text::uuid
     ORDER BY model_id, semantic_name
+";
+
+const AGGREGATION_ANCHOR_SCHEMA_AVAILABLE_SQL: &str = r"
+    SELECT EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_attribute AS attribute
+        JOIN pg_catalog.pg_class AS relation
+          ON relation.oid = attribute.attrelid
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'semantic'
+          AND relation.relname = 'metric'
+          AND attribute.attname = 'aggregation_anchor_field_id'
+          AND NOT attribute.attisdropped
+    ) AS available
 ";
 
 const RELATIONSHIPS_SQL: &str = r"
@@ -228,6 +263,14 @@ pub enum PublishedModelError {
         #[source]
         source: serde_json::Error,
     },
+    #[error("published semantic metric {model}.{metric} has unsupported additivity: {value}")]
+    UnsupportedAdditivity {
+        model: String,
+        metric: String,
+        value: String,
+    },
+    #[error("published semantic metric {model}.{metric} has invalid aggregation anchor metadata")]
+    InvalidAggregationAnchor { model: String, metric: String },
     #[error(
         "published semantic relationship {model}.{relationship} has unsupported cardinality: {value}"
     )]
@@ -357,7 +400,7 @@ fn load_published_internal(
     let revision_id: String = revision.get("revision_id");
     let schema_version: String = revision.get("schema_version");
     let expected_hash: String = revision.get("canonical_hash");
-    if schema_version != "1" {
+    if !matches!(schema_version.as_str(), "1" | "2") {
         return Err(PublishedModelError::UnsupportedSchemaVersion(
             schema_version,
         ));
@@ -374,11 +417,26 @@ fn load_published_internal(
             .map_err(|source| query_error("fields", source))?,
         &mut models,
     )?;
+    let aggregation_anchor_schema_available: bool = transaction
+        .query_one(AGGREGATION_ANCHOR_SCHEMA_AVAILABLE_SQL, &[])
+        .map_err(|source| query_error("aggregation anchor schema availability", source))?
+        .get("available");
+    if schema_version == "2" && !aggregation_anchor_schema_available {
+        return Err(PublishedModelError::UnsupportedSchemaVersion(
+            schema_version,
+        ));
+    }
+    let metrics_sql = if aggregation_anchor_schema_available {
+        METRICS_SQL
+    } else {
+        LEGACY_METRICS_SQL
+    };
     load_metrics(
         &transaction
-            .query(METRICS_SQL, &[&revision_id])
+            .query(metrics_sql, &[&revision_id])
             .map_err(|source| query_error("metrics", source))?,
         &mut models,
+        &schema_version,
     )?;
     load_relationships(
         &transaction
@@ -610,6 +668,7 @@ fn load_fields(
 fn load_metrics(
     rows: &[Row],
     models: &mut BTreeMap<String, Model>,
+    schema_version: &str,
 ) -> Result<(), PublishedModelError> {
     for row in rows {
         let model_id: String = row.get("model_id");
@@ -626,6 +685,17 @@ fn load_metrics(
             .get::<_, Option<String>>("metric_filter")
             .map(|value| parse_metric_filter(&value, &model.semantic_name, &metric))
             .transpose()?;
+        let additivity_value: String = row.get("additivity");
+        let additivity = (schema_version == "2")
+            .then(|| parse_additivity(&additivity_value, &model.semantic_name, &metric))
+            .transpose()?;
+        let aggregation_anchor: Option<String> = row.get("aggregation_anchor");
+        if schema_version == "1" && aggregation_anchor.is_some() {
+            return Err(PublishedModelError::InvalidAggregationAnchor {
+                model: model.semantic_name.clone(),
+                metric,
+            });
+        }
         model.metrics.push(Metric {
             semantic_name: metric.clone(),
             data_type: parse_data_type(
@@ -636,8 +706,27 @@ fn load_metrics(
             aggregation: expression.aggregation,
             field: expression.field,
             filter,
+            additivity,
+            aggregation_anchor,
             visible: !row.get::<_, bool>("hidden"),
         });
+    }
+
+    fn parse_additivity(
+        value: &str,
+        model: &str,
+        metric: &str,
+    ) -> Result<Additivity, PublishedModelError> {
+        match value {
+            "additive" => Ok(Additivity::Additive),
+            "semi_additive" => Ok(Additivity::SemiAdditive),
+            "non_additive" => Ok(Additivity::NonAdditive),
+            _ => Err(PublishedModelError::UnsupportedAdditivity {
+                model: model.to_owned(),
+                metric: metric.to_owned(),
+                value: value.to_owned(),
+            }),
+        }
     }
     Ok(())
 }

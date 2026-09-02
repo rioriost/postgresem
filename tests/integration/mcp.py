@@ -74,6 +74,10 @@ env["MCP_AUDIT_DATABASE_URL"] = (
     f"host={env['PGHOST']} port={env['PGPORT']} dbname={env['PGDATABASE']} "
     "user=postgresem_audit_writer sslmode=disable"
 )
+env["MCP_MUTATION_DATABASE_URL"] = (
+    f"host={env['PGHOST']} port={env['PGPORT']} dbname={env['PGDATABASE']} "
+    "user=postgresem_mutation_runtime sslmode=disable"
+)
 env["POSTGRESEM_MAX_RESULT_BYTES"] = "12"
 
 psql(
@@ -344,9 +348,19 @@ for hidden_name in ["internal_amount", "internal_revenue", "customers"]:
     if hidden_name in description_text:
         fail(f"private semantic name leaked from describe: {hidden_name}")
 if described["model"]["relationships"] != [
-    {"name": "customer", "cardinality": "many_to_one", "join_type": "left"}
+    {"name": "customer", "cardinality": "many_to_one", "join_type": "left"},
+    {"name": "items", "cardinality": "one_to_many", "join_type": "left"},
+    {"name": "tags", "cardinality": "one_to_many", "join_type": "left"},
 ]:
     fail(f"usable semantic relationships are incomplete: {described}")
+revenue_metric = next(
+    metric for metric in described["model"]["metrics"] if metric["name"] == "revenue"
+)
+if (
+    revenue_metric["additivity"] != "additive"
+    or revenue_metric["aggregation_anchor"] != "order_id"
+):
+    fail(f"aggregation anchor discovery is incomplete: {revenue_metric}")
 ordered_at = next(
     field for field in described["model"]["fields"] if field["name"] == "ordered_at"
 )
@@ -401,6 +415,27 @@ if has_key(validated["output_schema"], {"data_type"}):
     fail("validation output schema exposed compiler-internal data_type")
 if has_key(validated, {"sql", "generated_sql", "source_columns"}):
     fail("validation exposed a physical query surface")
+
+fanout_lsq = {
+    "schema_version": "1",
+    "model": "orders",
+    "dimensions": [{"field": "item_sku"}],
+    "metrics": [{"metric": "revenue"}],
+    "limit": 10,
+}
+fanout_validated = structured(
+    call(
+        "validate_semantic_query",
+        {"schema_version": "1", "lsq": fanout_lsq},
+        "validate-fanout",
+    )
+)
+if fanout_validated["lineage"]["aggregation_anchors"] != {
+    "revenue": "order_id"
+}:
+    fail(f"fan-out validation omitted public anchor lineage: {fanout_validated}")
+if fanout_validated["lineage"]["relationships"] != ["items"]:
+    fail(f"fan-out validation omitted semantic relationship: {fanout_validated}")
 
 hidden_validation = structured(
     call(

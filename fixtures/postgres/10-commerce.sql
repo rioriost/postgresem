@@ -31,6 +31,12 @@ CREATE TABLE commerce.order_item (
   quantity integer NOT NULL CHECK (quantity > 0)
 );
 
+CREATE TABLE commerce.order_tag (
+  order_tag_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  order_id bigint NOT NULL REFERENCES commerce.orders(order_id),
+  tag text NOT NULL
+);
+
 INSERT INTO commerce.customer (customer_name, region, credit_limit)
 VALUES
   ('Aster Trading', 'apac', 1000.00),
@@ -48,11 +54,22 @@ INSERT INTO commerce.order_item (order_id, sku, quantity)
 VALUES
   (1, 'SKU-RED', 1),
   (1, 'SKU-BLUE', 2),
-  (2, 'SKU-GREEN', 1);
+  (1, 'SKU-RED', 1),
+  (2, 'SKU-GREEN', 1),
+  (2, 'SKU-RED', 1),
+  (3, 'SKU-RED', 1);
+
+INSERT INTO commerce.order_tag (order_id, tag)
+VALUES
+  (1, 'priority'),
+  (1, 'priority'),
+  (2, 'standard'),
+  (3, 'review');
 
 ALTER TABLE commerce.customer OWNER TO postgresem_source_owner;
 ALTER TABLE commerce.orders OWNER TO postgresem_source_owner;
 ALTER TABLE commerce.order_item OWNER TO postgresem_source_owner;
+ALTER TABLE commerce.order_tag OWNER TO postgresem_source_owner;
 
 GRANT USAGE ON SCHEMA commerce TO postgresem_source_owner;
 GRANT USAGE ON SCHEMA commerce TO postgresem_analyst;

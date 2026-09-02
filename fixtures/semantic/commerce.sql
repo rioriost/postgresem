@@ -8,9 +8,13 @@ DECLARE
   v_project_id uuid := '10000000-0000-0000-0000-000000000001';
   v_revision_id uuid := '10000000-0000-0000-0000-000000000002';
   v_mutation_supported boolean := to_regclass('semantic.mutation_model') IS NOT NULL;
+  v_anchor_supported boolean :=
+    to_regprocedure('semantic.validate_metric_aggregation_anchor()') IS NOT NULL;
   v_hash text;
 BEGIN
   v_hash := CASE
+    WHEN v_anchor_supported
+      THEN 'sha256:dc6fe2f9a25e995dc1bf8a8d156ea245e05e2a9232b2613d9e960dd63b11150f'
     WHEN v_mutation_supported
       THEN 'sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c'
     ELSE 'sha256:806f8687c1e2161f65370e0c433832760c02b6f96f8b8bc6e93fde6295d29da6'
@@ -20,7 +24,7 @@ BEGIN
     v_project_id,
     'commerce',
     'Commerce development semantics',
-    'Idempotent development fixture matching fixtures/evals/m0-semantic-snapshot.json'
+    'Idempotent development fixture for guarded semantic query and mutation tests'
   )
   ON CONFLICT (semantic_name) DO NOTHING;
 
@@ -66,7 +70,15 @@ BEGIN
     canonical_hash,
     compiler_semantic_version
   )
-  VALUES (v_revision_id, v_project_id, 1, 'draft', '1', v_hash, '0.1.0');
+  VALUES (
+    v_revision_id,
+    v_project_id,
+    1,
+    'draft',
+    CASE WHEN v_anchor_supported THEN '2' ELSE '1' END,
+    v_hash,
+    CASE WHEN v_anchor_supported THEN '0.2.0' ELSE '0.1.0' END
+  );
 
   INSERT INTO semantic.model (
     model_id, revision_id, semantic_name, display_name, model_kind,
@@ -82,6 +94,21 @@ BEGIN
      current_database(), 'rls_fixture', 'orders', 'table', NULL, true),
     ('10000000-0000-0000-0000-000000000014', v_revision_id, 'subscriptions', 'Subscriptions', 'fact',
      current_database(), 'billing', 'subscriptions', 'table', 'UTC', true);
+
+  IF v_anchor_supported THEN
+    INSERT INTO semantic.model (
+      model_id, revision_id, semantic_name, display_name, model_kind,
+      source_database, source_schema, source_relation, source_relation_kind,
+      default_timezone, queryable
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000012', v_revision_id, 'order_items', 'Order items', 'dimension',
+       current_database(), 'commerce', 'order_item', 'table', NULL, false),
+      ('10000000-0000-0000-0000-000000000015', v_revision_id, 'order_tags', 'Order tags', 'dimension',
+       current_database(), 'commerce', 'order_tag', 'table', NULL, false),
+      ('10000000-0000-0000-0000-000000000016', v_revision_id, 'tenant_order_items', 'Tenant order items', 'dimension',
+       current_database(), 'rls_fixture', 'order_item', 'table', NULL, false);
+  END IF;
 
   INSERT INTO semantic.field (
     field_id, revision_id, model_id, semantic_name, display_name, field_kind,
@@ -107,6 +134,28 @@ BEGIN
     ('10000000-0000-0000-0000-000000000145', v_revision_id, '10000000-0000-0000-0000-000000000014', 'monthly_amount', 'Monthly amount', 'dimension', 'numeric', 'monthly_amount', false, false),
     ('10000000-0000-0000-0000-000000000146', v_revision_id, '10000000-0000-0000-0000-000000000014', 'active', 'Active', 'dimension', 'boolean', 'active', false, false);
 
+  IF v_anchor_supported THEN
+    INSERT INTO semantic.field (
+      field_id, revision_id, model_id, semantic_name, display_name, field_kind,
+      logical_type, source_column, nullable, hidden
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000121', v_revision_id, '10000000-0000-0000-0000-000000000012', 'order_item_id', 'Order item ID', 'entity_key', 'integer', 'order_item_id', false, false),
+      ('10000000-0000-0000-0000-000000000122', v_revision_id, '10000000-0000-0000-0000-000000000012', 'order_id', 'Order ID', 'dimension', 'integer', 'order_id', false, false),
+      ('10000000-0000-0000-0000-000000000123', v_revision_id, '10000000-0000-0000-0000-000000000012', 'sku', 'SKU', 'dimension', 'text', 'sku', false, false),
+      ('10000000-0000-0000-0000-000000000151', v_revision_id, '10000000-0000-0000-0000-000000000015', 'order_tag_id', 'Order tag ID', 'entity_key', 'integer', 'order_tag_id', false, false),
+      ('10000000-0000-0000-0000-000000000152', v_revision_id, '10000000-0000-0000-0000-000000000015', 'order_id', 'Order ID', 'dimension', 'integer', 'order_id', false, false),
+      ('10000000-0000-0000-0000-000000000153', v_revision_id, '10000000-0000-0000-0000-000000000015', 'tag', 'Tag', 'dimension', 'text', 'tag', false, false);
+    INSERT INTO semantic.field (
+      field_id, revision_id, model_id, semantic_name, display_name, field_kind,
+      logical_type, source_column, nullable, hidden
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000161', v_revision_id, '10000000-0000-0000-0000-000000000016', 'order_item_id', 'Order item ID', 'entity_key', 'integer', 'order_item_id', false, false),
+      ('10000000-0000-0000-0000-000000000162', v_revision_id, '10000000-0000-0000-0000-000000000016', 'order_id', 'Order ID', 'dimension', 'integer', 'order_id', false, false),
+      ('10000000-0000-0000-0000-000000000163', v_revision_id, '10000000-0000-0000-0000-000000000016', 'sku', 'SKU', 'dimension', 'text', 'sku', false, false);
+  END IF;
+
   INSERT INTO semantic.relationship (
     relationship_id, revision_id, semantic_name, from_model_id, to_model_id,
     cardinality, join_type, allowed_direction, priority
@@ -116,12 +165,42 @@ BEGIN
      '10000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000011',
      'many_to_one', 'left', 'forward', 0);
 
+  IF v_anchor_supported THEN
+    INSERT INTO semantic.relationship (
+      relationship_id, revision_id, semantic_name, from_model_id, to_model_id,
+      cardinality, join_type, allowed_direction, priority
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000202', v_revision_id, 'items',
+       '10000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000012',
+       'one_to_many', 'left', 'forward', 0),
+      ('10000000-0000-0000-0000-000000000203', v_revision_id, 'tags',
+       '10000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000015',
+       'one_to_many', 'left', 'forward', 0),
+      ('10000000-0000-0000-0000-000000000204', v_revision_id, 'tenant_items',
+       '10000000-0000-0000-0000-000000000013', '10000000-0000-0000-0000-000000000016',
+       'one_to_many', 'left', 'forward', 0);
+  END IF;
+
   INSERT INTO semantic.relationship_column (
     relationship_id, revision_id, ordinal, from_field_id, to_field_id
   )
   VALUES
     ('10000000-0000-0000-0000-000000000201', v_revision_id, 1,
      '10000000-0000-0000-0000-000000000102', '10000000-0000-0000-0000-000000000111');
+
+  IF v_anchor_supported THEN
+    INSERT INTO semantic.relationship_column (
+      relationship_id, revision_id, ordinal, from_field_id, to_field_id
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000202', v_revision_id, 1,
+       '10000000-0000-0000-0000-000000000101', '10000000-0000-0000-0000-000000000122'),
+      ('10000000-0000-0000-0000-000000000203', v_revision_id, 1,
+       '10000000-0000-0000-0000-000000000101', '10000000-0000-0000-0000-000000000152'),
+      ('10000000-0000-0000-0000-000000000204', v_revision_id, 1,
+       '10000000-0000-0000-0000-000000000131', '10000000-0000-0000-0000-000000000162');
+  END IF;
 
   INSERT INTO semantic.field (
     field_id, revision_id, model_id, semantic_name, display_name, field_kind,
@@ -130,6 +209,17 @@ BEGIN
   VALUES
     ('10000000-0000-0000-0000-000000000106', v_revision_id, '10000000-0000-0000-0000-000000000010', 'customer_region', 'Customer region', 'dimension', 'text', 'region', '10000000-0000-0000-0000-000000000201', false, false),
     ('10000000-0000-0000-0000-000000000107', v_revision_id, '10000000-0000-0000-0000-000000000010', 'customer_credit_limit', 'Customer credit limit', 'dimension', 'numeric', 'credit_limit', '10000000-0000-0000-0000-000000000201', false, false);
+
+  IF v_anchor_supported THEN
+    INSERT INTO semantic.field (
+      field_id, revision_id, model_id, semantic_name, display_name, field_kind,
+      logical_type, source_column, source_relationship_id, nullable, hidden
+    )
+    VALUES
+      ('10000000-0000-0000-0000-000000000110', v_revision_id, '10000000-0000-0000-0000-000000000010', 'item_sku', 'Item SKU', 'dimension', 'text', 'sku', '10000000-0000-0000-0000-000000000202', false, false),
+      ('10000000-0000-0000-0000-000000000114', v_revision_id, '10000000-0000-0000-0000-000000000010', 'order_tag', 'Order tag', 'dimension', 'text', 'tag', '10000000-0000-0000-0000-000000000203', false, false),
+      ('10000000-0000-0000-0000-000000000135', v_revision_id, '10000000-0000-0000-0000-000000000013', 'item_sku', 'Item SKU', 'dimension', 'text', 'sku', '10000000-0000-0000-0000-000000000204', false, false);
+  END IF;
 
   INSERT INTO semantic.metric (
     metric_id, revision_id, model_id, semantic_name, display_name, result_type,
@@ -154,6 +244,20 @@ BEGIN
      '{"version":"1","kind":"aggregation","aggregation":"count","field":"subscription_id"}', NULL, 'additive', false),
     ('10000000-0000-0000-0000-000000000322', v_revision_id, '10000000-0000-0000-0000-000000000014', 'mrr', 'MRR', 'numeric',
      '{"version":"1","kind":"aggregation","aggregation":"sum","field":"monthly_amount"}', '{"field":"active","value":{"type":"boolean","value":true}}', 'additive', false);
+
+  IF v_anchor_supported THEN
+    UPDATE semantic.metric
+    SET aggregation_anchor_field_id = CASE model_id
+      WHEN '10000000-0000-0000-0000-000000000010'::uuid
+        THEN '10000000-0000-0000-0000-000000000101'::uuid
+      WHEN '10000000-0000-0000-0000-000000000013'::uuid
+        THEN '10000000-0000-0000-0000-000000000131'::uuid
+      WHEN '10000000-0000-0000-0000-000000000014'::uuid
+        THEN '10000000-0000-0000-0000-000000000141'::uuid
+      ELSE NULL
+    END
+    WHERE revision_id = v_revision_id;
+  END IF;
 
   IF v_mutation_supported THEN
     INSERT INTO semantic.field (

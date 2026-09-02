@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "model": "orders",
+  "dimensions": [
+    {"field": "item_sku"}
+  ],
+  "metrics": [
+    {"metric": "revenue"},
+    {"metric": "order_count"}
+  ],
+  "order_by": [
+    {"ref": "item_sku", "direction": "asc"}
+  ],
+  "limit": 100
+}

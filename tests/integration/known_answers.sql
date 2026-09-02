@@ -22,6 +22,9 @@ DECLARE
   active_mrr numeric;
   month_count bigint;
   empty_metric_month_count bigint;
+  naive_red_revenue numeric;
+  anchored_red_revenue numeric;
+  priority_pair_count bigint;
 BEGIN
   SELECT sum(amount) FILTER (WHERE status = 'paid')
   INTO paid_revenue
@@ -64,6 +67,50 @@ BEGIN
       'filtered aggregate NULL semantics mismatch: months %, empty %',
       month_count,
       empty_metric_month_count;
+  END IF;
+
+  SELECT sum(orders.amount) FILTER (WHERE orders.status = 'paid')
+  INTO naive_red_revenue
+  FROM commerce.orders AS orders
+  JOIN commerce.order_item AS item
+    ON item.order_id = orders.order_id
+  WHERE item.sku = 'SKU-RED';
+
+  SELECT sum(amount)
+  INTO anchored_red_revenue
+  FROM (
+    SELECT orders.order_id, max(orders.amount) AS amount
+    FROM commerce.orders AS orders
+    JOIN commerce.order_item AS item
+      ON item.order_id = orders.order_id
+    WHERE item.sku = 'SKU-RED'
+      AND orders.status = 'paid'
+    GROUP BY orders.order_id
+  ) AS anchored_orders;
+
+  IF naive_red_revenue <> 320.50 OR anchored_red_revenue <> 200.50 THEN
+    RAISE EXCEPTION
+      'fan-out oracle mismatch: naive %, anchored %',
+      naive_red_revenue,
+      anchored_red_revenue;
+  END IF;
+
+  SELECT count(*)
+  INTO priority_pair_count
+  FROM (
+    SELECT item.sku, tag.tag, orders.order_id
+    FROM commerce.orders AS orders
+    JOIN commerce.order_item AS item
+      ON item.order_id = orders.order_id
+    JOIN commerce.order_tag AS tag
+      ON tag.order_id = orders.order_id
+    WHERE orders.status = 'paid'
+      AND tag.tag = 'priority'
+    GROUP BY item.sku, tag.tag, orders.order_id
+  ) AS anchored_pairs;
+
+  IF priority_pair_count <> 2 THEN
+    RAISE EXCEPTION 'multi-branch anchor oracle mismatch: %', priority_pair_count;
   END IF;
 END;
 $$;

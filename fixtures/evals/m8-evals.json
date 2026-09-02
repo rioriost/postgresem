@@ -1,0 +1,164 @@
+{
+  "schema_version": "1",
+  "suite": "M8 fan-out-safe aggregation anchors",
+  "cases": [
+    {
+      "id": "accept-01",
+      "dataset": "commerce-fanout",
+      "question": "Paid revenue by item SKU without duplicate-child multiplication.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "revenue"}],
+        "order_by": [{"ref": "item_sku", "direction": "asc"}]
+      },
+      "expect": {"outcome": "accept", "output": ["item_sku", "revenue"], "parameter_count": 2}
+    },
+    {
+      "id": "accept-02",
+      "dataset": "commerce-fanout",
+      "question": "Paid revenue and order count across two direct fan-out branches.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}, {"field": "order_tag"}],
+        "metrics": [{"metric": "revenue"}, {"metric": "order_count"}]
+      },
+      "expect": {"outcome": "accept", "output": ["item_sku", "order_tag", "revenue", "order_count"], "parameter_count": 2}
+    },
+    {
+      "id": "accept-03",
+      "dataset": "commerce-fanout",
+      "question": "Filter through a fan-out branch and count each matching order once.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "metrics": [{"metric": "order_count"}],
+        "filters": {"op": "eq", "field": "item_sku", "value": {"type": "text", "value": "SKU-RED"}}
+      },
+      "expect": {"outcome": "accept", "output": ["order_count"], "parameter_count": 2}
+    },
+    {
+      "id": "accept-04",
+      "dataset": "commerce-fanout",
+      "question": "Calculate a non-additive average at the declared order grain.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "average_order_value"}]
+      },
+      "expect": {"outcome": "accept", "output": ["item_sku", "average_order_value"], "parameter_count": 2}
+    },
+    {
+      "id": "accept-05",
+      "dataset": "commerce-fanout",
+      "question": "Mix a many-to-one dimension with an anchored fan-out dimension.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "customer_region"}, {"field": "item_sku"}],
+        "metrics": [{"metric": "revenue"}]
+      },
+      "expect": {"outcome": "accept", "output": ["customer_region", "item_sku", "revenue"], "parameter_count": 2}
+    },
+    {
+      "id": "accept-06",
+      "dataset": "commerce-fanout",
+      "question": "Apply an independent tag filter while grouping revenue by SKU.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "revenue"}],
+        "filters": {"op": "eq", "field": "order_tag", "value": {"type": "text", "value": "priority"}}
+      },
+      "expect": {"outcome": "accept", "output": ["item_sku", "revenue"], "parameter_count": 3}
+    },
+    {
+      "id": "reject-01",
+      "dataset": "commerce-fanout",
+      "question": "Use one-to-many dimensions without a metric anchor.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "unanchored_revenue"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_MISSING_AGGREGATION_ANCHOR"}
+    },
+    {
+      "id": "reject-02",
+      "dataset": "commerce-fanout",
+      "question": "Mix metrics declared at different entity-key anchors.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "order_count"}, {"metric": "external_count"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_MIXED_AGGREGATION_ANCHORS"}
+    },
+    {
+      "id": "reject-03",
+      "dataset": "commerce-fanout",
+      "question": "Use a non-key field as an aggregation anchor.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "invalid_anchor_revenue"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_INVALID_AGGREGATION_ANCHOR"}
+    },
+    {
+      "id": "reject-04",
+      "dataset": "commerce-fanout",
+      "question": "Use a joined child field inside a metric-local filter.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "joined_filter_revenue"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_JOINED_METRIC_FILTER"}
+    },
+    {
+      "id": "reject-05",
+      "dataset": "commerce-fanout",
+      "question": "Use a semi-additive metric without a modeled time axis.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "semi_additive_revenue"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_UNSUPPORTED_FANOUT_ADDITIVITY"}
+    },
+    {
+      "id": "reject-06",
+      "dataset": "commerce-fanout",
+      "question": "Traverse an unallocated many-to-many bridge.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "bridge_tag"}],
+        "metrics": [{"metric": "revenue"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_UNSAFE_RELATIONSHIP"}
+    },
+    {
+      "id": "reject-07",
+      "dataset": "commerce-fanout",
+      "question": "Aggregate a child-side field at the root fact grain.",
+      "lsq": {
+        "schema_version": "1",
+        "model": "orders",
+        "dimensions": [{"field": "item_sku"}],
+        "metrics": [{"metric": "joined_sku_count"}]
+      },
+      "expect": {"outcome": "reject", "code": "SEMANTIC_JOINED_METRIC_FIELD"}
+    }
+  ]
+}

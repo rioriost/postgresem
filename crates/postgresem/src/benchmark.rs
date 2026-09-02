@@ -139,6 +139,8 @@ fn synthetic_snapshot(model_count: usize) -> Result<SemanticSnapshot, BenchmarkE
                         aggregation: Aggregation::Count,
                         field: "id".to_owned(),
                         filter: None,
+                        additivity: None,
+                        aggregation_anchor: None,
                         visible: true,
                     }],
                     relationships: vec![],

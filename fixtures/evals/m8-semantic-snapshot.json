@@ -1,0 +1,168 @@
+{
+  "schema_version": "2",
+  "revision_hash": "sha256:5177302fc89e2a2725b5f74f421bfad54d3973b3c611e41a5faef2184a2bda57",
+  "models": [
+    {
+      "semantic_name": "orders",
+      "source": {"schema": "commerce", "relation": "orders"},
+      "timezone": "UTC",
+      "fields": [
+        {"semantic_name": "order_id", "data_type": "integer", "column": "order_id", "entity_key": true},
+        {"semantic_name": "external_id", "data_type": "text", "column": "external_id", "entity_key": true},
+        {"semantic_name": "status", "data_type": "text", "column": "status"},
+        {"semantic_name": "amount", "data_type": "numeric", "column": "amount"},
+        {"semantic_name": "ordered_at", "data_type": "timestamp_tz", "column": "ordered_at", "time_dimension": true},
+        {"semantic_name": "customer_region", "data_type": "text", "column": "region", "relationship": "customer"},
+        {"semantic_name": "item_sku", "data_type": "text", "column": "sku", "relationship": "items"},
+        {"semantic_name": "order_tag", "data_type": "text", "column": "tag", "relationship": "tags"},
+        {"semantic_name": "bridge_tag", "data_type": "text", "column": "tag", "relationship": "tag_bridge"}
+      ],
+      "metrics": [
+        {
+          "semantic_name": "revenue",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "amount",
+          "filter": {"field": "status", "value": {"type": "text", "value": "paid"}},
+          "additivity": "additive",
+          "aggregation_anchor": "order_id"
+        },
+        {
+          "semantic_name": "order_count",
+          "data_type": "integer",
+          "aggregation": "count",
+          "field": "order_id",
+          "additivity": "additive",
+          "aggregation_anchor": "order_id"
+        },
+        {
+          "semantic_name": "average_order_value",
+          "data_type": "numeric",
+          "aggregation": "avg",
+          "field": "amount",
+          "filter": {"field": "status", "value": {"type": "text", "value": "paid"}},
+          "additivity": "non_additive",
+          "aggregation_anchor": "order_id"
+        },
+        {
+          "semantic_name": "external_count",
+          "data_type": "integer",
+          "aggregation": "count",
+          "field": "external_id",
+          "additivity": "additive",
+          "aggregation_anchor": "external_id"
+        },
+        {
+          "semantic_name": "unanchored_revenue",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "amount",
+          "additivity": "additive"
+        },
+        {
+          "semantic_name": "invalid_anchor_revenue",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "amount",
+          "additivity": "additive",
+          "aggregation_anchor": "status"
+        },
+        {
+          "semantic_name": "joined_filter_revenue",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "amount",
+          "filter": {"field": "item_sku", "value": {"type": "text", "value": "SKU-RED"}},
+          "additivity": "additive",
+          "aggregation_anchor": "order_id"
+        },
+        {
+          "semantic_name": "semi_additive_revenue",
+          "data_type": "numeric",
+          "aggregation": "sum",
+          "field": "amount",
+          "additivity": "semi_additive",
+          "aggregation_anchor": "order_id"
+        },
+        {
+          "semantic_name": "joined_sku_count",
+          "data_type": "integer",
+          "aggregation": "count_distinct",
+          "field": "item_sku",
+          "additivity": "non_additive",
+          "aggregation_anchor": "order_id"
+        }
+      ],
+      "relationships": [
+        {
+          "semantic_name": "customer",
+          "target_model": "customers",
+          "target": {"schema": "commerce", "relation": "customer"},
+          "cardinality": "many_to_one",
+          "join_type": "left",
+          "from_column": "customer_id",
+          "to_column": "customer_id"
+        },
+        {
+          "semantic_name": "items",
+          "target_model": "order_items",
+          "target": {"schema": "commerce", "relation": "order_item"},
+          "cardinality": "one_to_many",
+          "join_type": "left",
+          "from_column": "order_id",
+          "to_column": "order_id"
+        },
+        {
+          "semantic_name": "tags",
+          "target_model": "order_tags",
+          "target": {"schema": "commerce", "relation": "order_tag"},
+          "cardinality": "one_to_many",
+          "join_type": "left",
+          "from_column": "order_id",
+          "to_column": "order_id"
+        },
+        {
+          "semantic_name": "tag_bridge",
+          "target_model": "order_tags",
+          "target": {"schema": "commerce", "relation": "order_tag"},
+          "cardinality": "many_to_many",
+          "join_type": "left",
+          "from_column": "order_id",
+          "to_column": "order_id"
+        }
+      ]
+    },
+    {
+      "semantic_name": "customers",
+      "source": {"schema": "commerce", "relation": "customer"},
+      "queryable": false,
+      "fields": [
+        {"semantic_name": "customer_id", "data_type": "integer", "column": "customer_id", "entity_key": true},
+        {"semantic_name": "region", "data_type": "text", "column": "region"}
+      ],
+      "metrics": []
+    },
+    {
+      "semantic_name": "order_items",
+      "source": {"schema": "commerce", "relation": "order_item"},
+      "queryable": false,
+      "fields": [
+        {"semantic_name": "order_item_id", "data_type": "integer", "column": "order_item_id", "entity_key": true},
+        {"semantic_name": "order_id", "data_type": "integer", "column": "order_id"},
+        {"semantic_name": "sku", "data_type": "text", "column": "sku"}
+      ],
+      "metrics": []
+    },
+    {
+      "semantic_name": "order_tags",
+      "source": {"schema": "commerce", "relation": "order_tag"},
+      "queryable": false,
+      "fields": [
+        {"semantic_name": "order_tag_id", "data_type": "integer", "column": "order_tag_id", "entity_key": true},
+        {"semantic_name": "order_id", "data_type": "integer", "column": "order_id"},
+        {"semantic_name": "tag", "data_type": "text", "column": "tag"}
+      ],
+      "metrics": []
+    }
+  ]
+}

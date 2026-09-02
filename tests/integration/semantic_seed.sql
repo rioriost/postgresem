@@ -11,9 +11,9 @@ BEGIN
     ON revision.project_id = project.project_id
   WHERE project.semantic_name = 'commerce'
     AND revision.status = 'published'
-    AND revision.schema_version = '1'
+    AND revision.schema_version = '2'
     AND revision.canonical_hash =
-      'sha256:a731347152caed2f8f3dfcecb730aac12c93c839f8cc91e6f81099128f70e58c';
+      'sha256:dc6fe2f9a25e995dc1bf8a8d156ea245e05e2a9232b2613d9e960dd63b11150f';
 
   IF (
     SELECT count(*)
@@ -24,16 +24,16 @@ BEGIN
   ) <> 1 THEN
     RAISE EXCEPTION 'semantic seed is not idempotent';
   END IF;
-  IF (SELECT count(*) FROM semantic.model WHERE revision_id = v_revision_id) <> 4 THEN
+  IF (SELECT count(*) FROM semantic.model WHERE revision_id = v_revision_id) <> 7 THEN
     RAISE EXCEPTION 'semantic seed model count is incorrect';
   END IF;
-  IF (SELECT count(*) FROM semantic.field WHERE revision_id = v_revision_id) <> 22 THEN
+  IF (SELECT count(*) FROM semantic.field WHERE revision_id = v_revision_id) <> 34 THEN
     RAISE EXCEPTION 'semantic seed field count is incorrect';
   END IF;
   IF (SELECT count(*) FROM semantic.metric WHERE revision_id = v_revision_id) <> 9 THEN
     RAISE EXCEPTION 'semantic seed metric count is incorrect';
   END IF;
-  IF (SELECT count(*) FROM semantic.relationship WHERE revision_id = v_revision_id) <> 1 THEN
+  IF (SELECT count(*) FROM semantic.relationship WHERE revision_id = v_revision_id) <> 4 THEN
     RAISE EXCEPTION 'semantic seed relationship count is incorrect';
   END IF;
   IF (
@@ -48,7 +48,7 @@ BEGIN
     FROM semantic.field
     WHERE revision_id = v_revision_id
       AND source_relationship_id IS NOT NULL
-  ) <> 2 THEN
+  ) <> 5 THEN
     RAISE EXCEPTION 'semantic seed declared relationship field bindings are incorrect';
   END IF;
   IF (
@@ -73,6 +73,14 @@ BEGIN
       )
   ) THEN
     RAISE EXCEPTION 'semantic seed contains invalid metric metadata';
+  END IF;
+  IF (
+    SELECT count(*)
+    FROM semantic.metric
+    WHERE revision_id = v_revision_id
+      AND aggregation_anchor_field_id IS NOT NULL
+  ) <> 9 THEN
+    RAISE EXCEPTION 'semantic seed aggregation anchors are incomplete';
   END IF;
   IF (SELECT count(*) FROM semantic.mutation_model WHERE revision_id = v_revision_id) <> 2
     OR (SELECT count(*) FROM semantic.mutation_field WHERE revision_id = v_revision_id) <> 10

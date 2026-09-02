@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     env,
     io::{self, BufRead, Write},
     time::Instant,
@@ -1134,6 +1134,8 @@ fn public_mutation_compile_message(error: &MutationCompileError) -> &'static str
 struct PublicLineage {
     models: Vec<String>,
     metrics: Vec<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    aggregation_anchors: BTreeMap<String, String>,
     relationships: Vec<String>,
     fields: Vec<String>,
 }
@@ -1149,6 +1151,11 @@ fn public_lineage(query: &LogicalSemanticQuery, compiled: &Lineage) -> PublicLin
     PublicLineage {
         models: vec![query.model.clone()],
         metrics: compiled.metrics.clone(),
+        aggregation_anchors: compiled
+            .aggregation_anchors
+            .iter()
+            .map(|anchor| (anchor.metric.clone(), anchor.field.clone()))
+            .collect(),
         relationships: compiled.relationships.clone(),
         fields: fields.into_iter().collect(),
     }
@@ -1277,7 +1284,9 @@ fn describe_model(revision: &str, model: &Model, max_result_bytes: usize) -> Val
             json!({
                 "name": metric.semantic_name,
                 "type": metric.data_type,
-                "aggregation": metric.aggregation
+                "aggregation": metric.aggregation,
+                "additivity": metric.additivity,
+                "aggregation_anchor": metric.aggregation_anchor
             })
         })
         .collect::<Vec<_>>();
