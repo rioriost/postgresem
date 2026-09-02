@@ -6,15 +6,20 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/rioriost/postgresem"
 
 [workspace.dependencies]
+async-stream = "0.3"
+axum = "0.8"
+base64 = "0.22"
 clap = { version = "4.5", features = ["derive"] }
 fallible-iterator = "0.2"
+hmac = "0.13"
+jsonwebtoken = "9.3"
 native-tls = { version = "0.2", features = ["vendored"] }
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
 postgres-native-tls = "0.5"
@@ -23,6 +28,9 @@ serde_json = "1.0"
 serde_yaml_ng = "0.10"
 sha2 = "0.11"
 thiserror = "2.0"
+time = "=0.3.36"
+tokio = { version = "1.45", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+url = "2.5"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -15,6 +15,9 @@ mod doctor;
 mod executor;
 mod hash;
 mod mcp;
+mod mcp_http;
+mod mcp_http_auth;
+mod mcp_http_rate;
 mod mutation_executor;
 mod osi;
 mod published_model;
@@ -241,6 +244,7 @@ enum MutationCommands {
 #[derive(Debug, Subcommand)]
 enum McpCommands {
     Serve,
+    ServeHttp,
 }
 
 #[derive(Debug, Subcommand)]
@@ -368,6 +372,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         Commands::Mcp {
             command: McpCommands::Serve,
         } => mcp::serve().map_err(Into::into),
+        Commands::Mcp {
+            command: McpCommands::ServeHttp,
+        } => mcp_http::serve().map_err(Into::into),
         Commands::Query {
             command: QueryCommands::Validate { path },
         } => validate_query(&path),
@@ -1089,5 +1096,13 @@ mod tests {
                 Cli::try_parse_from(["postgresem", "mcp", "serve", forbidden, "value"]).is_err()
             );
         }
+        assert!(matches!(
+            Cli::try_parse_from(["postgresem", "mcp", "serve-http"]),
+            Ok(Cli {
+                command: Commands::Mcp {
+                    command: McpCommands::ServeHttp
+                }
+            })
+        ));
     }
 }

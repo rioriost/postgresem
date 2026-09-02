@@ -7,8 +7,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+async-stream.workspace = true
+axum.workspace = true
+base64.workspace = true
 clap.workspace = true
 fallible-iterator.workspace = true
+hmac.workspace = true
+jsonwebtoken.workspace = true
 native-tls.workspace = true
 postgres.workspace = true
 postgres-native-tls.workspace = true
@@ -18,6 +23,9 @@ serde_json.workspace = true
 serde_yaml_ng.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+time.workspace = true
+tokio.workspace = true
+url.workspace = true
 
 [lints]
 workspace = true

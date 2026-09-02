@@ -26,6 +26,7 @@ const DEFAULT_STATEMENT_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_LOCK_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 5_000;
 
+#[derive(Clone)]
 pub struct MutationExecutorConfig {
     database_url: String,
     database_url_variable: String,
@@ -101,6 +102,8 @@ pub enum MutationExecuteError {
     IdempotencyConflict,
     #[error("mutation was cancelled")]
     Cancelled(#[source] postgres::Error),
+    #[error("mutation was cancelled before execution")]
+    CancellationRequested,
     #[error("PostgreSQL rejected the mutation")]
     Execution(#[source] postgres::Error),
     #[error("mutation returned an invalid row shape")]
@@ -162,6 +165,41 @@ impl MutationExecutorConfig {
             }
         }
 
+        let database_role = required_environment(database_role_variable)?;
+        Self::from_environment_with_passwords_and_role(
+            database_url_variable,
+            database_password_variable,
+            audit_database_url_variable,
+            audit_database_password_variable,
+            &database_role,
+        )
+    }
+
+    pub fn from_environment_with_passwords_and_role(
+        database_url_variable: &str,
+        database_password_variable: Option<&str>,
+        audit_database_url_variable: &str,
+        audit_database_password_variable: Option<&str>,
+        database_role: &str,
+    ) -> Result<Self, MutationExecuteError> {
+        for variable in [
+            Some(database_url_variable),
+            database_password_variable,
+            Some(audit_database_url_variable),
+            audit_database_password_variable,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !valid_environment_variable_name(variable) {
+                return Err(MutationExecuteError::InvalidEnvironmentVariableName(
+                    variable.to_owned(),
+                ));
+            }
+        }
+        if !valid_database_role(database_role) {
+            return Err(MutationExecuteError::InvalidDatabaseRole);
+        }
         let database_url = required_environment(database_url_variable)?;
         let database_password = database_password_variable
             .map(required_environment)
@@ -170,10 +208,6 @@ impl MutationExecutorConfig {
         let audit_database_password = audit_database_password_variable
             .map(required_environment)
             .transpose()?;
-        let database_role = required_environment(database_role_variable)?;
-        if !valid_database_role(&database_role) {
-            return Err(MutationExecuteError::InvalidDatabaseRole);
-        }
 
         Ok(Self {
             database_url,
@@ -182,7 +216,7 @@ impl MutationExecutorConfig {
             audit_database_url,
             audit_database_url_variable: audit_database_url_variable.to_owned(),
             audit_database_password,
-            database_role,
+            database_role: database_role.to_owned(),
             max_result_bytes: positive_integer_environment(
                 "POSTGRESEM_MAX_MUTATION_RESULT_BYTES",
                 DEFAULT_MAX_RESULT_BYTES,
@@ -207,17 +241,62 @@ impl MutationExecutorConfig {
         &self.database_role
     }
 
+    pub fn with_database_role(&self, database_role: &str) -> Result<Self, MutationExecuteError> {
+        if !valid_database_role(database_role) {
+            return Err(MutationExecuteError::InvalidDatabaseRole);
+        }
+        let mut config = self.clone();
+        config.database_role = database_role.to_owned();
+        Ok(config)
+    }
+
+    pub fn preflight_role(&self) -> Result<(), MutationExecuteError> {
+        let mut client = self.connect_mutation()?;
+        let mut transaction = client
+            .build_transaction()
+            .read_only(true)
+            .start()
+            .map_err(MutationExecuteError::StartTransaction)?;
+        fix_search_path(&mut transaction)?;
+        if !verify_role(&mut transaction, &self.database_role)? {
+            return Err(MutationExecuteError::DatabaseRoleMembership);
+        }
+        transaction
+            .commit()
+            .map_err(MutationExecuteError::TransactionConfiguration)
+    }
+
     pub(crate) fn connect_mutation(&self) -> Result<Client, MutationExecuteError> {
-        database::connect(&self.database_url, self.database_password.as_deref())
-            .map_err(|_| MutationExecuteError::MutationConnect(self.database_url_variable.clone()))
+        let mut client = database::connect(&self.database_url, self.database_password.as_deref())
+            .map_err(|_| {
+            MutationExecuteError::MutationConnect(self.database_url_variable.clone())
+        })?;
+        database::configure_session_timeouts(
+            &mut client,
+            self.statement_timeout,
+            self.lock_timeout,
+            self.idle_transaction_timeout,
+        )
+        .map_err(MutationExecuteError::TransactionConfiguration)?;
+        Ok(client)
     }
 
     fn connect_audit(&self) -> Result<Client, MutationExecuteError> {
-        database::connect(
+        let mut client = database::connect(
             &self.audit_database_url,
             self.audit_database_password.as_deref(),
         )
-        .map_err(|_| MutationExecuteError::AuditConnect(self.audit_database_url_variable.clone()))
+        .map_err(|_| {
+            MutationExecuteError::AuditConnect(self.audit_database_url_variable.clone())
+        })?;
+        database::configure_session_timeouts(
+            &mut client,
+            self.statement_timeout,
+            self.lock_timeout,
+            self.idle_transaction_timeout,
+        )
+        .map_err(MutationExecuteError::TransactionConfiguration)?;
+        Ok(client)
     }
 }
 
@@ -226,6 +305,16 @@ pub fn execute(
     project: &str,
     config: &MutationExecutorConfig,
     context: &ExecutionContext,
+) -> Result<MutationResult, MutationExecuteError> {
+    execute_with_cancel(input, project, config, context, |_| true)
+}
+
+pub fn execute_with_cancel(
+    input: &[u8],
+    project: &str,
+    config: &MutationExecutorConfig,
+    context: &ExecutionContext,
+    on_cancel_handle: impl FnOnce(database::CancelHandle) -> bool,
 ) -> Result<MutationResult, MutationExecuteError> {
     let mut audit = config.connect_audit()?;
     let raw_hash = sha256(input);
@@ -317,6 +406,22 @@ pub fn execute(
         }
     };
     let compile_duration = compile_started.elapsed();
+    let cancel_handle = database::cancel_handle(&mutation);
+    if !on_cancel_handle(cancel_handle.clone()) {
+        record_failure(
+            &mut audit,
+            project,
+            context,
+            config,
+            FailureMetadata::compiled(&normalized, &published, &compiled)?,
+            "rejected",
+            "MUTATION_CANCELLED",
+            validation_duration,
+            compile_duration,
+            Duration::ZERO,
+        )?;
+        return Err(MutationExecuteError::CancellationRequested);
+    }
     let database_started = Instant::now();
     match execute_compiled(
         &mut mutation,
@@ -1024,7 +1129,9 @@ pub const fn mutation_error_code(error: &MutationExecuteError) -> &'static str {
         MutationExecuteError::TargetRelationOwner => "MUTATION_TARGET_RELATION_OWNER",
         MutationExecuteError::UnsafeTargetRelation => "MUTATION_UNSAFE_TARGET_RELATION",
         MutationExecuteError::IdempotencyConflict => "MUTATION_IDEMPOTENCY_CONFLICT",
-        MutationExecuteError::Cancelled(_) => "MUTATION_CANCELLED",
+        MutationExecuteError::Cancelled(_) | MutationExecuteError::CancellationRequested => {
+            "MUTATION_CANCELLED"
+        }
         MutationExecuteError::Execution(_) => "MUTATION_DATABASE_REJECTED",
         MutationExecuteError::InvalidRowShape => "MUTATION_INVALID_ROW_SHAPE",
         MutationExecuteError::ResultByteLimitExceeded => "MUTATION_RESULT_BYTES_EXCEEDED",

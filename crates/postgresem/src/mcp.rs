@@ -219,11 +219,27 @@ fn read_bounded_line(reader: &mut impl BufRead, maximum_bytes: usize) -> io::Res
     }
 }
 
-struct McpServer {
+pub(crate) struct McpServer {
     config: McpConfig,
 }
 
 impl McpServer {
+    pub(crate) fn configured(
+        project: String,
+        executor: ExecutorConfig,
+        mutation_executor: Option<MutationExecutorConfig>,
+        execution_context: ExecutionContext,
+    ) -> Self {
+        Self {
+            config: McpConfig {
+                project,
+                executor,
+                mutation_executor,
+                execution_context,
+            },
+        }
+    }
+
     fn handle_line(&self, line: &[u8]) -> Option<Value> {
         let started = Instant::now();
         let message: Value = match serde_json::from_slice(line) {
@@ -353,7 +369,98 @@ impl McpServer {
         }
     }
 
+    pub(crate) fn dispatch_modern(
+        &self,
+        method: &str,
+        mut params: Value,
+    ) -> Result<Value, RpcFailure> {
+        let Some(parameters) = params.as_object_mut() else {
+            return Err(RpcFailure::invalid_params());
+        };
+        parameters.remove("_meta");
+        let mut result = match method {
+            "server/discover" => {
+                parse_params::<EmptyParams>(params)?;
+                json!({
+                    "supportedVersions": ["2026-07-28"],
+                    "capabilities": {
+                        "tools": {"listChanged": false},
+                        "resources": {"subscribe": false, "listChanged": false}
+                    },
+                    "_meta": {
+                        "io.modelcontextprotocol/serverInfo": {
+                            "name": "postgresem",
+                            "version": env!("CARGO_PKG_VERSION")
+                        }
+                    },
+                    "instructions": "Use semantic names and typed LSQ/LSM documents; raw SQL and request-selected database authority are not supported.",
+                    "ttlMs": 0,
+                    "cacheScope": "private"
+                })
+            }
+            "ping" => {
+                parse_params::<EmptyParams>(params)?;
+                json!({})
+            }
+            "tools/list" => {
+                let params = parse_params::<PaginationParams>(params)?;
+                reject_protocol_cursor(params.cursor.as_deref())?;
+                json!({
+                    "tools": tool_definitions(self.config.mutation_executor.is_some()),
+                    "ttlMs": 0,
+                    "cacheScope": "private"
+                })
+            }
+            "tools/call" => self.call_tool_with_cancel(parse_params(params)?, |_| true)?,
+            "resources/list" => {
+                let params = parse_params::<PaginationParams>(params)?;
+                reject_protocol_cursor(params.cursor.as_deref())?;
+                let mut result = self.list_resources()?;
+                if let Some(object) = result.as_object_mut() {
+                    object.insert("ttlMs".to_owned(), json!(0));
+                    object.insert("cacheScope".to_owned(), json!("private"));
+                }
+                result
+            }
+            "resources/read" => self.read_resource(parse_params(params)?)?,
+            _ => return Err(RpcFailure::method_not_found()),
+        };
+        if let Some(object) = result.as_object_mut() {
+            object.insert("resultType".to_owned(), json!("complete"));
+        }
+        Ok(result)
+    }
+
     fn call_tool(&self, request: ToolCallParams) -> Result<Value, RpcFailure> {
+        self.call_tool_with_cancel(request, |_| true)
+    }
+
+    pub(crate) fn dispatch_modern_with_cancel(
+        &self,
+        method: &str,
+        mut params: Value,
+        on_cancel_handle: impl FnOnce(crate::database::CancelHandle) -> bool,
+    ) -> Result<Value, RpcFailure> {
+        let Some(parameters) = params.as_object_mut() else {
+            return Err(RpcFailure::invalid_params());
+        };
+        parameters.remove("_meta");
+        let mut result = if method == "tools/call" {
+            self.call_tool_with_cancel(parse_params(params)?, on_cancel_handle)?
+        } else {
+            return self.dispatch_modern(method, params);
+        };
+        if let Some(object) = result.as_object_mut() {
+            object.insert("resultType".to_owned(), json!("complete"));
+        }
+        Ok(result)
+    }
+
+    fn call_tool_with_cancel(
+        &self,
+        request: ToolCallParams,
+        on_cancel_handle: impl FnOnce(crate::database::CancelHandle) -> bool,
+    ) -> Result<Value, RpcFailure> {
         let result = match request.name.as_str() {
             "list_semantic_models" => {
                 let params = parse_tool_arguments(&request.arguments)
@@ -373,7 +480,7 @@ impl McpServer {
             "query_semantic_model" => {
                 let params = parse_tool_arguments(&request.arguments)
                     .map_err(|_| RpcFailure::invalid_tool_arguments())?;
-                self.query_semantic_model(params)
+                self.query_semantic_model_with_cancel(params, on_cancel_handle)
             }
             "explain_semantic_query" => {
                 let params = parse_tool_arguments(&request.arguments)
@@ -388,7 +495,12 @@ impl McpServer {
             "mutate_semantic_model" => {
                 let params = parse_tool_arguments(&request.arguments)
                     .map_err(|_| RpcFailure::invalid_tool_arguments())?;
-                self.mutate_semantic_model(params)
+                self.mutate_semantic_model_with_cancel(params, on_cancel_handle)
+            }
+            "reconcile_semantic_mutation" => {
+                let params = parse_tool_arguments(&request.arguments)
+                    .map_err(|_| RpcFailure::invalid_tool_arguments())?;
+                self.reconcile_semantic_mutation(params)
             }
             _ => return Err(RpcFailure::tool_not_found()),
         };
@@ -408,7 +520,11 @@ impl McpServer {
             ));
         }
         let published = self.load_published()?;
-        let offset = parse_cursor(params.cursor.as_deref(), &published.snapshot.revision_hash)?;
+        let offset = parse_cursor(
+            params.cursor.as_deref(),
+            &published.snapshot.revision_hash,
+            self.config.execution_context.authority_id(),
+        )?;
         let models = queryable_models(&published.snapshot);
         if offset > models.len() {
             return Err(ToolFailure::new(
@@ -432,7 +548,11 @@ impl McpServer {
             "semantic_revision": published.snapshot.revision_hash,
             "models": page,
             "next_cursor": (end < models.len()).then(|| {
-                model_cursor(&published.snapshot.revision_hash, end)
+                model_cursor(
+                    &published.snapshot.revision_hash,
+                    self.config.execution_context.authority_id(),
+                    end,
+                )
             })
         }))
     }
@@ -508,15 +628,20 @@ impl McpServer {
         }))
     }
 
-    fn query_semantic_model(&self, params: QueryToolParams) -> Result<Value, ToolFailure> {
+    fn query_semantic_model_with_cancel(
+        &self,
+        params: QueryToolParams,
+        on_cancel_handle: impl FnOnce(crate::database::CancelHandle) -> bool,
+    ) -> Result<Value, ToolFailure> {
         validate_tool_version(&params.schema_version)?;
         let normalized = normalize_value(&params.lsq).map_err(ToolFailure::from_lsq)?;
         let input = serde_json::to_vec(&params.lsq).map_err(|_| ToolFailure::internal())?;
-        let result = executor::execute(
+        let result = executor::execute_with_cancel(
             &input,
             &self.config.project,
             &self.config.executor,
             &self.config.execution_context,
+            on_cancel_handle,
         )
         .map_err(ToolFailure::from_execute)?;
         Ok(public_query_result(result, &normalized.query))
@@ -563,7 +688,11 @@ impl McpServer {
         }
     }
 
-    fn mutate_semantic_model(&self, params: MutationToolParams) -> Result<Value, ToolFailure> {
+    fn mutate_semantic_model_with_cancel(
+        &self,
+        params: MutationToolParams,
+        on_cancel_handle: impl FnOnce(crate::database::CancelHandle) -> bool,
+    ) -> Result<Value, ToolFailure> {
         validate_tool_version(&params.schema_version)?;
         let input = serde_json::to_vec(&params.lsm).map_err(|_| ToolFailure::internal())?;
         let config = self.config.mutation_executor.as_ref().ok_or_else(|| {
@@ -572,14 +701,40 @@ impl McpServer {
                 "semantic mutation capability is not enabled",
             )
         })?;
-        let result = mutation_executor::execute(
+        let result = mutation_executor::execute_with_cancel(
             &input,
             &self.config.project,
             config,
             &self.config.execution_context,
+            on_cancel_handle,
         )
         .map_err(ToolFailure::from_mutation_execute)?;
         Ok(public_mutation_result(result))
+    }
+
+    fn reconcile_semantic_mutation(
+        &self,
+        params: ReconcileMutationParams,
+    ) -> Result<Value, ToolFailure> {
+        validate_tool_version(&params.schema_version)?;
+        let config = self.config.mutation_executor.as_ref().ok_or_else(|| {
+            ToolFailure::new(
+                "MUTATION_CAPABILITY_DISABLED",
+                "semantic mutation capability is not enabled",
+            )
+        })?;
+        let state = mutation_executor::reconcile(
+            &self.config.project,
+            &params.idempotency_key,
+            config,
+            &self.config.execution_context,
+        )
+        .map_err(ToolFailure::from_mutation_execute)?;
+        Ok(json!({
+            "schema_version": TOOL_SCHEMA_VERSION,
+            "idempotency_key_hash": crate::hash::sha256(&params.idempotency_key),
+            "state": state
+        }))
     }
 
     fn list_resources(&self) -> Result<Value, RpcFailure> {
@@ -715,10 +870,10 @@ impl McpServer {
 }
 
 #[derive(Debug)]
-struct RpcFailure {
-    rpc_code: i64,
-    public_code: &'static str,
-    message: &'static str,
+pub(crate) struct RpcFailure {
+    pub(crate) rpc_code: i64,
+    pub(crate) public_code: &'static str,
+    pub(crate) message: &'static str,
 }
 
 impl RpcFailure {
@@ -802,7 +957,8 @@ impl ToolFailure {
         match error {
             executor::ExecuteError::Lsq(error) => Self::from_lsq(error),
             executor::ExecuteError::Compile(error) => Self::from_compile(error),
-            executor::ExecuteError::SourceCancelled(_) => {
+            executor::ExecuteError::SourceCancelled(_)
+            | executor::ExecuteError::SourceCancellationRequested => {
                 Self::new("EXECUTOR_QUERY_CANCELLED", "semantic query was cancelled")
             }
             executor::ExecuteError::RowSerialization(_)
@@ -830,7 +986,8 @@ impl ToolFailure {
                 "MUTATION_COMMIT_INDETERMINATE",
                 "mutation outcome is indeterminate; retry with the same idempotency key",
             ),
-            mutation_executor::MutationExecuteError::Cancelled(_) => {
+            mutation_executor::MutationExecuteError::Cancelled(_)
+            | mutation_executor::MutationExecuteError::CancellationRequested => {
                 Self::new("MUTATION_CANCELLED", "semantic mutation was cancelled")
             }
             error => Self::new(
@@ -960,6 +1117,13 @@ struct MutationToolParams {
     lsm: Value,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReconcileMutationParams {
+    schema_version: String,
+    idempotency_key: String,
+}
+
 fn empty_object() -> Value {
     json!({})
 }
@@ -984,19 +1148,35 @@ fn validate_tool_version(version: &str) -> Result<(), ToolFailure> {
     }
 }
 
-fn model_cursor(revision: &str, offset: usize) -> String {
-    format!("v1:{revision}:{offset}")
+fn model_cursor(revision: &str, authority_id: &str, offset: usize) -> String {
+    format!(
+        "v2|{revision}|{}|{offset}",
+        crate::hash::sha256(authority_id)
+    )
 }
 
-fn parse_cursor(cursor: Option<&str>, revision: &str) -> Result<usize, ToolFailure> {
+fn parse_cursor(
+    cursor: Option<&str>,
+    revision: &str,
+    authority_id: &str,
+) -> Result<usize, ToolFailure> {
     let Some(cursor) = cursor else {
         return Ok(0);
     };
-    let (_cursor_revision, offset) = cursor
-        .strip_prefix("v1:")
-        .and_then(|body| body.rsplit_once(':'))
-        .filter(|(cursor_revision, _)| *cursor_revision == revision)
-        .ok_or_else(invalid_cursor)?;
+    let expected_authority = crate::hash::sha256(authority_id);
+    let mut parts = cursor.split('|');
+    let (Some("v2"), Some(cursor_revision), Some(cursor_authority), Some(offset), None) = (
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+        parts.next(),
+    ) else {
+        return Err(invalid_cursor());
+    };
+    if cursor_revision != revision || cursor_authority != expected_authority {
+        return Err(invalid_cursor());
+    }
     offset.parse().map_err(|_| invalid_cursor())
 }
 
@@ -1460,6 +1640,23 @@ fn tool_definitions(mutation_enabled: bool) -> Vec<Value> {
             "mutate_semantic_model",
             "Execute an LSM through the guarded semantic mutation executor.",
         ));
+        tools.push(json!({
+            "name": "reconcile_semantic_mutation",
+            "description": "Read idempotency state for the authenticated mutation authority.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["schema_version", "idempotency_key"],
+                "properties": {
+                    "schema_version": {"const": TOOL_SCHEMA_VERSION},
+                    "idempotency_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                    }
+                }
+            }
+        }));
     }
     tools
 }
@@ -1553,6 +1750,7 @@ fn public_tool_name(method: &str, params: &Value) -> Option<&'static str> {
         Some("explain_semantic_query") => Some("explain_semantic_query"),
         Some("validate_semantic_mutation") => Some("validate_semantic_mutation"),
         Some("mutate_semantic_model") => Some("mutate_semantic_model"),
+        Some("reconcile_semantic_mutation") => Some("reconcile_semantic_mutation"),
         Some(_) => Some("unknown"),
         None => None,
     }
@@ -1617,7 +1815,8 @@ mod tests {
                 "query_semantic_model",
                 "explain_semantic_query",
                 "validate_semantic_mutation",
-                "mutate_semantic_model"
+                "mutate_semantic_model",
+                "reconcile_semantic_mutation"
             ]
         );
         let serialized = serde_json::to_string(&tools).expect("tools serialize");
@@ -1787,16 +1986,27 @@ mod tests {
     #[test]
     fn model_cursor_is_bound_to_revision_and_parsed_from_the_right() {
         let revision = "sha256:0123456789abcdef";
-        let cursor = model_cursor(revision, 42);
+        let cursor = model_cursor(revision, "principal-a", 42);
         assert_eq!(
-            parse_cursor(Some(&cursor), revision).expect("valid cursor"),
+            parse_cursor(Some(&cursor), revision, "principal-a").expect("valid cursor"),
             42
         );
-        let error = parse_cursor(Some(&cursor), "sha256:different").expect_err("revision mismatch");
+        let error = parse_cursor(Some(&cursor), "sha256:different", "principal-a")
+            .expect_err("revision mismatch");
         assert_eq!(error.code, "MCP_INVALID_CURSOR");
         assert_eq!(
-            parse_cursor(Some("v1:sha256:0123456789abcdef:not-a-number"), revision)
-                .expect_err("invalid offset")
+            parse_cursor(
+                Some("v2|sha256:0123456789abcdef|sha256:authority|not-a-number"),
+                revision,
+                "principal-a"
+            )
+            .expect_err("invalid offset")
+            .code,
+            "MCP_INVALID_CURSOR"
+        );
+        assert_eq!(
+            parse_cursor(Some(&cursor), revision, "principal-b")
+                .expect_err("authority mismatch")
                 .code,
             "MCP_INVALID_CURSOR"
         );

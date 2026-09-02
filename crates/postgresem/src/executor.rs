@@ -27,6 +27,7 @@ const DEFAULT_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 5_000;
 const RESULT_TRUNCATION_WARNING: &str =
     "result is incomplete because it exceeded the byte limit; narrow the query";
 
+#[derive(Clone)]
 pub struct ExecutorConfig {
     database_url: String,
     database_url_variable: String,
@@ -108,6 +109,8 @@ pub enum ExecuteError {
     TransactionConfiguration(#[source] postgres::Error),
     #[error("source query was cancelled")]
     SourceCancelled(#[source] postgres::Error),
+    #[error("source query was cancelled before execution")]
+    SourceCancellationRequested,
     #[error("source query execution failed")]
     SourceExecution(#[source] postgres::Error),
     #[error("source transaction commit failed")]
@@ -157,6 +160,41 @@ impl ExecutorConfig {
             }
         }
 
+        let database_role = required_environment(database_role_variable)?;
+        Self::from_environment_with_passwords_and_role(
+            database_url_variable,
+            database_password_variable,
+            audit_database_url_variable,
+            audit_database_password_variable,
+            &database_role,
+        )
+    }
+
+    pub fn from_environment_with_passwords_and_role(
+        database_url_variable: &str,
+        database_password_variable: Option<&str>,
+        audit_database_url_variable: &str,
+        audit_database_password_variable: Option<&str>,
+        database_role: &str,
+    ) -> Result<Self, ExecuteError> {
+        for variable in [
+            Some(database_url_variable),
+            database_password_variable,
+            Some(audit_database_url_variable),
+            audit_database_password_variable,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !valid_environment_variable_name(variable) {
+                return Err(ExecuteError::InvalidEnvironmentVariableName(
+                    variable.to_owned(),
+                ));
+            }
+        }
+        if !valid_database_role(database_role) {
+            return Err(ExecuteError::InvalidDatabaseRole);
+        }
         let database_url = required_environment(database_url_variable)?;
         let database_password = database_password_variable
             .map(required_environment)
@@ -165,10 +203,6 @@ impl ExecutorConfig {
         let audit_database_password = audit_database_password_variable
             .map(required_environment)
             .transpose()?;
-        let database_role = required_environment(database_role_variable)?;
-        if !valid_database_role(&database_role) {
-            return Err(ExecuteError::InvalidDatabaseRole);
-        }
 
         Ok(Self {
             database_url,
@@ -177,7 +211,7 @@ impl ExecutorConfig {
             audit_database_url,
             audit_database_url_variable: audit_database_url_variable.to_owned(),
             audit_database_password,
-            database_role,
+            database_role: database_role.to_owned(),
             max_result_bytes: positive_integer_environment(
                 "POSTGRESEM_MAX_RESULT_BYTES",
                 DEFAULT_MAX_RESULT_BYTES,
@@ -207,20 +241,59 @@ impl ExecutorConfig {
         self.max_result_bytes
     }
 
+    pub fn with_database_role(&self, database_role: &str) -> Result<Self, ExecuteError> {
+        if !valid_database_role(database_role) {
+            return Err(ExecuteError::InvalidDatabaseRole);
+        }
+        let mut config = self.clone();
+        config.database_role = database_role.to_owned();
+        Ok(config)
+    }
+
+    pub fn preflight_role(&self) -> Result<(), ExecuteError> {
+        let mut client = self.connect_runtime()?;
+        let mut transaction = client
+            .build_transaction()
+            .read_only(true)
+            .start()
+            .map_err(ExecuteError::StartSourceTransaction)?;
+        fix_search_path(&mut transaction)?;
+        if !verify_role(&mut transaction, &self.database_role)? {
+            return Err(ExecuteError::DatabaseRoleMembership);
+        }
+        transaction.commit().map_err(ExecuteError::SourceCommit)
+    }
+
     pub(crate) fn connect_runtime(&self) -> Result<Client, ExecuteError> {
-        connect(
+        let mut client = connect(
             &self.database_url,
             self.database_password.as_deref(),
             || ExecuteError::RuntimeConnect(self.database_url_variable.clone()),
+        )?;
+        database::configure_session_timeouts(
+            &mut client,
+            self.statement_timeout,
+            self.lock_timeout,
+            self.idle_transaction_timeout,
         )
+        .map_err(ExecuteError::TransactionConfiguration)?;
+        Ok(client)
     }
 
     fn connect_audit(&self) -> Result<Client, ExecuteError> {
-        connect(
+        let mut client = connect(
             &self.audit_database_url,
             self.audit_database_password.as_deref(),
             || ExecuteError::AuditConnect(self.audit_database_url_variable.clone()),
+        )?;
+        database::configure_session_timeouts(
+            &mut client,
+            self.statement_timeout,
+            self.lock_timeout,
+            self.idle_transaction_timeout,
         )
+        .map_err(ExecuteError::TransactionConfiguration)?;
+        Ok(client)
     }
 }
 
@@ -275,6 +348,16 @@ pub fn execute(
     config: &ExecutorConfig,
     context: &ExecutionContext,
 ) -> Result<QueryResult, ExecuteError> {
+    execute_with_cancel(input, project, config, context, |_| true)
+}
+
+pub fn execute_with_cancel(
+    input: &[u8],
+    project: &str,
+    config: &ExecutorConfig,
+    context: &ExecutionContext,
+    on_cancel_handle: impl FnOnce(database::CancelHandle) -> bool,
+) -> Result<QueryResult, ExecuteError> {
     let mut runtime = config.connect_runtime()?;
     let published = published_model::load_published(&mut runtime, project)?;
 
@@ -297,6 +380,21 @@ pub fn execute(
         validation_duration,
         compile_duration,
     )?;
+    let cancel_handle = database::cancel_handle(&runtime);
+    if !on_cancel_handle(cancel_handle.clone()) {
+        finish_audit(
+            &mut audit,
+            &query_id,
+            "cancelled",
+            Some("EXECUTOR_QUERY_CANCELLED"),
+            Duration::ZERO,
+            Duration::ZERO,
+            0,
+            0,
+            false,
+        )?;
+        return Err(ExecuteError::SourceCancellationRequested);
+    }
 
     let database_started = Instant::now();
     match execute_compiled(&mut runtime, &published.snapshot, &compiled, config) {
@@ -326,7 +424,10 @@ pub fn execute(
         }
 
         Err(error) => {
-            let status = if matches!(error, ExecuteError::SourceCancelled(_)) {
+            let status = if matches!(
+                error,
+                ExecuteError::SourceCancelled(_) | ExecuteError::SourceCancellationRequested
+            ) {
                 "cancelled"
             } else {
                 "failed"
@@ -696,7 +797,9 @@ fn execution_error_code(error: &ExecuteError) -> &'static str {
         ExecuteError::UnsafeDatabaseRole => "EXECUTOR_UNSAFE_DATABASE_ROLE",
         ExecuteError::SourceRelationNotFound => "EXECUTOR_SOURCE_RELATION_NOT_FOUND",
         ExecuteError::SourceRelationOwner => "EXECUTOR_SOURCE_RELATION_OWNER",
-        ExecuteError::SourceCancelled(_) => "EXECUTOR_QUERY_CANCELLED",
+        ExecuteError::SourceCancelled(_) | ExecuteError::SourceCancellationRequested => {
+            "EXECUTOR_QUERY_CANCELLED"
+        }
         ExecuteError::SourceExecution(_) => "EXECUTOR_SOURCE_QUERY_FAILED",
         ExecuteError::SourceCommit(_) => "EXECUTOR_SOURCE_COMMIT_FAILED",
         ExecuteError::InvalidRowShape => "EXECUTOR_INVALID_ROW_SHAPE",
