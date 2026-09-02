@@ -8,10 +8,11 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The latest published release and current source version are **0.6.0**. The
-0.6 release adds explicit aggregation anchors and deterministic
-fan-out-safe aggregation for approved direct one-to-many relationships. It is
-not a production-readiness or long-term-support promise.
+The current source version is **0.7.0**; the latest published release is
+**0.6.0**. The 0.7 source adds authenticated stateless MCP HTTP, exact OAuth
+identity to PostgreSQL role mapping, multi-user RLS execution, remote mutation
+gates, and disconnect cancellation. It is not a production-readiness or
+long-term-support promise.
 
 ## What problem does postgresem solve?
 
@@ -66,7 +67,7 @@ procedures over a broad abstraction across many database dialects.
 
 ## Roadmap to 1.0
 
-The current source completes M8 as `0.6`, not `1.0`. M6's separate typed
+The current source completes M9 as `0.7`, not `1.0`. M6's separate typed
 mutation contract remains limited to bounded inserts and explicitly modeled
 idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
 and authorization-aware catalog drift without weakening the existing
@@ -85,8 +86,10 @@ PostgreSQL 18 dataset. Every reference produced the same expected aggregate,
 while the comparison kept their materially different trust boundaries
 explicit. M8 uses that evidence to add explicit metric aggregation anchors and
 a two-stage PostgreSQL plan that removes duplicate child rows at the declared
-root entity grain before applying the requested aggregate. Versions `0.7`
-through `0.9` continue with integration and operational gaps. Feature-count
+root entity grain before applying the requested aggregate. M9 adds a stateless
+MCP `2026-07-28` HTTP resource server without moving identity or authorization
+out of PostgreSQL. Versions `0.8` and `0.9` continue with scale, operations,
+and release-candidate gaps. Feature-count
 parity is not the objective: PostgreSQL remains the only execution engine and
 semantic source of truth through `1.0`.
 
@@ -98,6 +101,7 @@ for the M6–M12 gates.
 - [30-minute Apple Container quickstart](docs/quickstart.md)
 - [Linux Docker Compose and Podman Quadlet](docs/linux-containers.md)
 - [Commerce sample and stdio smoke client](examples/commerce/README.md)
+- [Authenticated MCP HTTP deployment and SDK guidance](docs/mcp-http.md)
 - [Local commerce Web demo](examples/web_demo/README.md)
 - [Operations guide](docs/operations.md)
 - [Error reference](docs/error-reference.md)
@@ -117,7 +121,7 @@ for the M6–M12 gates.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What 0.6 implements
+## What 0.7 implements
 
 - LSQ v1 validation and deterministic compilation
 - Semantic Snapshot/Schema v2 backed by PostgreSQL, with Snapshot v1 loading
@@ -133,7 +137,11 @@ for the M6–M12 gates.
 - fixed PostgreSQL role mapping with GRANT and RLS enforcement
 - mandatory query and mutation audit lifecycle records
 - MCP `2024-11-05` over line-delimited JSON-RPC stdio
-- seven semantic-only tools and four resource URI forms
+- authenticated stateless MCP `2026-07-28` over loopback Streamable HTTP,
+  with RFC 9728 metadata and local asymmetric JWT verification
+- exact verified subject-to-query/writer-role mappings, per-authority limits,
+  private discovery, request SSE, and disconnect-to-PostgreSQL cancellation
+- eight mutation-enabled semantic-only tools and four resource URI forms
 - deterministic semantic model compatibility diffs with a breaking-change gate
 - fingerprinted PostgreSQL catalog drift with GRANT, RLS, role authorization,
   complete role-graph evidence, security-definer view-owner authority,
@@ -149,10 +157,10 @@ for the M6–M12 gates.
 
 The MCP tools are `list_semantic_models`, `describe_semantic_model`,
 `validate_semantic_query`, `query_semantic_model`, and
-`explain_semantic_query`, plus `validate_semantic_mutation` and
-`mutate_semantic_model` when mutation configuration is present. There is no raw
-SQL or compiler-output MCP tool, and MCP responses do not expose generated SQL
-or physical lineage.
+`explain_semantic_query`, plus `validate_semantic_mutation`,
+`mutate_semantic_model`, and `reconcile_semantic_mutation` when mutation
+configuration is present. There is no raw SQL or compiler-output MCP tool, and
+MCP responses do not expose generated SQL or physical lineage.
 
 ## Security boundary
 
@@ -169,6 +177,14 @@ idempotency result, and the terminal committed audit state share one
 transaction. PostgreSQL column GRANT, RLS `USING`/`WITH CHECK`, constraints,
 and triggers remain the final authority.
 
+The HTTP adapter is only an OAuth resource server. It reads a strict authority
+document, JWKS, and principal HMAC key from local read-only files, maps exact
+verified JWT subjects to preconfigured roles, and binds only to loopback behind
+a colocated HTTPS reverse proxy. It does not issue tokens, fetch remote keys,
+trust forwarded identity headers, or accept request-selected roles. Remote
+mutation is disabled unless the operator gate, verified scope, mapped writer
+role, and existing PostgreSQL mutation boundary are all active.
+
 Apple Container requires the gateway Compose configuration user to be root for
 its `/etc/hosts` fallback. The startup command immediately drops to
 `postgresem` for the idle process, and `make mcp` explicitly execs MCP as
@@ -184,9 +200,12 @@ and unknown semantic objects receive the same public “not available” errors.
 - PostgreSQL connections require an explicit `sslmode`. Use
   `sslmode=require` for remote connections; `sslmode=disable` is accepted only
   as an explicit choice for local or independently protected connections.
-- MCP is stdio only. There is no HTTP listener or remote authentication layer.
-- Concurrent MCP cancellation is not implemented; PostgreSQL statement timeout
-  is the cancellation boundary.
+- The authenticated HTTP listener does not terminate TLS and cannot bind to a
+  non-loopback address. A colocated HTTPS reverse proxy must preserve the
+  public Host, disable SSE buffering, and propagate disconnects.
+- HTTP authority/JWKS reload, runtime OIDC discovery, distributed rate-limit
+  state, resumable sessions, GET event streams, and connection pooling are not
+  implemented.
 - N-1 and same-name restore paths are fixture-tested, but production backup,
   RPO/RTO, disaster recovery, and down migrations remain operator-owned.
 - `v0.6.0` checksums and immutable container image digest are keyless

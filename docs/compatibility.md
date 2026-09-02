@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The latest published release and current
-source package are `0.6.0`. Before 1.0:
+The project uses Semantic Versioning. The current source package is `0.7.0`;
+the latest published release is `0.6.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -28,14 +28,14 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | LSQ | `schema_version: "1"` | strict JSON; unknown fields rejected; only v1 accepted |
 | Semantic Snapshot/Schema | `schema_version: "2"` | v1 and v2 load/compile; v1 hashes remain stable; anchors and additivity require v2 |
 | PostgreSQL catalog snapshot | `schema_version: "2"` | fingerprint includes database, complete role attributes/membership graph, scanning-role authorization, security-definer view/function owner authorization, normalized database/schema/relation/sequence/routine ACL evidence, non-system function/window/aggregate definitions and owners, relation ownership, and normalized catalog evidence |
-| MCP protocol | `2024-11-05` | initialize returns this version; stdio JSON-RPC only |
+| MCP protocol | stdio `2024-11-05`; HTTP `2026-07-28` | stdio retains initialize compatibility; HTTP is authenticated stateless POST with mirrored metadata headers |
 | MCP tool schema | `"1"` | every tool requires this exact version |
 | compiler semantics | `0.2.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
-| database migrations | `0001`–`0008` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
-| source package | `0.6.0` | M8 explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
-| latest published package | `0.6.0` | signed M8 release with explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
+| database migrations | `0001`–`0009` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
+| source package | `0.7.0` | M9 authenticated stateless MCP HTTP and multi-user PostgreSQL authority mapping |
+| latest published package | `0.6.0` | signed M8 release with fan-out-safe aggregation and container integration |
 
 Migration 0008 changes new mutation idempotency records from a project-global
 key namespace to `(project, stable authority ID, key)`. Mapped role, content,
@@ -43,6 +43,11 @@ and revision changes within that authority still fail closed. Existing records
 retain their legacy authority hash and remain replayable only by the matching
 pre-upgrade principal/profile/role context; a different authority cannot claim
 their keys.
+
+Migration 0009 gives current `principal-v1` state deterministic precedence if
+both current and matching legacy authority rows exist for one retry key.
+Authority and JWKS rotation requires an atomic file replacement plus process
+restart; hot reload is not part of the 0.7 contract.
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -236,8 +241,10 @@ immutable-publication, mutation, or PostgreSQL-authorization boundary.
 | future major versions | unsupported until evaluated | catalog and behavior changes require explicit validation |
 
 The [CI workflow](../.github/workflows/ci.yml) defines separate PostgreSQL 16,
-17, and 18 jobs for migrations, database integration, guarded execution, MCP
-integration, N-1 migration, and backup/restore recovery. Integration images
+17, and 18 jobs for migrations, database integration, guarded execution,
+stdio and authenticated HTTP MCP integration, N-1 migration, and
+backup/restore recovery. Native Linux amd64 and arm64 jobs also execute the
+authenticated HTTP/RLS/cancellation fixture. Integration images
 use the matching PostgreSQL client major. The performance service runs only in
 the PostgreSQL 18 matrix job. All three jobs passed in
 [CI run 33575772186](https://github.com/rioriost/postgresem/actions/runs/33575772186)
@@ -279,7 +286,7 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 | image SBOM and provenance | published by Docker Buildx with the release image |
 | binary SBOM/provenance | not configured |
 | cryptographic release signatures | `v0.6.0` checksums and immutable image digest are keyless-signed by the GitHub release workflow |
-| MCP HTTP/server artifact | not implemented; the loopback Web demo is a sample adapter over stdio |
+| MCP HTTP/server artifact | included in the standard binary/image as `postgresem mcp serve-http`; loopback binding and an external colocated HTTPS proxy are required |
 
 The [release workflow](../.github/workflows/release.yml) runs only for `v*`
 tags, requires the tag to match the workspace version, builds the four native
@@ -301,11 +308,12 @@ supply-chain artifact.
 ## Known limitations
 
 - beta, not production-ready;
-- stdio MCP only; no HTTP, remote authentication, or TLS termination;
+- authenticated HTTP does not terminate TLS and requires a colocated reverse
+  proxy; authority/JWKS hot reload and runtime OIDC discovery are absent;
 - remote PostgreSQL TLS requires a platform-trusted certificate and hostname;
   custom trust roots and client certificates are not yet configurable;
-- no concurrent MCP cancellation;
-- no connection pool or remote multi-user service;
+- HTTP request SSE supports disconnect cancellation, but stdio cancellation,
+  resumable sessions, distributed limits, and a connection pool are absent;
 - governed mutation is limited to published insert/upsert projections; no
   arbitrary update/delete/merge/copy/call/DDL surface;
 - snapshot is reloaded per operation;

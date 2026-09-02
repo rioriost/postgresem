@@ -8,10 +8,10 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-最新の公開リリースと現在のsource versionは**0.6.0**です。0.6 releaseでは、
-明示的なaggregation anchorと、承認済みのdirect one-to-many relationshipに対する
-決定的なfan-out-safe aggregationを追加しました。production readinessやlong-term
-supportを保証するものではありません。
+現在のsource versionは**0.7.0**で、最新の公開リリースは**0.6.0**です。0.7
+sourceでは、認証済みstateless MCP HTTP、OAuth identityからPostgreSQL roleへの
+完全一致mapping、multi-user RLS実行、remote mutation gate、切断時cancellationを
+追加しました。production readinessやlong-term supportを保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -63,7 +63,7 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 
 ## 1.0までのロードマップ
 
-現在のsourceはM8を`1.0`ではなく`0.6`として完了しています。M6の独立した型付き
+現在のsourceはM9を`1.0`ではなく`0.7`として完了しています。M6の独立した型付き
 mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
 です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
 authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` query executor
@@ -80,8 +80,10 @@ M7では、固定したWren AI、Cube、Malloy、MetricFlowのOSS runtimeを同�
 datasetに対して実行しました。全referenceが同じ期待aggregateを返すことを確認しつつ、
 異なるtrust boundaryを明示しています。M8ではこのevidenceを基に、明示的なmetric
 aggregation anchorと、要求されたaggregateを適用する前に宣言済みroot entity grainで
-duplicate child rowを除去する二段階PostgreSQL planを追加しました。`0.7`から`0.9`では
-integration、operationsのgapへ進みます。feature数のparityは目的とせず、`1.0`まで
+duplicate child rowを除去する二段階PostgreSQL planを追加しました。M9ではidentityと
+authorizationをPostgreSQLから移動させず、stateless MCP `2026-07-28` HTTP resource
+serverを追加しました。`0.8`と`0.9`ではscale、operations、release candidateのgapへ
+進みます。feature数のparityは目的とせず、`1.0`まで
 PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
 
 M6〜M12のgateは
@@ -93,6 +95,7 @@ M6〜M12のgateは
 - [30分で試すApple Container quickstart](docs/quickstart.md)
 - [Linux Docker ComposeとPodman Quadlet](docs/linux-containers.md)
 - [Commerce sampleとstdio smoke client](examples/commerce/README.md)
+- [認証済みMCP HTTP deploymentとSDK guidance](docs/mcp-http.md)
 - [ローカルCommerce Web demo](examples/web_demo/README.md)
 - [運用ガイド](docs/operations.md)
 - [エラーリファレンス](docs/error-reference.md)
@@ -112,7 +115,7 @@ M6〜M12のgateは
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## 0.6で実装されているもの
+## 0.7で実装されているもの
 
 - LSQ v1 validationと決定的compile
 - PostgreSQLをbacking storeとするSemantic Snapshot/Schema v2。Snapshot v1の読み込みと
@@ -128,7 +131,11 @@ M6〜M12のgateは
 - PostgreSQLのGRANTとRLSを強制する固定role mapping
 - 必須query/mutation audit lifecycle record
 - 改行区切りJSON-RPC stdio上のMCP `2024-11-05`
-- semantic操作に限定した7つのtoolと4形式のresource URI
+- RFC 9728 metadataとlocal asymmetric JWT検証を備えた、loopback
+  Streamable HTTP上の認証済みstateless MCP `2026-07-28`
+- verified subjectからquery/writer roleへの完全一致mapping、authority単位のlimit、
+  private discovery、request SSE、切断からPostgreSQLへのcancellation
+- mutation有効時に8つのsemantic限定toolと4形式のresource URI
 - breaking-change gateを持つ決定的Semantic Model互換性diff
 - fingerprint付きPostgreSQL catalog drift。GRANT、RLS、role authorization、
   完全なrole graph evidence、security-definer view owner authority、
@@ -145,8 +152,9 @@ M6〜M12のgateは
 MCP toolは`list_semantic_models`、`describe_semantic_model`、
 `validate_semantic_query`、`query_semantic_model`、
 `explain_semantic_query`に加え、mutation設定時の
-`validate_semantic_mutation`と`mutate_semantic_model`です。raw SQLまたはcompiler
-outputを返すMCP toolはなく、MCP responseは生成SQLや物理lineageを公開しません。
+`validate_semantic_mutation`、`mutate_semantic_model`、
+`reconcile_semantic_mutation`です。raw SQLまたはcompiler outputを返すMCP toolはなく、
+MCP responseは生成SQLや物理lineageを公開しません。
 
 ## Security境界
 
@@ -162,6 +170,13 @@ audit lifecycleを使用します。business DML、committed idempotency result�
 committed audit stateは同一transactionで確定します。PostgreSQLのcolumn GRANT、RLS
 `USING`/`WITH CHECK`、constraint、triggerが最終authorityです。
 
+HTTP adapterはOAuth resource serverとしてのみ動作します。local read-only fileから
+strict authority document、JWKS、principal HMAC keyを読み、検証済みJWT subjectを
+事前設定済みroleへ完全一致でmappingし、同居HTTPS reverse proxyの背後でloopbackだけ
+にbindします。token発行、remote key fetch、forwarded identity headerの信頼、
+request-selected roleは行いません。remote mutationはoperator gate、verified scope、
+mapped writer role、既存PostgreSQL mutation境界がすべて有効な場合だけ公開されます。
+
 Apple Containerでは、`/etc/hosts` fallbackのためにGatewayのCompose設定userをrootに
 する必要があります。startup commandはidle processを直ちに`postgresem`へ降格し、
 `make mcp`もMCPを明示的に`postgresem`としてexecします。container設定自体はnonroot
@@ -176,9 +191,11 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
 - PostgreSQL connectionには明示的な`sslmode`が必要です。remote connectionでは
   `sslmode=require`を使用してください。`sslmode=disable`は、ローカルまたは別途
   保護されたconnectionとして明示的に選択した場合だけ受け入れます。
-- MCPはstdio専用です。HTTP listenerやremote authentication layerはありません。
-- MCPのconcurrent cancellationは未実装です。PostgreSQL statement timeoutが現在の
-  cancellation境界です。
+- 認証済みHTTP listenerはTLSを終端せず、非loopback addressへbindできません。同居
+  HTTPS reverse proxyでpublic Hostを保持し、SSE bufferingを無効化し、切断を伝播する
+  必要があります。
+- HTTP authority/JWKS reload、runtime OIDC discovery、distributed rate-limit state、
+  resumable session、GET event stream、connection poolingは未実装です。
 - N-1および同名restore pathはfixtureでtestされていますが、本番backup、RPO/RTO、
   disaster recovery、down migrationはoperatorの責任です。
 - `v0.6.0`のchecksumとimmutable container image digestは、GitHub release

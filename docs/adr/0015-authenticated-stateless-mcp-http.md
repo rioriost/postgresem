@@ -47,7 +47,7 @@ Normative references:
 
 ### Protocol and transport
 
-1. Add `postgresem mcp http-serve` while preserving
+1. Add `postgresem mcp serve-http` while preserving
    `postgresem mcp serve` and its MCP `2024-11-05` line-delimited stdio
    contract.
 2. The HTTP endpoint implements MCP `2026-07-28` only. It does not implement
@@ -67,10 +67,11 @@ Normative references:
    2020-12 tool definitions, and existing revision-bound pagination are
    supported. The server advertises no prompts, sampling, elicitation, roots,
    subscriptions, or experimental extensions.
-6. Simple requests may return one JSON object. Database execution requests use
-   a request-scoped SSE response so disconnect can cancel PostgreSQL work and
-   close the mandatory audit lifecycle according to the observed database
-   outcome.
+6. Simple requests may return one JSON object. Query and mutation execution
+   tools use a request-scoped SSE response so disconnect can cancel PostgreSQL
+   work and close the mandatory audit lifecycle according to the observed
+   database outcome. Other bounded metadata/database methods retain JSON
+   responses and database-side timeouts.
 
 ### Network boundary
 
@@ -109,8 +110,9 @@ Normative references:
    - issued-at time within the configured maximum token age and clock skew;
    - bounded token and claim sizes.
 3. The gateway performs no runtime JWKS or authorization-server network
-   fetches. Key rotation is an operator-controlled atomic file/config reload,
-   avoiding an application-side SSRF and availability dependency.
+   fetches. Key rotation is an operator-controlled atomic file replacement
+   followed by process restart, avoiding an application-side SSRF and
+   availability dependency.
 4. A strict operator-owned authority document maps exact `(issuer, subject)`
    identities to:
    - one stable, opaque authority ID that must not be changed while
@@ -132,9 +134,11 @@ Normative references:
    path. This rotatable audit pseudonym is separate from the stable authority
    ID used for idempotency. Logs do not emit the token, subject, claims,
    requested private names, SQL, connection data, or result rows.
-8. Startup and configuration reload preflight every mapped PostgreSQL role for
-   existence, runtime-login membership, superuser/BYPASSRLS status, and
-   applicable relation ownership before accepting traffic.
+8. Startup preflights every mapped PostgreSQL role for existence,
+   runtime-login membership, and superuser/BYPASSRLS status before accepting
+   traffic. Applicable relation ownership remains fail-closed during each
+   compiled query or mutation because lineage/target relations are
+   request-dependent.
 9. Missing or invalid bearer credentials return HTTP 401 with an RFC 6750
    `WWW-Authenticate` challenge containing the RFC 9728 protected-resource
    metadata URL. A mapped identity missing a required scope receives the
@@ -179,17 +183,19 @@ Normative references:
 
 ### Rate limiting and cancellation
 
-1. Tool calls are limited by verified principal and tool class using
-   operator-configured token buckets and concurrent-request ceilings.
+1. Requests are limited by verified authority using one operator-configured
+   token bucket and concurrent-request ceiling per authority, plus process and
+   database concurrency ceilings.
 2. HTTP cancellation is signalled by closing the request SSE stream. The
    server captures a PostgreSQL cancellation token before execution, emits
    periodic SSE keep-alives with `X-Accel-Buffering: no`, propagates disconnect
    cancellation through a separate connection, and emits no later response on
    the closed stream.
-3. Query audit records `cancelled` only after PostgreSQL confirms cancellation.
-   Mutation cancellation before commit records cancellation/rollback; a
-   disconnect or connection loss during commit remains indeterminate and must
-   be reconciled rather than being labelled cancelled.
+3. Query audit records `cancelled` after PostgreSQL confirms cancellation or
+   when disconnect is observed before source execution starts. Mutation
+   cancellation before execution or commit records a terminal non-committed
+   outcome; a disconnect or connection loss during commit remains
+   indeterminate and must be reconciled rather than being labelled cancelled.
 4. The statement timeout remains a hard upper bound independent of progress or
    client connectivity.
 
@@ -199,13 +205,13 @@ Normative references:
    before comparing `Mcp-Name` with the request body.
 2. No postgresem tool schema publishes `x-mcp-header`; unknown
    `Mcp-Param-*` headers never become tool arguments or authority inputs.
-3. Existing revision-bound cursors remain opaque pagination positions. Reuse
-   by another principal can never widen visibility or authority; any future
-   stateful cursor must also be keyed to the verified principal.
-4. Missing or invalid `Accept`, protocol metadata, or required mirrored
-   headers fail with HTTP 400 and JSON-RPC `-32020 HeaderMismatch`.
-   Unsupported protocol versions use `-32022`. The modern core defines no
-   client-to-server notifications for this surface.
+3. Model cursors bind the revision and a hash of the immutable authority ID.
+   Reuse by another principal fails with the same opaque invalid-cursor error.
+4. Missing or invalid HTTP content negotiation fails with HTTP 400 and
+   `MCP_INVALID_HTTP_HEADERS`. Protocol metadata or required mirrored-header
+   mismatches use `-32020`; a missing required client-capability object uses
+   `-32021`; unsupported protocol versions use `-32022`. The modern core
+   defines no client-to-server notifications for this surface.
 
 ### Client contracts
 

@@ -944,6 +944,12 @@ bounded fan-out contractを実装し、LSQ v1とSnapshot v1の読み込みを維
 
 ### M9: 0.7 — Application・Agent integration
 
+**実装status:** `0.7.0` source treeで完了。ADR 0015、strict authority/JWKS
+loading、RFC 9728 metadata、JWT subjectからroleへの完全一致mapping、stateless
+MCP `2026-07-28` POST/SSE、stable authority単位のmutation idempotency、切断時
+cancellation、legacy/current reconciliationの決定的precedence、PostgreSQL
+16〜18 multi-user integration gateを実装済み。
+
 - ADR 0015に従い、MCP `2026-07-28`の認証済みstateless Streamable HTTP endpointを
   実装し、MCP `2024-11-05` stdio adapterを維持する。
 - OAuth resource serverとしてのみ動作する。RFC 9728 metadataを公開し、local設定された

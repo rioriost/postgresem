@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+### Added
+
+- Authenticated stateless Streamable HTTP for MCP `2026-07-28`, while
+  preserving the MCP `2024-11-05` line-delimited stdio adapter.
+- Local-file OAuth resource-server authority with RFC 9728 protected-resource
+  metadata, strict asymmetric JWT verification, exact subject-to-role
+  mappings, HMAC-pseudonymized audit identities, and startup role preflight.
+- Identity-dependent `server/discover`, private capability discovery,
+  per-authority token-bucket/concurrency limits, bounded JSON/SSE responses,
+  and disconnect-to-PostgreSQL cancellation.
+- Capability-gated remote mutation and authenticated reconciliation with
+  stable authority-scoped idempotency.
+- PostgreSQL 16–18 integration coverage for invalid hosts, origins, tokens,
+  protocol metadata, distinct tenant RLS results, mutation isolation, limits,
+  and cancellation audit completion.
+- TypeScript and Python MCP v2 client guidance plus a strict authority schema
+  and example configuration.
+
+### Changed
+
+- Advance the source package to M9 `0.7.0` and database migrations through
+  `0009_mutation_reconcile_precedence`.
+- Add `reconcile_semantic_mutation` as the eighth mutation-enabled MCP tool.
+- Require the HTTP listener to bind to explicit loopback and operate behind a
+  colocated HTTPS reverse proxy that preserves public Host and disconnects.
+- Keep local JWKS/config files authoritative; the gateway performs no runtime
+  OIDC discovery, JWKS fetch, token issuance, or caller-selected role mapping.
+
+### Security
+
+- Reject duplicate authority identities, unsafe PostgreSQL roles, embedded or
+  remote JOSE keys, symmetric/unknown algorithms, invalid token type,
+  issuer/audience/time/scope claims, and mismatched MCP header/body metadata.
+- Keep remote mutation disabled by default and advertise it only when the
+  global gate, verified scope, exact identity mapping, writer role, GRANT/RLS,
+  idempotency, and mandatory audit boundaries all pass.
+- Namespace new mutation idempotency records by immutable authority ID while
+  preserving fail-closed reconciliation for pre-0.7 legacy records.
+- Abort before database execution when an HTTP client disconnects before the
+  PostgreSQL cancel handle is registered, closing the audit lifecycle without
+  starting an unobserved statement.
+
 ## [0.6.0] - 2026-09-02
 
 ### Added

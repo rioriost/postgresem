@@ -1,6 +1,6 @@
 # Error reference
 
-This is the public/stored taxonomy implemented through the current `0.6.0`
+This is the public/stored taxonomy implemented through the current `0.7.0`
 source. Codes are stable within this pre-1.0 contract but remain
 subject to the pre-1.0 compatibility policy.
 
@@ -34,8 +34,20 @@ Tool-operation failures are successful JSON-RPC responses with:
 | `MCP_PARSE_ERROR` | `-32700` | No | line is not valid JSON |
 | `MCP_INVALID_REQUEST` | `-32600` | No | invalid JSON-RPC object, version, method, or ID |
 | `MCP_REQUEST_TOO_LARGE` | `-32600` | No | input line exceeds 1 MiB |
+| `MCP_REQUEST_BODY_TIMEOUT` | `-33006` / HTTP 408 | Conditional | HTTP request body was not received within 5 seconds |
+| `MCP_HEADERS_TOO_LARGE` | `-32600` / HTTP 431 | No | HTTP headers exceed the configured byte budget |
+| `MCP_INVALID_HTTP_HEADERS` | `-32600` / HTTP 400 | No | HTTP content negotiation or content type is invalid |
+| `MCP_NOTIFICATION_UNSUPPORTED` | `-32600` / HTTP 400 | No | stateless HTTP does not accept client notifications |
 | `MCP_METHOD_NOT_FOUND` | `-32601` | No | method is outside the implemented MCP surface |
 | `MCP_INVALID_PARAMS` | `-32602` | No | method parameter envelope is invalid |
+| `MCP_HEADER_MISMATCH` | `-32020` / HTTP 400 | No | MCP method/name/version headers do not match the request body metadata |
+| `MCP_MISSING_REQUIRED_CLIENT_CAPABILITY` | `-32021` / HTTP 400 | No | modern request metadata omits the required client-capability object |
+| `MCP_UNSUPPORTED_PROTOCOL_VERSION` | `-32022` / HTTP 400 | No | HTTP request does not use MCP `2026-07-28` |
+| `MCP_RATE_LIMITED` | `-33001` / HTTP 429 | Conditional | authenticated authority exhausted its token bucket |
+| `MCP_CONCURRENCY_LIMITED` | `-33002` / HTTP 429 | Conditional | principal, process, or database concurrency budget is full |
+| `MCP_AUTHORITY_DENIED` | `-33003` / HTTP 403 | No | verified identity cannot construct the configured execution authority |
+| `MCP_EXECUTION_TIMEOUT` | `-33004` / HTTP 504 or SSE | Conditional | HTTP execution exceeded its hard duration |
+| `MCP_RESULT_TOO_LARGE` | `-33005` | No | serialized HTTP JSON-RPC result exceeded its byte budget |
 | `MCP_INVALID_TOOL_ARGUMENTS` | `-32602` | No | strict tool argument schema mismatch |
 | `MCP_TOOL_NOT_FOUND` | `-32602` | No | requested tool is not currently advertised |
 | `MCP_TOOL_SCHEMA_VERSION_UNSUPPORTED` | tool error | No | tool `schema_version` is not `"1"` |

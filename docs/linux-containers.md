@@ -42,6 +42,14 @@ The same Compose files are valid OCI Compose input. Podman installations may
 use `podman compose` when a compatible Compose provider is configured, but the
 repository's provider-independent Podman path is Quadlet.
 
+To expose authenticated MCP HTTP, do not publish the gateway loopback port
+directly. Start `postgresem mcp serve-http` with read-only authority/JWKS/HMAC
+secrets and place the HTTPS proxy in the same network namespace, such as a
+same-pod sidecar or a Compose proxy using
+`network_mode: service:gateway`. See
+[`mcp-http.md`](mcp-http.md) for the required Host, Origin, SSE, and disconnect
+behavior.
+
 ## Rootless Podman Quadlet
 
 Requirements:

@@ -108,10 +108,19 @@ container's configuration user to root for Apple Container host-file patching,
 an exec without `--user` would not preserve the intended application-process
 privilege boundary. Both the idle process and MCP process are unprivileged.
 
-The gateway container has no HTTP listener and normally has no request log to
-retrieve with `container logs`; the MCP process is attached to its invoking
-client. Capture stderr in the supervising client if operational retention is
-required, applying local access controls and retention limits.
+The default gateway container remains idle and has no listener until an MCP
+command is started. The stdio process is attached to its invoking client.
+Capture stderr in the supervising client if operational retention is required,
+applying local access controls and retention limits.
+
+For authenticated remote clients, configure the local authority/JWKS/HMAC
+files and run `postgresem mcp serve-http`. The listener refuses non-loopback
+addresses. In a container deployment the HTTPS proxy must share the gateway's
+network namespace (for example, a same-pod sidecar or Docker
+`network_mode: service:<gateway>`), because another bridge-network container
+cannot reach the gateway loopback socket. Preserve the original public Host,
+disable proxy buffering for SSE, and propagate client disconnects. See
+[`mcp-http.md`](mcp-http.md).
 
 ## Audit inspection
 
@@ -170,7 +179,13 @@ remapping. It is startup configuration, never an LSM or MCP request field.
 | statement timeout | 30,000 ms | PostgreSQL cancels the statement |
 | lock timeout | 5,000 ms | transaction-local |
 | idle transaction timeout | 5,000 ms | transaction-local |
+| PostgreSQL connect timeout | 10 seconds | applied when omitted or zero; explicit positive values must not exceed 10 seconds |
+| PostgreSQL TCP liveness | 10-second user timeout; keepalive idle 10 seconds, interval 3 seconds, 3 retries | stricter operator values are preserved; disabled keepalives and user timeouts above 10 seconds are rejected |
 | MCP input line | 1,048,576 bytes | oversized line is consumed and rejected |
+| MCP HTTP request body | 1,048,576 bytes by default | oversized body is rejected before JSON parsing |
+| MCP HTTP body receive | 5 seconds | pre-authentication permit is held while the bounded body is read |
+| MCP HTTP execution/SSE | authority-configured, 30/60 seconds in the example | timeout closes the result; an armed PostgreSQL request is cancelled |
+| MCP HTTP principal rate/concurrency | authority-configured | in-memory token bucket and active-request limit per immutable authority ID |
 | model page | 50 default, 100 maximum | revision-bound opaque cursor |
 | LSM request | 1,048,576 bytes | larger requests are rejected before compilation |
 | LSM rows | 100 | model-specific lower limits may apply |
@@ -183,10 +198,17 @@ Configure the execution values with positive integer environment variables:
 `POSTGRESEM_MAX_RESULT_BYTES`, `POSTGRESEM_STATEMENT_TIMEOUT_MS`,
 `POSTGRESEM_LOCK_TIMEOUT_MS`, and
 `POSTGRESEM_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS`. They are read at MCP
-startup, so restart the attached MCP process after changes.
+startup, so restart the attached MCP process after changes. PostgreSQL
+connection strings may set a stricter `connect_timeout`; PostgreSQL's zero
+value is normalized to 10 seconds, and values above 10 seconds are rejected so
+stalled connection establishment cannot retain an execution slot indefinitely.
+TCP user timeout and keepalive bounds also limit established network failures
+on supported platforms.
 
-There is no concurrent MCP cancellation. Narrow the LSQ or adjust a locally
-approved statement timeout; do not treat a larger timeout as a correctness fix.
+The stdio transport has no concurrent client-disconnect cancellation. The HTTP
+transport cancels an armed query or mutation when its SSE response is dropped.
+Narrow the LSQ or adjust a locally approved statement timeout; do not treat a
+larger timeout as a correctness fix.
 
 Mutation equivalents are `POSTGRESEM_MAX_MUTATION_RESULT_BYTES`,
 `POSTGRESEM_MUTATION_STATEMENT_TIMEOUT_MS`,
@@ -299,7 +321,7 @@ writable projections must be authored and reviewed separately.
 
 ## Upgrade order
 
-Forward migrations `0001` through `0008`, idempotent reruns, N-1 execution, and
+Forward migrations `0001` through `0009`, idempotent reruns, N-1 execution, and
 N-1-to-current migration are tested.
 
 For a disposable/local preview upgrade:
@@ -399,6 +421,9 @@ PostgreSQL 16/17 are not selectable through the local `.env` or Apple Container
 path. Docker CI applies `compose.ci.yaml` through `COMPOSE_FILE` for its
 configured version matrix.
 
-MCP is stdio only. There is no HTTP endpoint, TLS termination, bearer-token
-authentication, streamable HTTP, or remote multi-user service in the current
-beta.
+MCP supports the local `2024-11-05` stdio adapter and the authenticated
+stateless `2026-07-28` HTTP adapter. The Rust HTTP listener is loopback-only
+and does not terminate TLS; production-facing HTTPS, failed-auth
+source-address throttling, and disconnect propagation belong to the colocated
+reverse proxy. JWT verification, exact identity mapping, and per-authority
+limits remain inside the gateway.

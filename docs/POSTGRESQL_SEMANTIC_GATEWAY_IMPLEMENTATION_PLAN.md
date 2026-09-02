@@ -984,6 +984,13 @@ GRANT/RLS.
 
 ### M9: 0.7 — Application and Agent Integration
 
+**Implementation status:** complete in the `0.7.0` source tree. ADR 0015,
+strict authority/JWKS loading, RFC 9728 metadata, exact JWT subject-to-role
+mapping, stateless MCP `2026-07-28` POST/SSE, stable authority-scoped mutation
+idempotency with deterministic legacy reconciliation precedence, disconnect
+cancellation, and PostgreSQL 16–18 multi-user
+integration gates are implemented.
+
 - Implement ADR 0015's authenticated MCP `2026-07-28` stateless Streamable
   HTTP endpoint while preserving the MCP `2024-11-05` stdio adapter.
 - Act only as an OAuth resource server: publish RFC 9728 metadata, validate
