@@ -1,0 +1,20 @@
+[Unit]
+Description=Publish the postgresem commerce fixture
+Requires=postgresem-migrate.service
+After=postgresem-migrate.service
+
+[Container]
+Image=docker.io/library/postgres:18
+ContainerName=postgresem-seed
+Network=postgresem.network
+EnvironmentFile=%h/.config/postgresem/postgresem-database.env
+Volume=%h/.local/share/postgresem/fixtures/semantic:/semantic:ro,Z
+Exec=/bin/sh -ec "exec /bin/sh /semantic/run.sh"
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

@@ -40,6 +40,12 @@ absent.
 
 ## Startup, checks, and shutdown
 
+Linux users should follow
+[`linux-containers.md`](linux-containers.md) for Docker Compose or rootless
+Podman Quadlet. Those paths use `Dockerfile` and keep the gateway configured as
+UID/GID `10001`; they do not use the Apple Container root/gosu workaround
+described below.
+
 ```sh
 make doctor
 make dev-up

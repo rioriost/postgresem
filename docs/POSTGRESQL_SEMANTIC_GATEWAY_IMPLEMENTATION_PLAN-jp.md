@@ -628,6 +628,10 @@ Containerを継続利用し、Linux文書とCIは対応OCI/Compose runtimeを使
 
 Compose fileはApple ContainerとLinux CIで共通利用できる機能の交差部分に限定する。特殊なDocker socket、privileged container、暗黙host networkには依存しない。PostgreSQLデータはbind mountではなくnamed volumeを既定とし、権限差を避ける。
 
+M8開始前に、Docker/Podman向けのbyte-equivalentな`Dockerfile`、UID/GID `10001`を
+維持するLinux Compose override、rootless Quadlet unitも提供する。CIではDockerと
+Podmanの両方でimageをbuild/runし、Linux Compose stackを起動し、Quadlet生成を検証する。
+
 ### 14.3 開発コマンドの目標
 
 ```text
@@ -675,7 +679,10 @@ postgresem/
 ├── AGENTS.md
 ├── Makefile
 ├── compose.yaml
+├── compose.linux.yaml
 ├── Containerfile
+├── Dockerfile
+├── deploy/quadlet/
 ├── crates/
 │   ├── postgresem/              # gateway binary、CLI、wiring
 │   └── postgresem-compiler/     # pure LSQ/IR/planner/compiler core

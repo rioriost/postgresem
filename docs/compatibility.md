@@ -239,6 +239,9 @@ Apple Container uses the static `postgres:18` image in `compose.yaml`;
 selection through `.env` is therefore neither supported nor documented.
 `compose.ci.yaml` is a Docker Compose overlay selected by CI through
 `COMPOSE_FILE`; it is not an Apple Container version-selection mechanism.
+Linux Docker Compose uses `compose.linux.yaml` to select the standard
+`Dockerfile` and run the gateway directly as UID/GID `10001`. Rootless Podman
+uses the checked-in Quadlet units under `deploy/quadlet`.
 
 Rust PostgreSQL connections require an explicit `sslmode`. `sslmode=require`
 uses the platform-native TLS implementation and validates the server
@@ -253,7 +256,8 @@ compose-local development paths. Omitted `sslmode` and downgrade-capable
 | source checkout + Rust 1.85 build | supported developer path |
 | Apple Container 1.0.0 + `container-compose` 1.1.0 on macOS arm64 | supported quickstart path |
 | locally built `gateway:latest` OCI image | supported by `make dev-up`; Apple Container runs the image in a Linux arm64 VM on the documented macOS path |
-| Docker/Docker Compose on Linux amd64 | exercised by GitHub Actions integration jobs; not yet the end-user quickstart |
+| Docker/Docker Compose on Linux amd64 | documented local evaluation path; CI builds `Dockerfile`, starts the Compose stack, and verifies the nonroot gateway |
+| Podman on Linux amd64 | CI builds and runs `Dockerfile`; rootless Quadlet units are generator-validated |
 | Linux amd64/arm64 runtime execution gate | native CI jobs execute the runtime image against PostgreSQL 18; tagged releases also execute each packaged binary and architecture-specific image before publication |
 | native binary archives | `v0.5.0` published for Linux amd64/arm64 and macOS amd64/arm64 |
 | `SHA256SUMS` | published with a keyless Sigstore signature and certificate |

@@ -1,0 +1,22 @@
+[Unit]
+Description=postgresem PostgreSQL 18
+
+[Container]
+Image=docker.io/library/postgres:18
+ContainerName=postgresem-db
+Network=postgresem.network
+Volume=postgresem-db.volume:/var/lib/postgresql
+Volume=%h/.local/share/postgresem/fixtures/postgres:/docker-entrypoint-initdb.d:ro,Z
+EnvironmentFile=%h/.config/postgresem/postgresem-database.env
+PublishPort=127.0.0.1:55432:5432
+HealthCmd=pg_isready -U postgres -d postgresem_dev
+HealthInterval=2s
+HealthTimeout=3s
+HealthRetries=30
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

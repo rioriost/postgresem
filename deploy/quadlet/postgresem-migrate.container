@@ -1,0 +1,20 @@
+[Unit]
+Description=Apply postgresem migrations
+Requires=postgresem-db.service
+After=postgresem-db.service
+
+[Container]
+Image=docker.io/library/postgres:18
+ContainerName=postgresem-migrate
+Network=postgresem.network
+EnvironmentFile=%h/.config/postgresem/postgresem-database.env
+Volume=%h/.local/share/postgresem/migrations:/migrations:ro,Z
+Exec=/bin/sh -ec "until pg_isready -h postgresem-db -U postgres -d postgresem_dev; do sleep 2; done; exec /bin/sh /migrations/run.sh"
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+services:
+  gateway:
+    build:
+      dockerfile: Dockerfile
+    user: "10001:10001"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["exec sleep infinity"]

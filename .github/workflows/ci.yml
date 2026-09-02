@@ -71,6 +71,105 @@ jobs:
               print(f"parsed {schema}")
           PY
 
+  container-compatibility:
+    name: Docker, Compose, Podman, and Quadlet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: postgresem-linux-ci
+      POSTGRES_SUPERUSER_PASSWORD: ci-superuser-password
+      POSTGRESEM_RUNTIME_PASSWORD: ci-runtime-password
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: ci-audit-writer-password
+      POSTGRESEM_MUTATION_RUNTIME_PASSWORD: ci-mutation-runtime-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify Dockerfile and Containerfile parity
+        run: cmp Dockerfile Containerfile
+
+      - name: Validate Linux Compose configuration
+        run: |
+          docker compose \
+            -f compose.yaml \
+            -f compose.linux.yaml \
+            config --quiet
+
+      - name: Start Linux Docker Compose stack
+        run: |
+          docker compose \
+            -f compose.yaml \
+            -f compose.linux.yaml \
+            up --detach --build gateway
+
+      - name: Verify nonroot Docker Compose gateway
+        run: |
+          test "$(
+            docker compose \
+              -f compose.yaml \
+              -f compose.linux.yaml \
+              exec -T gateway id -u
+          )" = "10001"
+          docker compose \
+            -f compose.yaml \
+            -f compose.linux.yaml \
+            exec -T gateway postgresem --version
+
+      - name: Validate Quadlet with Podman 4.9
+        run: |
+          docker run --rm \
+            --volume "$PWD:/workspace:ro" \
+            --workdir /workspace \
+            --entrypoint /bin/sh \
+            quay.io/podman/stable:v4.9.3@sha256:cc3563b15b511b3e84d23dc04087cf06df5dee8146c3834c652bd217d4ace1cd \
+            -ec 'tests/containers/quadlet.sh deploy/quadlet'
+
+      - name: Install Podman and Quadlet
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends podman
+
+      - name: Build and run Dockerfile with Podman
+        run: |
+          podman build --file Dockerfile --tag localhost/postgresem:ci .
+          test "$(
+            podman run --rm \
+              --entrypoint /usr/bin/id \
+              localhost/postgresem:ci -u
+          )" = "10001"
+          podman run --rm localhost/postgresem:ci --version
+
+      - name: Validate rootless Quadlet generation
+        run: |
+          tests/containers/quadlet.sh deploy/quadlet
+          HOME="${RUNNER_TEMP}/quadlet-home" deploy/quadlet/install.sh
+          test "$(
+            stat --format '%a' \
+              "${RUNNER_TEMP}/quadlet-home/.config/postgresem/postgresem-database.env"
+          )" = "600"
+          test "$(
+            stat --format '%a' \
+              "${RUNNER_TEMP}/quadlet-home/.config/postgresem/postgresem-gateway.env"
+          )" = "600"
+
+      - name: Show Compose logs after failure
+        if: failure()
+        run: |
+          docker compose \
+            -f compose.yaml \
+            -f compose.linux.yaml \
+            logs --no-color
+
+      - name: Stop Linux Compose stack
+        if: always()
+        run: |
+          docker compose \
+            -f compose.yaml \
+            -f compose.linux.yaml \
+            down --volumes --remove-orphans
+
   linux-runtime:
     name: Linux ${{ matrix.arch }} runtime
     runs-on: ${{ matrix.runner }}
@@ -95,7 +194,7 @@ jobs:
           persist-credentials: false
 
       - name: Build native runtime image
-        run: docker build --file Containerfile --tag postgresem:linux-${{ matrix.arch }} .
+        run: docker build --file Dockerfile --tag postgresem:linux-${{ matrix.arch }} .
 
       - name: Start PostgreSQL 18
         shell: bash

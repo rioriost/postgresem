@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- A Docker-standard `Dockerfile` kept in parity with the Apple Container
+  definition, a nonroot Linux Compose overlay, and rootless Podman Quadlet
+  units for PostgreSQL migration, fixture publication, and gateway startup.
+- CI gates that build and run the image with Docker and Podman, start the
+  Docker Compose stack, verify UID 10001, and reject invalid Quadlet units.
+
 ## [0.5.0] - 2026-09-01
 
 ### Added

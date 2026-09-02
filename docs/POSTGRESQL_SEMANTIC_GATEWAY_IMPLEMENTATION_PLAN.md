@@ -649,6 +649,11 @@ development path.
 
 The Compose file is limited to the intersection of features that work with both Apple Container and Linux CI. It does not depend on special Docker sockets, privileged containers, or implicit host networking. PostgreSQL data defaults to a named volume rather than a bind mount to avoid permission discrepancies.
 
+Before M8, the repository also provides a byte-equivalent `Dockerfile` for
+Docker/Podman, a Linux Compose override that preserves UID/GID `10001`, and
+rootless Quadlet units. CI builds and runs the image with both Docker and
+Podman, starts the Linux Compose stack, and validates Quadlet generation.
+
 ### 14.3 Development Command Goals
 
 ```text
@@ -698,7 +703,10 @@ postgresem/
 ├── AGENTS.md
 ├── Makefile
 ├── compose.yaml
+├── compose.linux.yaml
 ├── Containerfile
+├── Dockerfile
+├── deploy/quadlet/
 ├── crates/
 │   ├── postgresem/              # gateway binary, CLI, wiring
 │   └── postgresem-compiler/     # pure LSQ/IR/planner/compiler core

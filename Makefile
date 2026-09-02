@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -11,6 +11,21 @@ mcp:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
 	@container-compose up --env-file .env -d --build gateway </dev/null 1>&2
 	@container exec -i --user postgresem postgresem-gateway postgresem mcp serve
+
+docker-up:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	docker compose --env-file .env -f compose.yaml -f compose.linux.yaml \
+		up --detach --build gateway
+
+docker-mcp:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	@docker compose --env-file .env -f compose.yaml -f compose.linux.yaml \
+		up --detach --build gateway </dev/null 1>&2
+	@docker compose --env-file .env -f compose.yaml -f compose.linux.yaml \
+		exec -T gateway postgresem mcp serve
+
+docker-down:
+	docker compose --env-file .env -f compose.yaml -f compose.linux.yaml down
 
 web-demo:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
