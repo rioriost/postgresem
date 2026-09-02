@@ -361,15 +361,23 @@ pub fn reconcile(
     project: &str,
     idempotency_key: &str,
     config: &MutationExecutorConfig,
+    context: &ExecutionContext,
 ) -> Result<Option<Value>, MutationExecuteError> {
     if idempotency_key.trim().is_empty() || idempotency_key.len() > 256 {
         return Err(MutationExecuteError::InvalidIdempotencyKey);
     }
     let mut audit = config.connect_audit()?;
+    let authority_hash = mutation_authority_hash(context);
+    let legacy_authority_hash = legacy_mutation_authority_hash(context, config.database_role())?;
     let row = audit
         .query_one(
-            "SELECT semantic.lookup_mutation_idempotency($1, $2) AS state",
-            &[&project, &sha256(idempotency_key)],
+            "SELECT semantic.lookup_mutation_idempotency($1, $2, $3, $4) AS state",
+            &[
+                &project,
+                &authority_hash,
+                &legacy_authority_hash,
+                &sha256(idempotency_key),
+            ],
         )
         .map_err(MutationExecuteError::Reconciliation)?;
     Ok(row.get("state"))
@@ -526,19 +534,16 @@ fn claim_mutation(
         serde_json::to_value(&compiled.lineage).map_err(MutationExecuteError::Serialization)?;
     let policy_context = json!({
         "database_role": config.database_role,
+        "legacy_authority_hash": legacy_mutation_authority_hash(
+            context,
+            config.database_role(),
+        )?,
         "project": project,
         "capability_profile": published.capabilities.profile,
     });
     let operation = operation_name(compiled.operation);
     let principal_subject_hash = sha256(context.principal_subject());
-    let authority_hash = sha256(
-        &serde_json::to_string(&[
-            principal_subject_hash.as_str(),
-            context.config_profile(),
-            config.database_role(),
-        ])
-        .map_err(MutationExecuteError::Serialization)?,
-    );
+    let authority_hash = mutation_authority_hash(context);
     let requested_rows = i64::try_from(compiled.expected_rows)
         .map_err(|_| MutationExecuteError::AffectedRowMismatch)?;
     let validation_ms = duration_milliseconds(validation_duration);
@@ -588,6 +593,25 @@ fn claim_mutation(
         affected_rows: row.get("affected_rows"),
         result: row.get("result"),
     })
+}
+
+fn mutation_authority_hash(context: &ExecutionContext) -> String {
+    sha256(context.authority_id())
+}
+
+fn legacy_mutation_authority_hash(
+    context: &ExecutionContext,
+    database_role: &str,
+) -> Result<String, MutationExecuteError> {
+    let principal_subject_hash = sha256(context.principal_subject());
+    Ok(sha256(
+        &serde_json::to_string(&[
+            principal_subject_hash.as_str(),
+            context.config_profile(),
+            database_role,
+        ])
+        .map_err(MutationExecuteError::Serialization)?,
+    ))
 }
 
 fn run_statement(

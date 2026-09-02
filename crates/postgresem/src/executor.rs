@@ -45,6 +45,7 @@ pub struct ExecutorConfig {
 pub struct ExecutionContext {
     principal_subject: String,
     config_profile: String,
+    authority_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -71,7 +72,9 @@ pub enum ExecuteError {
     InvalidIntegerConfiguration { variable: &'static str },
     #[error("configured database role is not a safe unquoted PostgreSQL identifier")]
     InvalidDatabaseRole,
-    #[error("execution context must have a non-empty principal subject and config profile")]
+    #[error(
+        "execution context must have a non-empty principal subject, config profile, and authority ID"
+    )]
     InvalidExecutionContext,
     #[error("failed to connect using runtime URL environment variable {0}")]
     RuntimeConnect(String),
@@ -228,12 +231,28 @@ impl ExecutionContext {
     ) -> Result<Self, ExecuteError> {
         let principal_subject = principal_subject.into();
         let config_profile = config_profile.into();
-        if principal_subject.trim().is_empty() || config_profile.trim().is_empty() {
+        let authority_id = principal_subject.clone();
+        Self::new_with_authority(principal_subject, config_profile, authority_id)
+    }
+
+    pub fn new_with_authority(
+        principal_subject: impl Into<String>,
+        config_profile: impl Into<String>,
+        authority_id: impl Into<String>,
+    ) -> Result<Self, ExecuteError> {
+        let principal_subject = principal_subject.into();
+        let config_profile = config_profile.into();
+        let authority_id = authority_id.into();
+        if principal_subject.trim().is_empty()
+            || config_profile.trim().is_empty()
+            || authority_id.trim().is_empty()
+        {
             return Err(ExecuteError::InvalidExecutionContext);
         }
         Ok(Self {
             principal_subject,
             config_profile,
+            authority_id,
         })
     }
 
@@ -243,6 +262,10 @@ impl ExecutionContext {
 
     pub(crate) fn config_profile(&self) -> &str {
         &self.config_profile
+    }
+
+    pub(crate) fn authority_id(&self) -> &str {
+        &self.authority_id
     }
 }
 
@@ -838,6 +861,7 @@ mod tests {
         assert!(ExecutionContext::new("mcp:stdio", "mcp-stdio").is_ok());
         assert!(ExecutionContext::new("", "mcp-stdio").is_err());
         assert!(ExecutionContext::new("mcp:stdio", " ").is_err());
+        assert!(ExecutionContext::new_with_authority("principal", "profile", "").is_err());
     }
 
     #[test]

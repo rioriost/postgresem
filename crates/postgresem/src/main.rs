@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, env, error::Error, fs, path::PathBuf, process::ExitCode};
+use std::{collections::BTreeSet, env, error::Error, fs, io, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 use postgresem_compiler::{
@@ -515,10 +515,7 @@ fn execute_mutation(
         audit_database_url_env,
         db_role_env,
     )?;
-    let context = executor::ExecutionContext::new(
-        format!("database-role:{}", config.database_role()),
-        "cli",
-    )?;
+    let context = mutation_execution_context(&config)?;
     let result = mutation_executor::execute(&fs::read(path)?, project, &config, &context)?;
     println!(
         "{}",
@@ -556,7 +553,8 @@ fn reconcile_mutation(
         db_role_env,
     )?;
     let idempotency_key = env::var(idempotency_key_env)?;
-    let state = mutation_executor::reconcile(project, &idempotency_key, &config)?;
+    let context = mutation_execution_context(&config)?;
+    let state = mutation_executor::reconcile(project, &idempotency_key, &config, &context)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
@@ -566,6 +564,27 @@ fn reconcile_mutation(
         }))?
     );
     Ok(())
+}
+
+fn mutation_execution_context(
+    config: &mutation_executor::MutationExecutorConfig,
+) -> Result<executor::ExecutionContext, Box<dyn Error>> {
+    let authority_id = match env::var("POSTGRESEM_MUTATION_AUTHORITY_ID") {
+        Ok(authority_id) => authority_id,
+        Err(env::VarError::NotPresent) => "cli:local-mutation".to_owned(),
+        Err(env::VarError::NotUnicode(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "POSTGRESEM_MUTATION_AUTHORITY_ID is not valid Unicode",
+            )
+            .into());
+        }
+    };
+    Ok(executor::ExecutionContext::new_with_authority(
+        format!("database-role:{}", config.database_role()),
+        "cli",
+        authority_id,
+    )?)
 }
 
 fn export_model(database_url_env: &str, project: &str) -> Result<(), Box<dyn Error>> {

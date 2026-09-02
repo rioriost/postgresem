@@ -137,15 +137,45 @@ if [ "$(
 fi
 
 export POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_a_writer
+export POSTGRESEM_MUTATION_AUTHORITY_ID=tenant-a
 tenant_insert=$(
   postgresem mutation execute "${TEST_ROOT}/mutations/tenant-a-insert.json" --project commerce
 )
 printf '%s\n' "$tenant_insert" | grep -q '"tenant_a"'
+tenant_a_mutation_id=$(
+  printf '%s\n' "$tenant_insert" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["mutation_id"])'
+)
 export POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_b_writer
-if postgresem mutation execute "${TEST_ROOT}/mutations/tenant-a-insert.json" \
-  --project commerce >/dev/null 2>&1
-then
-  echo "idempotent replay crossed the mapped writer authority" >&2
+export POSTGRESEM_MUTATION_AUTHORITY_ID=tenant-b
+tenant_b_insert=$(
+  postgresem mutation execute \
+    "${TEST_ROOT}/mutations/tenant-b-same-key-insert.json" \
+    --project commerce
+)
+printf '%s\n' "$tenant_b_insert" | grep -q '"tenant_b"'
+tenant_b_mutation_id=$(
+  printf '%s\n' "$tenant_b_insert" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["mutation_id"])'
+)
+if [ "$tenant_a_mutation_id" = "$tenant_b_mutation_id" ]; then
+  echo "idempotency state was shared across mapped writer authorities" >&2
+  exit 1
+fi
+export POSTGRESEM_IDEMPOTENCY_KEY=integration-tenant-a-insert
+tenant_b_reconciled=$(postgresem mutation reconcile --project commerce)
+printf '%s\n' "$tenant_b_reconciled" |
+  grep -q "\"mutation_id\": \"$tenant_b_mutation_id\""
+export POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_a_writer
+export POSTGRESEM_MUTATION_AUTHORITY_ID=tenant-a
+tenant_a_reconciled=$(postgresem mutation reconcile --project commerce)
+printf '%s\n' "$tenant_a_reconciled" |
+  grep -q "\"mutation_id\": \"$tenant_a_mutation_id\""
+if [ "$(
+  psql --no-psqlrc --tuples-only --no-align -c \
+    "SELECT count(*) FROM semantic.mutation_idempotency WHERE idempotency_key_hash = '$(printf %s integration-tenant-a-insert | sha256sum | awk '{print "sha256:" $1}')'"
+)" != "2" ]; then
+  echo "idempotency rows were not namespaced by authority" >&2
   exit 1
 fi
 export POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_a_writer
@@ -164,6 +194,7 @@ if [ "$(
 fi
 
 export POSTGRESEM_MUTATION_DB_ROLE=postgresem_order_writer
+unset POSTGRESEM_MUTATION_AUTHORITY_ID
 export POSTGRESEM_MAX_MUTATION_RESULT_BYTES=2
 if postgresem mutation execute "${TEST_ROOT}/mutations/result-limit.json" \
   --project commerce >/dev/null 2>&1

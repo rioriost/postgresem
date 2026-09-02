@@ -155,6 +155,10 @@ postgresem mutation reconcile --project commerce
 ```
 
 The key is read from `POSTGRESEM_IDEMPOTENCY_KEY`, not a command-line value.
+`POSTGRESEM_MUTATION_AUTHORITY_ID` may assign an immutable operator authority
+namespace for CLI automation; it defaults to `cli:local-mutation`. Keep the same
+value for execution, retries, and reconciliation, including across writer-role
+remapping. It is startup configuration, never an LSM or MCP request field.
 
 ## Time, row, request, and result budgets
 
@@ -295,7 +299,7 @@ writable projections must be authored and reviewed separately.
 
 ## Upgrade order
 
-Forward migrations `0001` through `0007`, idempotent reruns, N-1 execution, and
+Forward migrations `0001` through `0008`, idempotent reruns, N-1 execution, and
 N-1-to-current migration are tested.
 
 For a disposable/local preview upgrade:
@@ -309,8 +313,11 @@ For a disposable/local preview upgrade:
 7. run model diff/validation, the MCP smoke, and audit checks;
 8. retain the old environment until acceptance.
 
-The current binary is tested against the latest N-1 schema only. Do not assume
-older combinations or downgrade support. There are no down migrations.
+The current binary is tested for read-only guarded queries against the latest
+N-1 schema. Mutation execution and reconciliation require migration 0008
+because their authority-scoped idempotency function contract changed. Apply
+all migrations before starting a mutation-capable gateway. Do not assume older
+combinations or downgrade support. There are no down migrations.
 
 ## Backup, export, and uninstall boundary
 

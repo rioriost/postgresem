@@ -1,0 +1,80 @@
+{
+  "schema_version": "1",
+  "resource": "https://mcp.example.test/mcp",
+  "issuer": "https://identity.example.test",
+  "audience": "https://mcp.example.test/mcp",
+  "authorization_servers": [
+    "https://identity.example.test"
+  ],
+  "scopes_supported": [
+    "postgresem.query",
+    "postgresem.mutate"
+  ],
+  "jwks_path": "/run/secrets/postgresem-mcp-jwks.json",
+  "principal_hmac_key_path": "/run/secrets/postgresem-mcp-principal-hmac.key",
+  "allowed_token_types": [
+    "at+jwt",
+    "application/at+jwt"
+  ],
+  "allowed_algorithms": [
+    "RS256",
+    "ES256"
+  ],
+  "scope_claims": [
+    "scope",
+    "scp"
+  ],
+  "clock_skew_seconds": 30,
+  "max_token_age_seconds": 3600,
+  "allowed_hosts": [
+    "mcp.example.test"
+  ],
+  "allowed_origins": [
+    "https://agent.example.test"
+  ],
+  "query_scope": "postgresem.query",
+  "mutation_scope": "postgresem.mutate",
+  "remote_mutation_enabled": false,
+  "server_limits": {
+    "max_request_body_bytes": 1048576,
+    "max_token_bytes": 16384,
+    "max_header_bytes": 32768,
+    "max_execution_seconds": 30,
+    "max_result_bytes": 1048576,
+    "max_concurrent_requests": 64,
+    "max_pre_auth_concurrent_requests": 8,
+    "max_database_connections": 32,
+    "sse_keepalive_seconds": 10,
+    "max_sse_seconds": 60
+  },
+  "principals": [
+    {
+      "subject": "tenant-a-agent",
+      "authority_id": "tenant-a",
+      "query_role": "postgresem_tenant_a",
+      "allowed_scopes": [
+        "postgresem.query"
+      ],
+      "rate_limit": {
+        "requests_per_minute": 60,
+        "burst": 10,
+        "max_concurrent": 4
+      }
+    },
+    {
+      "subject": "tenant-b-agent",
+      "authority_id": "tenant-b",
+      "query_role": "postgresem_tenant_b",
+      "mutation_role": "postgresem_order_writer",
+      "allowed_scopes": [
+        "postgresem.query",
+        "postgresem.mutate"
+      ],
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "burst": 5,
+        "max_concurrent": 2
+      }
+    }
+  ]
+}

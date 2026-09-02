@@ -32,6 +32,14 @@ configure_gateway_urls() {
   export POSTGRESEM_DB_ROLE=postgresem_analyst
 }
 
+configure_mutation_urls() {
+  database=$1
+  export POSTGRESEM_MUTATION_DATABASE_URL="host=$PGHOST port=$PGPORT dbname=$database user=postgresem_mutation_runtime password=$POSTGRESEM_MUTATION_RUNTIME_PASSWORD sslmode=disable"
+  export POSTGRESEM_AUDIT_DATABASE_URL="host=$PGHOST port=$PGPORT dbname=$database user=postgresem_audit_writer password=$POSTGRESEM_AUDIT_WRITER_PASSWORD sslmode=disable"
+  export POSTGRESEM_MUTATION_DB_ROLE=postgresem_order_writer
+  export POSTGRESEM_MUTATION_AUTHORITY_ID=cli:local-mutation
+}
+
 verify_revision() {
   database=$1
   expected_revision=$2
@@ -87,15 +95,73 @@ then
   echo "invalid migration ceiling changed the database" >&2
   exit 1
 fi
-POSTGRESEM_MIGRATION_MAX_VERSION=0006_fanout_aggregation_anchor \
+POSTGRESEM_MIGRATION_MAX_VERSION=0007_fanout_anchor_invariants \
   sh /migrations/run.sh
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /fixtures/semantic/commerce.sql
 
+psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  v_mutation_id uuid;
+  v_attempt_id uuid;
+  v_revision_id uuid;
+  v_revision_hash text;
+  v_principal_hash text :=
+    'sha256:a4a49a30293115a968b7e784794fc2f78ce6421c6baa11d8701bfcf438f03504';
+  v_authority_hash text :=
+    'sha256:4063de5cad15a5b21303e73351eedc246758b6f5c9886b43842bf9aee0cd1112';
+  v_key_hash text :=
+    'sha256:6cc8c4880b70e61c9ab34ce345b1b782251ad69aabb13cc2a34c8ad411faee63';
+BEGIN
+  SELECT revision_id, canonical_hash
+  INTO STRICT v_revision_id, v_revision_hash
+  FROM semantic.revision AS revision
+  JOIN semantic.project AS project
+    ON project.project_id = revision.project_id
+  WHERE project.semantic_name = 'commerce'
+    AND revision.status = 'published';
+
+  SELECT mutation_id, attempt_id
+  INTO STRICT v_mutation_id, v_attempt_id
+  FROM semantic.claim_mutation(
+    'commerce',
+    v_key_hash,
+    v_authority_hash,
+    '1',
+    'sha256:' || repeat('0', 64),
+    v_revision_id,
+    v_revision_hash,
+    v_principal_hash,
+    '0.1.0',
+    'cli',
+    'insert',
+    'Orders',
+    'sha256:' || repeat('1', 64),
+    'sha256:' || repeat('2', 64),
+    '[]'::jsonb,
+    '{}'::jsonb,
+    '{"database_role":"postgresem_order_writer"}'::jsonb,
+    0,
+    0,
+    0
+  );
+
+  PERFORM semantic.finish_mutation(
+    v_mutation_id,
+    v_attempt_id,
+    '[]'::jsonb,
+    0,
+    0
+  );
+END;
+$$;
+SQL
+
 if psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
-  -c "SELECT count(*) FROM pg_catalog.pg_constraint WHERE conname = 'metric_aggregation_anchor_model_fkey'" |
+  -c "SELECT count(*) FROM pg_catalog.pg_proc WHERE proname = 'lookup_mutation_idempotency' AND pronargs = 4" |
   grep -q '^1$'
 then
-  echo "N-1 database unexpectedly contains the current anchor repair" >&2
+  echo "N-1 database unexpectedly contains authority-scoped idempotency" >&2
   exit 1
 fi
 
@@ -108,7 +174,7 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "7" ]; then
+if [ "$migration_count" != "8" ]; then
   echo "N-1 upgrade did not apply the complete migration set" >&2
   exit 1
 fi
@@ -117,6 +183,11 @@ postgresem report beta --window-hours 1 |
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
 verify_revision "$n_minus_one_database" "$current_revision"
+configure_mutation_urls "$n_minus_one_database"
+export POSTGRESEM_IDEMPOTENCY_KEY=recovery-legacy-idempotency
+postgresem mutation reconcile --project commerce |
+  grep -q '"status": "committed"'
+TEST_ROOT=/tests/integration sh /tests/integration/mutation.sh
 
 drop_database "$legacy_v1_database"
 create_database "$legacy_v1_database"

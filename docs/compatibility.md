@@ -33,9 +33,16 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | compiler semantics | `0.2.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
-| database migrations | `0001`–`0007` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
+| database migrations | `0001`–`0008` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
 | source package | `0.6.0` | M8 explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
 | latest published package | `0.6.0` | signed M8 release with explicit aggregation anchors and direct one-to-many fan-out-safe aggregation |
+
+Migration 0008 changes new mutation idempotency records from a project-global
+key namespace to `(project, stable authority ID, key)`. Mapped role, content,
+and revision changes within that authority still fail closed. Existing records
+retain their legacy authority hash and remain replayable only by the matching
+pre-upgrade principal/profile/role context; a different authority cannot claim
+their keys.
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema

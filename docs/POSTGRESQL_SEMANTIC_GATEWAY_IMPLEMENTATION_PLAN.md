@@ -984,15 +984,37 @@ GRANT/RLS.
 
 ### M9: 0.7 — Application and Agent Integration
 
-- Add authenticated MCP Streamable HTTP if demand and threat-model gates are
-  met.
-- Provide generated client schemas/SDK guidance, capability negotiation,
-  cancellation, pagination/streaming, and stable idempotency behavior.
-- Keep stdio supported and keep remote mutation disabled unless explicit
-  authentication, authorization, origin, rate, and audit requirements pass.
+- Implement ADR 0015's authenticated MCP `2026-07-28` stateless Streamable
+  HTTP endpoint while preserving the MCP `2024-11-05` stdio adapter.
+- Act only as an OAuth resource server: publish RFC 9728 metadata, validate
+  locally configured signed JWT access tokens for exact issuer/audience/expiry,
+  and map exact verified identities to operator-configured query and optional
+  mutation PostgreSQL roles.
+- Require loopback binding behind a colocated HTTPS reverse proxy, exact Host
+  and Origin allowlists, matching modern MCP request metadata headers/body,
+  bounded request sizes, per-principal rate/concurrency budgets, and
+  privacy-safe errors and logs.
+- Implement `server/discover`, current result envelopes, deterministic
+  capability/tool/resource discovery, revision-bound pagination, request SSE,
+  disconnect-to-PostgreSQL cancellation, and hard execution ceilings.
+- Keep remote mutation disabled by default. Advertise it only when the server
+  gate, verified token scope, operator identity mapping, existing mutation
+  executor, PostgreSQL role checks, RLS, idempotency, and mandatory audit
+  requirements all pass.
+- Namespace mutation idempotency and reconciliation by verified authority
+  before exposing retries to multiple remote principals.
+- Publish strict authority/config schemas plus official TypeScript and Python
+  SDK guidance for discovery, resource selection, pagination, cancellation,
+  and retrying indeterminate mutation outcomes with the same idempotency key.
+- Add multi-user integration fixtures proving that two authenticated
+  identities receive distinct PostgreSQL RLS results and cannot select each
+  other's roles, cursors, mutation capability, or audit authority.
 
 **Exit gate**: Multi-user remote deployments preserve the same visibility,
-role/RLS, privacy, query, and mutation invariants as local stdio deployments.
+role/RLS, privacy, query, and mutation invariants as local stdio deployments;
+invalid tokens/origins/hosts/metadata fail closed; cancellation reaches
+PostgreSQL and closes the audit lifecycle; and Linux amd64/arm64 plus
+PostgreSQL 16–18 CI exercise the authenticated transport.
 
 ### M10: 0.8 — PostgreSQL-native Scale and Operations
 

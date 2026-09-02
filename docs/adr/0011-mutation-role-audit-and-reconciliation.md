@@ -34,6 +34,10 @@ database denial.
    executing DML and records a replay attempt. The key is bound to the
    principal, configuration profile, mapped writer role, LSM hash, and
    revision. Reuse under different authority, content, or revision is rejected.
+   ADR 0015 and migration 0008 supersede the cross-authority part of this
+   decision: new records are namespaced by a stable authority ID, while mapped
+   role, content, and revision changes still fail closed. Pre-0008 records keep
+   their legacy authority binding.
 7. Validation, compilation, role, RLS, constraint, trigger, timeout, and
    rollback failures are recorded through a separate restricted audit
    connection after the business transaction has rolled back. Failure-audit
@@ -43,6 +47,9 @@ database denial.
    committed result if the transaction committed, or performs the mutation if
    it rolled back. Operators can also inspect audit/idempotency state by key
    hash without storing the key or row values.
+   ADR 0015 and migration 0008 require the authority namespace as well as the
+   key hash for application reconciliation; key-hash-only inspection is an
+   operator database procedure for legacy records, not a public lookup API.
 9. Mutation audit stores hashes, types, semantic field names, counts, policy
    context, and outcome. It does not store input values by default.
 

@@ -944,14 +944,33 @@ bounded fan-out contractを実装し、LSQ v1とSnapshot v1の読み込みを維
 
 ### M9: 0.7 — Application・Agent integration
 
-- demandとthreat-model gateを満たす場合、認証済みMCP Streamable HTTPを追加する。
-- generated client schema/SDK guidance、capability negotiation、cancellation、
-  pagination/streaming、stable idempotency behaviorを提供する。
-- stdioを維持し、明示的authn/authz、origin、rate、audit要件を満たさないremote mutationを
-  無効にする。
+- ADR 0015に従い、MCP `2026-07-28`の認証済みstateless Streamable HTTP endpointを
+  実装し、MCP `2024-11-05` stdio adapterを維持する。
+- OAuth resource serverとしてのみ動作する。RFC 9728 metadataを公開し、local設定された
+  署名付きJWT access tokenのissuer/audience/expiryを厳密に検証し、検証済みidentityを
+  operator設定のquery roleとoptional mutation PostgreSQL roleへ対応付ける。
+- colocated HTTPS reverse proxy背後のloopback bind、Host/Origin完全一致allowlist、
+  modern MCP request metadata header/body一致、request size上限、principal単位の
+  rate/concurrency budget、privacy-safeなerror/logを必須とする。
+- `server/discover`、現行result envelope、決定的capability/tool/resource discovery、
+  revision-bound pagination、request SSE、disconnectからPostgreSQLへのcancellation、
+  hard execution ceilingを実装する。
+- remote mutationはdefault無効とする。server gate、検証済みtoken scope、operator identity
+  mapping、既存mutation executor、PostgreSQL role check、RLS、idempotency、必須auditの
+  全要件を満たす場合だけadvertiseする。
+- 複数remote principalへretryを公開する前に、mutation idempotencyとreconciliationを
+  検証済みauthority単位でnamespace化する。
+- discovery、resource selection、pagination、cancellation、indeterminate mutationを同じ
+  idempotency keyでretryする方法について、strict authority/config schemaと公式
+  TypeScript/Python SDK guidanceを公開する。
+- 2つの認証済みidentityが異なるPostgreSQL RLS resultを受け取り、相互のrole、cursor、
+  mutation capability、audit authorityを選択できないmulti-user integration fixtureを
+  追加する。
 
 **Exit gate**: multi-user remote deploymentがlocal stdioと同じvisibility、role/RLS、
-privacy、query、mutation invariantを維持する。
+privacy、query、mutation invariantを維持し、invalid token/origin/host/metadataをfail
+closedにし、cancellationがPostgreSQLへ到達してaudit lifecycleを閉じ、Linux
+amd64/arm64およびPostgreSQL 16–18 CIが認証済みtransportを実行する。
 
 ### M10: 0.8 — PostgreSQL-native scale・operations
 

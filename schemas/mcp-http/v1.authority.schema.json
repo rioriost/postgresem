@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postgresem.dev/schemas/mcp-http/v1.authority.schema.json",
+  "title": "postgresem MCP HTTP authority configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "resource",
+    "issuer",
+    "audience",
+    "authorization_servers",
+    "scopes_supported",
+    "jwks_path",
+    "principal_hmac_key_path",
+    "allowed_token_types",
+    "allowed_algorithms",
+    "scope_claims",
+    "clock_skew_seconds",
+    "max_token_age_seconds",
+    "allowed_hosts",
+    "allowed_origins",
+    "query_scope",
+    "mutation_scope",
+    "remote_mutation_enabled",
+    "server_limits",
+    "principals"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "resource": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[^/?#@]+(?:/[^?#]*)?$",
+      "maxLength": 2048
+    },
+    "issuer": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 2048
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "authorization_servers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https://",
+        "maxLength": 2048
+      }
+    },
+    "scopes_supported": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/scope"
+      }
+    },
+    "jwks_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "principal_hmac_key_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "allowed_token_types": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "at+jwt",
+          "application/at+jwt",
+          "JWT"
+        ]
+      }
+    },
+    "allowed_algorithms": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "RS256",
+          "RS384",
+          "RS512",
+          "ES256",
+          "ES384",
+          "EdDSA"
+        ]
+      }
+    },
+    "scope_claims": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+      }
+    },
+    "clock_skew_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 300
+    },
+    "max_token_age_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "allowed_hosts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "pattern": "^[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+      }
+    },
+    "allowed_origins": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https://",
+        "maxLength": 2048
+      }
+    },
+    "query_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "mutation_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "remote_mutation_enabled": {
+      "type": "boolean"
+    },
+    "server_limits": {
+      "$ref": "#/$defs/serverLimits"
+    },
+    "principals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/principal"
+      }
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[\\x21\\x23-\\x5B\\x5D-\\x7E]+$"
+    },
+    "databaseRole": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "rateLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests_per_minute",
+        "burst",
+        "max_concurrent"
+      ],
+      "properties": {
+        "requests_per_minute": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "burst": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "max_concurrent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "serverLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_request_body_bytes",
+        "max_token_bytes",
+        "max_header_bytes",
+        "max_execution_seconds",
+        "max_result_bytes",
+        "max_concurrent_requests",
+        "max_pre_auth_concurrent_requests",
+        "max_database_connections",
+        "sse_keepalive_seconds",
+        "max_sse_seconds"
+      ],
+      "properties": {
+        "max_request_body_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        },
+        "max_token_bytes": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 65536
+        },
+        "max_header_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        },
+        "max_execution_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "max_result_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1073741824
+        },
+        "max_concurrent_requests": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "max_pre_auth_concurrent_requests": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "max_database_connections": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10000
+        },
+        "sse_keepalive_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "max_sse_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject",
+        "authority_id",
+        "query_role",
+        "allowed_scopes",
+        "rate_limit"
+      ],
+      "properties": {
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "authority_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "query_role": {
+          "$ref": "#/$defs/databaseRole"
+        },
+        "mutation_role": {
+          "$ref": "#/$defs/databaseRole"
+        },
+        "allowed_scopes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/scope"
+          }
+        },
+        "rate_limit": {
+          "$ref": "#/$defs/rateLimit"
+        }
+      }
+    }
+  }
+}
