@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-02
+
 ### Added
 
 - Authenticated stateless Streamable HTTP for MCP `2026-07-28`, while

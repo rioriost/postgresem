@@ -8,8 +8,8 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The current source version is **0.7.0**; the latest published release is
-**0.6.0**. The 0.7 source adds authenticated stateless MCP HTTP, exact OAuth
+The latest published release and current source version are **0.7.0**. The 0.7
+release adds authenticated stateless MCP HTTP, exact OAuth
 identity to PostgreSQL role mapping, multi-user RLS execution, remote mutation
 gates, and disconnect cancellation. It is not a production-readiness or
 long-term-support promise.
@@ -208,7 +208,7 @@ and unknown semantic objects receive the same public “not available” errors.
   implemented.
 - N-1 and same-name restore paths are fixture-tested, but production backup,
   RPO/RTO, disaster recovery, and down migrations remain operator-owned.
-- `v0.6.0` checksums and immutable container image digest are keyless
+- `v0.7.0` checksums and immutable container image digest are keyless
   signed by the GitHub release workflow.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
   and 18 pass the Docker CI migration, integration, and recovery matrix. See the
@@ -236,10 +236,10 @@ authenticates the signed `SHA256SUMS` against the exact release workflow/tag,
 and then verifies the matching archive checksum before installation.
 
 The
-[`v0.6.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.6.0)
+[`v0.7.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.7.0)
 contains Linux and macOS archives for amd64 and arm64, native Linux binary and
 image runtime evidence, `SHA256SUMS`, and its Sigstore signature and
-certificate. The public image is `ghcr.io/rioriost/postgresem:0.6.0`. The
+certificate. The public image is `ghcr.io/rioriost/postgresem:0.7.0`. The
 checksum and immutable image digest are GitHub OIDC keyless-signed;
 verification must constrain the expected workflow identity and issuer. See the
 [artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
