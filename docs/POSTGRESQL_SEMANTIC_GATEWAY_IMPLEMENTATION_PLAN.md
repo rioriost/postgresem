@@ -653,6 +653,9 @@ Before M8, the repository also provides a byte-equivalent `Dockerfile` for
 Docker/Podman, a Linux Compose override that preserves UID/GID `10001`, and
 rootless Quadlet units. CI builds and runs the image with both Docker and
 Podman, starts the Linux Compose stack, and validates Quadlet generation.
+Run
+[`33575772186`](https://github.com/rioriost/postgresem/actions/runs/33575772186)
+passed these gates on native Linux amd64/arm64 and Podman 4.9.
 
 ### 14.3 Development Command Goals
 

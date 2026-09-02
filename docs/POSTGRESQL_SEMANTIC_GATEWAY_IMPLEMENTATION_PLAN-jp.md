@@ -631,6 +631,9 @@ Compose fileはApple ContainerとLinux CIで共通利用できる機能の交差
 M8開始前に、Docker/Podman向けのbyte-equivalentな`Dockerfile`、UID/GID `10001`を
 維持するLinux Compose override、rootless Quadlet unitも提供する。CIではDockerと
 Podmanの両方でimageをbuild/runし、Linux Compose stackを起動し、Quadlet生成を検証する。
+run
+[`33575772186`](https://github.com/rioriost/postgresem/actions/runs/33575772186)
+はnative Linux amd64/arm64とPodman 4.9でこれらのgateを通過した。
 
 ### 14.3 開発コマンドの目標
 

@@ -8,6 +8,12 @@ point. CI rejects drift between them.
 These are local evaluation paths, not a production orchestration or
 availability claim. Use fictional data and separate disposable credentials.
 
+GitHub Actions run
+[`33575772186`](https://github.com/rioriost/postgresem/actions/runs/33575772186)
+builds the Dockerfile on native Linux amd64 and arm64, starts the Docker
+Compose stack, builds and runs the same file with Podman, and validates the
+Quadlet units with both Podman 4.9 and the runner-installed Podman.
+
 ## Docker Compose
 
 Copy `.env.example` to `.env`, replace every placeholder, then run:

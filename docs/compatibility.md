@@ -231,8 +231,11 @@ The [CI workflow](../.github/workflows/ci.yml) defines separate PostgreSQL 16,
 integration, N-1 migration, and backup/restore recovery. Integration images
 use the matching PostgreSQL client major. The performance service runs only in
 the PostgreSQL 18 matrix job. All three jobs passed in
-[CI run 33526641734](https://github.com/rioriost/postgresem/actions/runs/33526641734)
-on 2026-08-31. Core operation requires no PostgreSQL extension.
+[CI run 33575772186](https://github.com/rioriost/postgresem/actions/runs/33575772186)
+on 2026-09-02. The same run also passed native Linux amd64/arm64 Dockerfile
+runtime jobs plus Docker Compose, Podman build/run, Podman 4.9 Quadlet
+generation, and split-credential checks. Core operation requires no PostgreSQL
+extension.
 
 Apple Container uses the static `postgres:18` image in `compose.yaml`;
 `container-compose` does not interpolate `${POSTGRES_IMAGE}`. Local version
