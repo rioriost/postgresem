@@ -1045,6 +1045,13 @@ authorization.
 
 ### M11: 0.9 — 1.0 Release Candidate
 
+**Repository implementation status:** complete in the `0.9.0` source tree.
+ADR 0017, the frozen contract manifest, previous-binary rollback rehearsal,
+operator workflow, support/governance/deprecation policies, and independent
+technical security review implement the repository-controlled scope. The M11
+exit gate remains externally blocked by issue #4 until an independent external
+security review and two accepted 28-day non-fixture pilot records exist.
+
 - Freeze candidate LSQ, LSM, Semantic Schema, MCP, CLI, error, migration, and
   audit contracts.
 - Complete independent security review, production pilot evidence, upgrade and

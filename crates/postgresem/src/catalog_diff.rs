@@ -9,7 +9,7 @@ use crate::catalog::{
     CatalogSnapshot, RowLevelSecurityPolicy,
 };
 
-const CATALOG_DIFF_SCHEMA_VERSION: &str = "1";
+pub(crate) const CATALOG_DIFF_SCHEMA_VERSION: &str = "1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]

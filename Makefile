@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-contracts test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery test-rc-workflow preview-check beta-check rc-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -65,6 +65,12 @@ check:
 
 test:
 	cargo test --workspace --all-features
+
+test-contracts:
+	@output="$$(mktemp)"; \
+	trap 'rm -f "$$output"' EXIT; \
+	cargo run --quiet -p postgresem -- contract show >"$$output"; \
+	python3 tests/contracts/verify.py --actual-manifest "$$output"
 
 test-install:
 	tests/install/security.sh
@@ -182,7 +188,7 @@ test-recovery:
 	@attempt=0; \
 	while [ $$attempt -lt 180 ]; do \
 		logs="$$(container logs postgresem-recovery-test 2>&1)"; \
-		if printf '%s\n' "$$logs" | grep -q "M10 N-1 migration, scale authoring, and backup/restore recovery checks passed"; then \
+		if printf '%s\n' "$$logs" | grep -q "M11 N-1 migration and recovery checks passed"; then \
 			printf '%s\n' "$$logs"; \
 			exit 0; \
 		fi; \
@@ -196,6 +202,28 @@ test-recovery:
 	echo "recovery integration test timed out" >&2; \
 	exit 1
 
-preview-check: fmt check test test-reference-comparison test-db test-execution test-mcp test-mutation test-performance
+test-rc-workflow:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	container-compose up --env-file .env -d --build rc-test
+	@attempt=0; \
+	while [ $$attempt -lt 120 ]; do \
+		logs="$$(container logs postgresem-rc-test 2>&1)"; \
+		if printf '%s\n' "$$logs" | grep -q "M11 release-candidate query and ingestion workflow passed"; then \
+			printf '%s\n' "$$logs"; \
+			exit 0; \
+		fi; \
+		if container inspect postgresem-rc-test 2>/dev/null | grep -q '"state" : "stopped"'; then \
+			printf '%s\n' "$$logs" >&2; \
+			exit 1; \
+		fi; \
+		attempt=$$((attempt + 1)); \
+		sleep 1; \
+	done; \
+	echo "M11 release-candidate workflow test timed out" >&2; \
+	exit 1
+
+preview-check: fmt check test test-contracts test-reference-comparison test-db test-execution test-mcp test-mutation test-performance
 
 beta-check: preview-check test-install test-web-demo test-recovery
+
+rc-check: beta-check test-rc-workflow

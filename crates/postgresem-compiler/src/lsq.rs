@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::hash::sha256;
 
-const LSQ_SCHEMA_VERSION: &str = "1";
+pub const LSQ_SCHEMA_VERSION: &str = "1";
 const MAX_LIMIT: u32 = 10_000;
 const MAX_FILTER_DEPTH: usize = 16;
 const MAX_FILTER_NODES: usize = 128;

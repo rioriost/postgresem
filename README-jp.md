@@ -8,10 +8,10 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-現在のsource versionは**0.8.0**、最新の公開releaseは**0.7.0**です。M10では、
-set-based catalog scaling、決定的な1,000-model scaffold、PostgreSQL-native
-operational report、backup gate付きlocal upgrade automationを追加しました。
-production readinessやlong-term supportを保証するものではありません。
+現在のsource versionは**0.9.0 release candidate**、最新の公開releaseは
+**0.7.0**です。M11ではcandidate contractをfreezeし、previous-binary rollback、
+query/ingestion operator gate、support/governance/deprecation policyを追加しました。
+production readinessやSLAを保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -63,7 +63,8 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 
 ## 1.0までのロードマップ
 
-現在のsourceはM10を`1.0`ではなく`0.8`として完了しています。M6の独立した型付き
+現在のsourceはrepository管理下のM11 scopeを`1.0`ではなく`0.9`として実装しています。
+M6の独立した型付き
 mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
 です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
 authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` query executor
@@ -85,8 +86,10 @@ authorizationをPostgreSQLから移動させず、stateless MCP `2026-07-28` HTT
 serverを追加しました。M10では計測されたcatalog N+1 bottleneckを解消し、
 catalog-boundなlarge-model scaffoldとoperations/upgrade surfaceを追加しました。
 guarded executionは計測上のbottleneckではなかったため、persisted accelerationは
-deferしています。`0.9`ではrelease candidateのgapへ進みます。feature数のparityは
-目的とせず、`1.0`まで
+deferしています。M11ではこれらのcontractをfreezeし、release-candidate operationと
+rollback gateを追加しました。独立external security reviewと2件の28日間non-fixture
+pilotは[issue #4](https://github.com/rioriost/postgresem/issues/4)で未完了です。
+feature数のparityは目的とせず、`1.0`まで
 PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
 
 M6〜M12のgateは
@@ -101,6 +104,11 @@ M6〜M12のgateは
 - [認証済みMCP HTTP deploymentとSDK guidance](docs/mcp-http.md)
 - [ローカルCommerce Web demo](examples/web_demo/README.md)
 - [運用ガイド](docs/operations.md)
+- [M11 release-candidate checklist](docs/m11-release-candidate-checklist.md)
+- [Release-candidate operator workflow](docs/rc-operator-workflow.md)
+- [Support policy](SUPPORT.md)
+- [Governance](GOVERNANCE.md)
+- [Deprecation policy](docs/deprecation-policy.md)
 - [エラーリファレンス](docs/error-reference.md)
 - [互換性policyとsupport matrix](docs/compatibility.md)
 - [M10 reference比較](docs/reference-comparison/2026-09-03.md)
@@ -118,7 +126,7 @@ M6〜M12のgateは
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## 0.8で実装されているもの
+## 0.9で実装されているもの
 
 - LSQ v1 validationと決定的compile
 - PostgreSQLをbacking storeとするSemantic Snapshot/Schema v2。Snapshot v1の読み込みと
@@ -154,6 +162,9 @@ M6〜M12のgateは
 - 最大1,000のreview-only modelを生成する決定的catalog-bound scaffold
 - fixedかつprivacy-preservingなM10 operational dashboard
 - verified backupをgateとするlocal Apple Container upgrade automation
+- 決定的なfrozen release-candidate contract inventory
+- isolated same-name restore後のprevious-release binary実行
+- guarded query、governed ingestion、replay、auditを結合したworkflow gate
 - PostgreSQL 18を使用するローカルApple Container Compose開発stack
 - Linux Docker Composeとrootless Podman Quadlet deployment path
 

@@ -43,6 +43,9 @@ jobs:
           print(f"verified release version {version}")
           PY
 
+      - name: Verify frozen RC contracts
+        run: python3 tests/contracts/verify.py
+
   binaries:
     name: ${{ matrix.asset_os }} ${{ matrix.asset_arch }}
     needs: metadata
@@ -105,12 +108,20 @@ jobs:
           root="dist/${archive}"
           source_date_epoch="$(git show -s --format=%ct "${GITHUB_SHA}")"
 
+          mkdir -p "${root}/contracts"
+          mkdir -p "${root}/docs"
           mkdir -p "${root}/schemas"
           install -m 0755 \
             "target/${TARGET}/release/postgresem" \
             "${root}/postgresem"
           cp -R schemas/. "${root}/schemas/"
-          cp CHANGELOG.md LICENSE README.md "${root}/"
+          cp -R contracts/. "${root}/contracts/"
+          cp docs/compatibility.md docs/deprecation-policy.md \
+            docs/m11-release-candidate-checklist.md \
+            docs/rc-operator-workflow.md \
+            "${root}/docs/"
+          cp CHANGELOG.md GOVERNANCE.md LICENSE README.md SECURITY.md SUPPORT.md \
+            "${root}/"
 
           python3 - "${root}" "dist/${archive}.tar.gz" \
             "${source_date_epoch}" <<'PY'
@@ -172,6 +183,11 @@ jobs:
           tar -xzf "dist/${archive}.tar.gz" -C dist/smoke
           test -x "dist/smoke/${archive}/postgresem"
           "dist/smoke/${archive}/postgresem" --version
+          "dist/smoke/${archive}/postgresem" contract show \
+            >dist/smoke/contract.json
+          cmp \
+            <(python3 -c 'import json; print(json.dumps(json.load(open("contracts/rc-v1.json"))["manifest"], sort_keys=True))') \
+            <(python3 -c 'import json; print(json.dumps(json.load(open("dist/smoke/contract.json")), sort_keys=True))')
 
       - name: Start Linux release smoke database
         if: matrix.asset_os == 'linux'

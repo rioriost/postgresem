@@ -1,0 +1,309 @@
+{
+  "manifest": {
+    "schema_version": "1",
+    "release_candidate": "0.9.0",
+    "status": "release_candidate",
+    "contracts": {
+      "lsq": [
+        "1"
+      ],
+      "lsm": [
+        "1"
+      ],
+      "semantic_snapshot_load": [
+        "1",
+        "2"
+      ],
+      "semantic_snapshot_author": "2",
+      "compiler_semantics": "0.2.0",
+      "mutation_compiler_semantics": "0.1.0",
+      "catalog_snapshot": "2",
+      "catalog_diff": "1",
+      "authoring_scaffold": "1",
+      "osi_import": "1",
+      "benchmark": "1",
+      "mcp_tool_schema": "1",
+      "error_taxonomy": "1",
+      "database_migrations": {
+        "first": "0001_semantic_schema",
+        "current": "0010_m10_operational_report"
+      }
+    },
+    "protocols": {
+      "mcp_stdio": "2024-11-05",
+      "mcp_http": "2026-07-28"
+    },
+    "cli_commands": [
+      "benchmark",
+      "catalog",
+      "contract",
+      "doctor",
+      "mcp",
+      "model",
+      "mutation",
+      "query",
+      "report",
+      "snapshot"
+    ],
+    "mcp_tools": {
+      "query": [
+        "describe_semantic_model",
+        "explain_semantic_query",
+        "list_semantic_models",
+        "query_semantic_model",
+        "validate_semantic_query"
+      ],
+      "mutation": [
+        "mutate_semantic_model",
+        "reconcile_semantic_mutation",
+        "validate_semantic_mutation"
+      ]
+    },
+    "deprecated": [
+      {
+        "surface": "report beta",
+        "replacement": "report operations",
+        "removal_before": null
+      }
+    ],
+    "deferred": [
+      "automatic_materialized_view_routing",
+      "connection_pooling",
+      "distributed_rate_limits",
+      "down_migrations",
+      "dynamic_oidc_or_jwks_discovery",
+      "general_update_delete",
+      "pre_aggregation"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "sha256:b544011a6d16fb2e9e43fdd07bf061c526cd4d2365c38fec9906423a579028bc"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha256": "sha256:3a62849feabc25bf9c5f6a1d77d8ac5ae906a38f4d40af5d0a0963cfe45c1832"
+    },
+    {
+      "path": "Containerfile",
+      "sha256": "sha256:494d26f4982f534fe9177a16588b56afdc06bdd933395fb2c48bcc24e1343f0a"
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "sha256:494d26f4982f534fe9177a16588b56afdc06bdd933395fb2c48bcc24e1343f0a"
+    },
+    {
+      "path": "IntegrationContainerfile",
+      "sha256": "sha256:0e7e6fb69f8637f5191fca80e3bcefb5cbf712b96363635cb966edd765a2028a"
+    },
+    {
+      "path": "Makefile",
+      "sha256": "sha256:06a9012259e6eadc3ddfd0e5cfa4b4a23fcb6ea9bfa02e124b8b45eccb476b83"
+    },
+    {
+      "path": "compose.ci.yaml",
+      "sha256": "sha256:0d2891096f950cb330cf3011afe3c24751a1f04285e7868bcf4e8bf188d0c8d0"
+    },
+    {
+      "path": "compose.yaml",
+      "sha256": "sha256:23ac48ecc7a72458c47a7e4e271ece4f3d5b1f10bc2b0c0abd3d7f6ae9255ab3"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/compiler.rs",
+      "sha256": "sha256:6e3dd7d6812b8ce4c61f88f3f1b18174d10af14438cfb207d716821c8e219cdb"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/diff.rs",
+      "sha256": "sha256:5a85ba578d69414bd88f30e2931f7b35abe99b98fe43443fbe4830e00e7f7714"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/hash.rs",
+      "sha256": "sha256:84567c37175a4e480852deed35987a7731602b9f2d4f0a70f4ae61fcaaa4d803"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/lib.rs",
+      "sha256": "sha256:25cbf7d2c39f54072844031a0fed725f64ad495822e33fe7a01b9a6288620507"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/lsm.rs",
+      "sha256": "sha256:f60565a969cd746565f8e86576fe26524b9ddbd8e8841f8dad42461ee11d11a8"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/lsq.rs",
+      "sha256": "sha256:a13a99f7642ff3bb293e33156d23e1f86250b8cf1f80ea03d3b8e43fd3d1ddb2"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/mutation.rs",
+      "sha256": "sha256:31826cc693b8e5e260e2e4a6587582b69324cd8dec92dff21a8725a91fc511e5"
+    },
+    {
+      "path": "crates/postgresem-compiler/src/semantic.rs",
+      "sha256": "sha256:67953e8fc70458dce2a91a5dd2cdb94f77a6e75c92a37572f84da2f84333f308"
+    },
+    {
+      "path": "crates/postgresem/src/authoring.rs",
+      "sha256": "sha256:34c24cd62f23627c2ff9c6d5144c237b974a7551bd270b04f022b0317ffd4d68"
+    },
+    {
+      "path": "crates/postgresem/src/benchmark.rs",
+      "sha256": "sha256:2c04bdc21a72e1efa912d4abf6dd09269a8a9dc89fbc18c017a07edee992a56b"
+    },
+    {
+      "path": "crates/postgresem/src/catalog.rs",
+      "sha256": "sha256:54230eb5c71d787865754001611d76b9c0595ac86a071ab9063c7f4fde53d73f"
+    },
+    {
+      "path": "crates/postgresem/src/catalog_diff.rs",
+      "sha256": "sha256:a62e6f799390641351c20b1e8b58171246c9e4ad9ef8f2ad4fce010dc992da38"
+    },
+    {
+      "path": "crates/postgresem/src/catalog_types.rs",
+      "sha256": "sha256:da9d07c16093976c5b9d8d22afe74caf6e2742729c3b8ef3e951bf515e8d94af"
+    },
+    {
+      "path": "crates/postgresem/src/contract.rs",
+      "sha256": "sha256:8f81645b692a309902edc866d7361e29676a0c60c3566a2e43e6c003406d40da"
+    },
+    {
+      "path": "crates/postgresem/src/database.rs",
+      "sha256": "sha256:94ac4dd4da9af2652928b45dee73118833f9ee9781132b8b0b8331d18fbd1095"
+    },
+    {
+      "path": "crates/postgresem/src/executor.rs",
+      "sha256": "sha256:642f800d6a2ca3d80de05cf834430069af5106afa2fa75da60af02fea5db49f1"
+    },
+    {
+      "path": "crates/postgresem/src/hash.rs",
+      "sha256": "sha256:84567c37175a4e480852deed35987a7731602b9f2d4f0a70f4ae61fcaaa4d803"
+    },
+    {
+      "path": "crates/postgresem/src/main.rs",
+      "sha256": "sha256:3a04fb34c2f4428acbcdce76a78b3abf14ed65ad46ca3e9db4dd045206f40a2d"
+    },
+    {
+      "path": "crates/postgresem/src/mcp.rs",
+      "sha256": "sha256:61c356600a30c3dbe193d7036a8668b9c9ef4b728f93f4b7c3d3905d10edc9ed"
+    },
+    {
+      "path": "crates/postgresem/src/mcp_http.rs",
+      "sha256": "sha256:da0c9396accf7b61d66d5bcf748f19db77a5ca825e392ce32d025d425ac2da5c"
+    },
+    {
+      "path": "crates/postgresem/src/mcp_http_auth.rs",
+      "sha256": "sha256:4d6349ae319c1b521c89bf2623269f7ba9a00a08a5d645182128dbe73a235fca"
+    },
+    {
+      "path": "crates/postgresem/src/mcp_http_rate.rs",
+      "sha256": "sha256:b4154a48b787ec58870b638017f261c59d741982e75e2dd5041368e8ce0f70db"
+    },
+    {
+      "path": "crates/postgresem/src/mutation_executor.rs",
+      "sha256": "sha256:ebb392dab9e5429c9f6a61000a09784f6d1a533aac6e656a70ea7405f3ef2ff5"
+    },
+    {
+      "path": "crates/postgresem/src/osi.rs",
+      "sha256": "sha256:3c8a834d9e2dadce70df979cfce84d53cea44145d19a46f38254749a21a6473b"
+    },
+    {
+      "path": "crates/postgresem/src/published_model.rs",
+      "sha256": "sha256:1f3e66df4b1b0eabfc9e8a7f1dfa0b3e44f31048185ba807c2d14fd13c0eeb67"
+    },
+    {
+      "path": "crates/postgresem/src/report.rs",
+      "sha256": "sha256:43734c92cd4d718d49ca861202ab58d97dd3d7b1cd3c769726899402df1bc168"
+    },
+    {
+      "path": "docs/error-reference.md",
+      "sha256": "sha256:136e9b945bb243d68391b29d8039db2bf15e2c68d87109e41c98ece0e52df464"
+    },
+    {
+      "path": "migrations/0001_semantic_schema.sql",
+      "sha256": "sha256:ea6aa07780701a60083e8f787f24a8febb37e3e990b5ef48bfe7461519ba5ff7"
+    },
+    {
+      "path": "migrations/0002_published_snapshot_v1.sql",
+      "sha256": "sha256:d97c9d52a7e88f52f5a3612e9bbb79bcbaa42e148320f52cadc9a3f3d03531ea"
+    },
+    {
+      "path": "migrations/0003_guarded_execution_audit.sql",
+      "sha256": "sha256:7272b97e4803e884be7c5273983c0163e85fcfd54ee497d832056967952122d3"
+    },
+    {
+      "path": "migrations/0004_beta_operational_report.sql",
+      "sha256": "sha256:d944fbde8e414ba70b08d74103c6334a2ae7161fb3165755d0c5345528d4ea90"
+    },
+    {
+      "path": "migrations/0005_governed_mutation.sql",
+      "sha256": "sha256:3208e902031885ad7ea58918ecdcf126a2c9f7f7a069499d98b36c1901249454"
+    },
+    {
+      "path": "migrations/0006_fanout_aggregation_anchor.sql",
+      "sha256": "sha256:03bcc6166056ba1d99641cf2e48a222b23055794d1c0ee8ca2c8d693326ae4f2"
+    },
+    {
+      "path": "migrations/0007_fanout_anchor_invariants.sql",
+      "sha256": "sha256:0e677ecc3a2845a5738af59247eaae3c0a43bd6b8ff4537943f96a09c4b3f810"
+    },
+    {
+      "path": "migrations/0008_mutation_authority_idempotency.sql",
+      "sha256": "sha256:6a5b573a8ebb3e86819ebb8c7c3d8a154e3d4478d63fa8b542f63b7902b3c786"
+    },
+    {
+      "path": "migrations/0009_mutation_reconcile_precedence.sql",
+      "sha256": "sha256:b2383aa81d0a5800c2b6873d8a3414b34a67b7735519e9733b5249a55dfc59ae"
+    },
+    {
+      "path": "migrations/0010_m10_operational_report.sql",
+      "sha256": "sha256:62a84b23fb148976d8f249ab440f92928514d1babd0c208c1659913b3290c595"
+    },
+    {
+      "path": "migrations/run.sh",
+      "sha256": "sha256:23bdf0b9e8e4de746b556251f1cca55600bd755f9b0adfddda3bdf8e2248c6d5"
+    },
+    {
+      "path": "schemas/lsm/v1.schema.json",
+      "sha256": "sha256:02af8783c851297fa0c6e8131dcb5a697944d218568389d0534c21454f53f906"
+    },
+    {
+      "path": "schemas/lsq/v1.schema.json",
+      "sha256": "sha256:12c1c04499bc2ef665f603c94ff06044454c697d6e98a7a197993d3e69044644"
+    },
+    {
+      "path": "schemas/mcp-http/v1.authority.schema.json",
+      "sha256": "sha256:05e61b58887431a33028f5d4dcc0074c9e9cc3005046f1d59c77aff388af8291"
+    },
+    {
+      "path": "schemas/semantic-expression/v1.schema.json",
+      "sha256": "sha256:9c9c7d2d2e8206c430ee13c1f966afe25f8bf8f2f800279fabae3887e20ed752"
+    },
+    {
+      "path": "scripts/backup.sh",
+      "sha256": "sha256:6ff3e4f8bd63317e4287b62dc7ca32affaabd03f10139325fcc109ec6b0a9997"
+    },
+    {
+      "path": "scripts/install.sh",
+      "sha256": "sha256:9759b86107fb8270e5391ae6677303bfafb91e94f34e19a9a64d6753f776f931"
+    },
+    {
+      "path": "scripts/upgrade-local.sh",
+      "sha256": "sha256:c1848d16b91f1c8c7ddadf9f82a37242efa4f1f043d7b80f5c94a15682fee14e"
+    },
+    {
+      "path": "scripts/verify-backup.sh",
+      "sha256": "sha256:a8d3129edb20d5b14146d93688098c2eba2854a66d903510c570c38a7958d8a1"
+    },
+    {
+      "path": "tests/integration/mcp_http.py",
+      "sha256": "sha256:c425c9083d750a0089de0ff74bdc72ba7400ae00015f956f378485c07c0db5c4"
+    },
+    {
+      "path": "tests/rc/operator.sh",
+      "sha256": "sha256:738e5c2c74290195e59d08fb42aa9e55e1811ddb04ad9c3ed9511a40f76d0b4a"
+    },
+    {
+      "path": "tests/recovery/run.sh",
+      "sha256": "sha256:4b5e1e8fc1ff726940bf7ce34175a87b8ac021222a7a6658272cc84544116fd4"
+    }
+  ]
+}

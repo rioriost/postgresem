@@ -56,14 +56,31 @@ verify_revision() {
 }
 
 run_guarded_query() {
-  database=$1
+  run_guarded_query_with postgresem "$1"
+}
+
+run_guarded_query_with() {
+  binary=$1
+  database=$2
   configure_gateway_urls "$database"
   result=$(
-    postgresem query execute /tests/integration/queries/commerce-revenue.json \
+    "$binary" query execute /tests/integration/queries/commerce-revenue.json \
       --project commerce
   )
   printf '%s\n' "$result" | grep -q '"200.50"'
   printf '%s\n' "$result" | grep -q '"truncated": false'
+}
+
+run_governed_mutation_with() {
+  binary=$1
+  database=$2
+  configure_mutation_urls "$database"
+  result=$(
+    "$binary" mutation execute /tests/integration/mutations/order-insert.json \
+      --project commerce
+  )
+  printf '%s\n' "$result" | grep -q '"affected_rows": 1'
+  printf '%s\n' "$result" | grep -q '"replayed": false'
 }
 
 verify_scale_authoring() {
@@ -430,6 +447,35 @@ postgresem report beta --window-hours 1 |
   grep -q '"validation_compile_p95_under_50_ms"'
 postgresem report operations --window-hours 1 |
   grep -q '"current": "0010_m10_operational_report"'
+case ${POSTGRESEM_REQUIRE_PREVIOUS_BIN:-0} in
+  0 | 1) ;;
+  *)
+    echo "POSTGRESEM_REQUIRE_PREVIOUS_BIN must be 0 or 1" >&2
+    exit 1
+    ;;
+esac
+if [ "${POSTGRESEM_REQUIRE_PREVIOUS_BIN:-0}" = 1 ] &&
+  [ -z "${POSTGRESEM_PREVIOUS_BIN:-}" ]; then
+  echo "previous release binary is required but was not provided" >&2
+  exit 1
+fi
+if [ -n "${POSTGRESEM_PREVIOUS_BIN:-}" ]; then
+  if [ ! -x "$POSTGRESEM_PREVIOUS_BIN" ]; then
+    echo "previous release binary is not executable" >&2
+    exit 1
+  fi
+  if [ "$("$POSTGRESEM_PREVIOUS_BIN" --version)" != "postgresem 0.8.0" ]; then
+    echo "rollback rehearsal requires the M10 0.8.0 binary" >&2
+    exit 1
+  fi
+  run_guarded_query_with "$POSTGRESEM_PREVIOUS_BIN" "$source_database"
+  run_governed_mutation_with "$POSTGRESEM_PREVIOUS_BIN" "$source_database"
+  "$POSTGRESEM_PREVIOUS_BIN" report operations --window-hours 1 |
+    grep -q '"current": "0010_m10_operational_report"'
+  rollback_result="; previous-binary rollback passed"
+else
+  rollback_result="; previous-binary rollback not requested"
+fi
 restore_original_database
 
-echo "M10 N-1 migration, scale authoring, and backup/restore recovery checks passed"
+echo "M11 N-1 migration and recovery checks passed${rollback_result}"

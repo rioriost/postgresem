@@ -13,7 +13,7 @@ use crate::{
     hash::sha256,
 };
 
-const BENCHMARK_SCHEMA_VERSION: &str = "1";
+pub(crate) const BENCHMARK_SCHEMA_VERSION: &str = "1";
 
 #[derive(Debug, Serialize)]
 pub struct CompilerBenchmark {

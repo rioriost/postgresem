@@ -434,6 +434,19 @@ def main():
         rate_token = sign_token(private_key, "rate-agent", "postgresem.query")
 
         environment = os.environ.copy()
+        database_host = environment.get("PGHOST")
+        if database_host:
+            for name in (
+                "MCP_RUNTIME_DATABASE_URL",
+                "MCP_AUDIT_DATABASE_URL",
+                "MCP_MUTATION_DATABASE_URL",
+            ):
+                if name in environment:
+                    environment[name] = environment[name].replace(
+                        "host=db ",
+                        f"host={database_host} ",
+                        1,
+                    )
         environment.update(
             {
                 "POSTGRESEM_MCP_HTTP_AUTHORITY_FILE": authority_path,

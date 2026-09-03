@@ -1,6 +1,6 @@
 # Contributing
 
-The project is in beta. Changes to the current query path must preserve its
+The project is in release-candidate development. Changes to the current query path must preserve its
 narrow semantic-only, read-only security boundary and must not imply
 production readiness.
 
@@ -17,10 +17,10 @@ make test
 ```
 
 Use the smallest relevant integration targets for database, execution, MCP, or
-performance changes. The full current preview gate is:
+performance changes. The full current release-candidate gate is:
 
 ```sh
-make preview-check
+make rc-check
 ```
 
 Compiler behavior changes require accepted-input and safe-rejection tests.
@@ -49,5 +49,6 @@ Applied migration files are append-only. Add a new migration rather than
 editing migration history, and document upgrade/export effects.
 
 See [docs/compatibility.md](docs/compatibility.md),
-[docs/developer-preview-checklist.md](docs/developer-preview-checklist.md), and
+[docs/m11-release-candidate-checklist.md](docs/m11-release-candidate-checklist.md),
+[`GOVERNANCE.md`](GOVERNANCE.md), [`SUPPORT.md`](SUPPORT.md), and
 [SECURITY.md](SECURITY.md).

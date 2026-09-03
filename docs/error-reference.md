@@ -1,8 +1,8 @@
 # Error reference
 
-This is the public/stored taxonomy implemented through the current `0.8.0`
-source. Codes are stable within this pre-1.0 contract but remain
-subject to the pre-1.0 compatibility policy.
+This is the frozen candidate public/stored taxonomy implemented through the
+current `0.9.0` source. Changes follow the
+[release-candidate deprecation policy](deprecation-policy.md).
 
 ## Response envelopes
 
@@ -222,5 +222,6 @@ Direct CLI and Rust-library errors are an operator/developer interface and can
 contain semantic object names or environment-variable names. Do not expose
 their stderr verbatim to untrusted users.
 
-No additional reserved error-code ranges are promised during the current beta.
-New categories must be documented before clients rely on them.
+No additional reserved error-code ranges are promised. New categories require
+documentation, compatibility classification, and an intentional RC contract
+manifest update.

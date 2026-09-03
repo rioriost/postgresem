@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{Literal, hash::sha256};
 
-const LSM_SCHEMA_VERSION: &str = "1";
+pub const LSM_SCHEMA_VERSION: &str = "1";
 const MAX_INPUT_BYTES: usize = 1_048_576;
 const MAX_ROWS: usize = 100;
 const MAX_FIELDS_PER_ROW: usize = 64;

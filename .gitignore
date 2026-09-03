@@ -4,3 +4,4 @@ target/
 backups/
 __pycache__/
 *.py[cod]
+tests/recovery/previous-postgresem

@@ -21,8 +21,8 @@ use crate::{
     published_model,
 };
 
-const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
-const TOOL_SCHEMA_VERSION: &str = "1";
+pub(crate) const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
+pub(crate) const TOOL_SCHEMA_VERSION: &str = "1";
 const MAX_REQUEST_LINE_BYTES: usize = 1_048_576;
 const DEFAULT_PAGE_LIMIT: usize = 50;
 const MAX_PAGE_LIMIT: usize = 100;

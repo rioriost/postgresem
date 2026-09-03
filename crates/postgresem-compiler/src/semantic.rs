@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub const SUPPORTED_SNAPSHOT_SCHEMA_VERSIONS: [&str; 2] = ["1", "2"];
+
 use crate::{Literal, hash::sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

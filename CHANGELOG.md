@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-03
+
+### Added
+
+- Add the deterministic `postgresem contract show` release-candidate inventory
+  and checked artifact hashes for LSQ, LSM, Semantic Snapshot, catalog, MCP,
+  CLI, error, migration, audit, authoring, report, and benchmark surfaces.
+- Add an M11 query-and-ingestion operator workflow covering guarded query,
+  governed insert, idempotent replay, and complete operational-report
+  objectives.
+- Add previous-release binary rollback rehearsal by rebuilding immutable M10
+  commit `c0984d3` and executing it after same-name restore.
+- Add support, governance, release cadence, deprecation, and RC evidence
+  policies.
+
+### Changed
+
+- Advance the source package to the M11 `0.9.0` release candidate while
+  retaining database migrations through `0010_m10_operational_report`.
+- Freeze the candidate public contracts under ADR 0017 and require an
+  intentional manifest refresh for contract-bearing changes.
+- Deprecate `report beta` in favor of `report operations` without assigning a
+  pre-1.0 removal version.
+
+### Security
+
+- Complete an independent read-only technical security review of the M10
+  baseline with no P0/P1-equivalent finding.
+- Keep external security-review and two 28-day non-fixture pilot requirements
+  explicitly outstanding; repository automation does not self-certify them.
+
 ## [0.8.0] - 2026-09-03
 
 ### Added

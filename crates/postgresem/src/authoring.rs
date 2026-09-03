@@ -11,7 +11,7 @@ use crate::{
     catalog_types::{portable_identifier, postgres_data_type},
 };
 
-const AUTHORING_SCHEMA_VERSION: &str = "1";
+pub(crate) const AUTHORING_SCHEMA_VERSION: &str = "1";
 const MAX_SCAFFOLD_MODELS: usize = 1_000;
 
 #[derive(Debug, Deserialize)]

@@ -265,11 +265,41 @@ services:
       POSTGRESEM_STATEMENT_TIMEOUT_MS: "30000"
       POSTGRESEM_LOCK_TIMEOUT_MS: "5000"
       POSTGRESEM_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS: "5000"
+      POSTGRESEM_PREVIOUS_BIN: ${POSTGRESEM_PREVIOUS_BIN}
+      POSTGRESEM_REQUIRE_PREVIOUS_BIN: ${POSTGRESEM_REQUIRE_PREVIOUS_BIN}
     volumes:
       - ./fixtures:/fixtures:ro
       - ./migrations:/migrations:ro
       - ./tests:/tests:ro
     entrypoint: ["/bin/sh", "/tests/recovery/run.sh"]
+
+  rc-test:
+    build:
+      context: .
+      dockerfile: IntegrationContainerfile
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: postgresem_dev
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRESEM_RUNTIME_PASSWORD: ${POSTGRESEM_RUNTIME_PASSWORD}
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: ${POSTGRESEM_AUDIT_WRITER_PASSWORD}
+      POSTGRESEM_MUTATION_RUNTIME_PASSWORD: ${POSTGRESEM_MUTATION_RUNTIME_PASSWORD}
+      POSTGRESEM_MAX_RESULT_BYTES: "1048576"
+      POSTGRESEM_MAX_MUTATION_RESULT_BYTES: "1048576"
+      POSTGRESEM_STATEMENT_TIMEOUT_MS: "30000"
+      POSTGRESEM_MUTATION_STATEMENT_TIMEOUT_MS: "30000"
+      POSTGRESEM_LOCK_TIMEOUT_MS: "5000"
+      POSTGRESEM_MUTATION_LOCK_TIMEOUT_MS: "5000"
+      POSTGRESEM_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS: "5000"
+      POSTGRESEM_MUTATION_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS: "5000"
+    volumes:
+      - ./tests:/tests:ro
+    entrypoint: ["/bin/sh", "/tests/rc/operator.sh"]
 
 volumes:
   postgres-data:

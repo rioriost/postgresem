@@ -12,6 +12,7 @@ mod benchmark;
 mod catalog;
 mod catalog_diff;
 mod catalog_types;
+mod contract;
 mod database;
 mod doctor;
 mod executor;
@@ -42,6 +43,10 @@ enum Commands {
         #[command(subcommand)]
         command: CatalogCommands,
     },
+    Contract {
+        #[command(subcommand)]
+        command: ContractCommands,
+    },
     Doctor {
         #[arg(long)]
         json: bool,
@@ -70,6 +75,11 @@ enum Commands {
         #[command(subcommand)]
         command: SnapshotCommands,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ContractCommands {
+    Show,
 }
 
 #[derive(Debug, Subcommand)]
@@ -387,6 +397,9 @@ fn run() -> Result<(), Box<dyn Error>> {
                     fail_on_breaking,
                 },
         } => diff_catalogs(&from, &to, fail_on_breaking),
+        Commands::Contract {
+            command: ContractCommands::Show,
+        } => show_contract(),
         Commands::Doctor { json } => doctor(json),
         Commands::Model {
             command:
@@ -506,6 +519,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
     }
+}
+
+fn show_contract() -> Result<(), Box<dyn Error>> {
+    println!("{}", serde_json::to_string_pretty(&contract::manifest())?);
+    Ok(())
 }
 
 fn beta_report(
@@ -869,9 +887,25 @@ mod tests {
     use clap::Parser;
 
     use super::{
-        BenchmarkCommands, CatalogCommands, Cli, Commands, McpCommands, ModelCommands,
-        ModelImportCommands, MutationCommands, QueryCommands,
+        BenchmarkCommands, CatalogCommands, Cli, Commands, ContractCommands, McpCommands,
+        ModelCommands, ModelImportCommands, MutationCommands, QueryCommands,
     };
+
+    #[test]
+    fn contract_show_has_no_mutating_or_request_selected_arguments() {
+        assert!(matches!(
+            Cli::try_parse_from(["postgresem", "contract", "show"]),
+            Ok(Cli {
+                command: Commands::Contract {
+                    command: ContractCommands::Show
+                }
+            })
+        ));
+        assert!(
+            Cli::try_parse_from(["postgresem", "contract", "show", "--manifest", "other.json"])
+                .is_err()
+        );
+    }
 
     #[test]
     fn compiler_benchmark_defaults_to_the_preview_baseline() {

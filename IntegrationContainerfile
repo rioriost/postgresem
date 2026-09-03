@@ -4,6 +4,7 @@ FROM rust:1.85-bookworm AS builder
 WORKDIR /workspace
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
+COPY contracts ./contracts
 COPY schemas ./schemas
 RUN cargo build --locked --release -p postgresem
 

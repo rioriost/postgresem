@@ -14,10 +14,12 @@ pub use diff::{
     ChangeKind, Compatibility, DiffError, DiffSummary, SemanticChange, SemanticDiff,
     SemanticObjectKind, diff_snapshots,
 };
+pub use lsm::LSM_SCHEMA_VERSION;
 pub use lsm::{
     LogicalSemanticMutation, LsmError, MutationOperation, MutationValue, NormalizedLsm,
     normalize_lsm,
 };
+pub use lsq::LSQ_SCHEMA_VERSION;
 pub use lsq::{
     Dimension, Filter, Literal, LogicalSemanticQuery, LsqError, MetricReference, NormalizedLsq,
     OrderBy, SortDirection, TimeGrain, normalize_lsq,
@@ -28,6 +30,6 @@ pub use mutation::{
 };
 pub use semantic::{
     Additivity, Aggregation, Cardinality, DataType, Field, JoinType, Metric, MetricFilter, Model,
-    Relation, Relationship, SemanticSnapshot, SnapshotHashError, UpsertPolicy, WritableField,
-    WritableModel,
+    Relation, Relationship, SUPPORTED_SNAPSHOT_SCHEMA_VERSIONS, SemanticSnapshot,
+    SnapshotHashError, UpsertPolicy, WritableField, WritableModel,
 };

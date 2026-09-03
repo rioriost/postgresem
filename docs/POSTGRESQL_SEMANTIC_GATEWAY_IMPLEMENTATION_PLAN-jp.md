@@ -998,6 +998,12 @@ freshness、database authorizationを損なわない。
 
 ### M11: 0.9 — 1.0 release candidate
 
+**Repository実装status:** `0.9.0` source treeで完了。ADR 0017、frozen contract
+manifest、previous-binary rollback rehearsal、operator workflow、
+support/governance/deprecation policy、独立technical security reviewでrepository
+管理下のscopeを実装した。独立external security reviewと2件の28日間non-fixture
+pilot evidenceが得られるまで、M11 exit gateはissue #4によりexternal blockのままとする。
+
 - candidate LSQ、LSM、Semantic Schema、MCP、CLI、error、migration、audit contractをfreezeする。
 - independent security review、production pilot evidence、upgrade/rollback rehearsal、
   support policy、governance、deprecation policyを完了する。

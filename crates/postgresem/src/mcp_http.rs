@@ -44,7 +44,7 @@ use crate::{
     mutation_executor::MutationExecutorConfig,
 };
 
-const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
+pub(crate) const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
 const AUTHORITY_FILE_ENV: &str = "POSTGRESEM_MCP_HTTP_AUTHORITY_FILE";
 const BIND_ENV: &str = "POSTGRESEM_MCP_HTTP_BIND";
 const RATE_LIMITED_RPC_CODE: i64 = -33_001;

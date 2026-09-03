@@ -44,6 +44,9 @@ jobs:
       - name: Run workspace tests
         run: cargo test --locked --workspace --all-features
 
+      - name: Verify frozen RC contracts
+        run: make test-contracts
+
       - name: Run installer trust-boundary tests
         run: make test-install
 
@@ -60,6 +63,7 @@ jobs:
           from pathlib import Path
 
           schemas = sorted(Path("schemas").rglob("*.json"))
+          schemas.extend(sorted(Path("contracts").rglob("*.json")))
           if not schemas:
               raise SystemExit("no JSON schemas found")
 
@@ -354,6 +358,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Validate Compose configuration
@@ -362,8 +367,32 @@ jobs:
       - name: Start PostgreSQL
         run: docker compose up --detach --wait --wait-timeout 120 db
 
+      - name: Build M10 rollback binary
+        if: matrix.postgres == '18'
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous_source="${RUNNER_TEMP}/postgresem-m10"
+          previous_target="${RUNNER_TEMP}/postgresem-m10-target"
+          git worktree add --detach \
+            "${previous_source}" \
+            c0984d30d800dd615164824141147ca0f1230335
+          docker run --rm \
+            --volume "${previous_source}:/workspace:ro" \
+            --volume "${previous_target}:/target" \
+            --workdir /workspace \
+            --env CARGO_TARGET_DIR=/target \
+            rust:1.85-bookworm \
+            cargo build --locked --release --package postgresem
+          install -m 0755 \
+            "${previous_target}/release/postgresem" \
+            tests/recovery/previous-postgresem
+          echo "POSTGRESEM_PREVIOUS_BIN=/tests/recovery/previous-postgresem" \
+            >>"${GITHUB_ENV}"
+          echo "POSTGRESEM_REQUIRE_PREVIOUS_BIN=1" >>"${GITHUB_ENV}"
+
       - name: Build integration images
-        run: docker compose build execution-test mcp-test mcp-http-test mutation-test performance-test recovery-test
+        run: docker compose build execution-test mcp-test mcp-http-test mutation-test performance-test recovery-test rc-test
 
       - name: Apply migrations
         run: docker compose run --rm --no-deps migrate
@@ -392,6 +421,9 @@ jobs:
 
       - name: Run N-1 migration and recovery checks
         run: docker compose run --rm --no-deps recovery-test
+
+      - name: Run M11 release-candidate operator workflow
+        run: docker compose run --rm --no-deps rc-test
 
       - name: Show service logs after failure
         if: failure()

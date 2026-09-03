@@ -53,6 +53,11 @@ It:
 9. runs a guarded query and both operational reports;
 10. restores the original fixture database.
 
+On PostgreSQL 18 CI, the rehearsal additionally rebuilds immutable M10 commit
+`c0984d3`, restores the backup under the original database name, and runs its
+`0.8.0` binary for a guarded query and operations report before returning to
+the RC binary.
+
 Do not copy this rename procedure into a shared or production cluster. Restore
 production backups into an isolated cluster or recovery environment that can
 use the original database name, validate there, then use the platform's

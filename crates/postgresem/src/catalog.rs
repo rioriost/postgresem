@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{database, hash::sha256};
 
-const CATALOG_SNAPSHOT_SCHEMA_VERSION: &str = "2";
+pub(crate) const CATALOG_SNAPSHOT_SCHEMA_VERSION: &str = "2";
 
 const RELATIONS_SQL: &str = r"
     SELECT

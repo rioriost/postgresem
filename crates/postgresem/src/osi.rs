@@ -14,7 +14,7 @@ use crate::{
 };
 
 const OSI_VERSION: &str = "0.1.1";
-const IMPORT_SCHEMA_VERSION: &str = "1";
+pub(crate) const IMPORT_SCHEMA_VERSION: &str = "1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OsiImportReport {

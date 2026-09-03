@@ -2,20 +2,18 @@
 
 ## Supported versions and scope
 
-No production-ready version has been released. `0.5.0` is the active published
-preview with catalog-bound Ossie import, authorization-aware catalog drift,
-and reproducible reference-runtime evidence. There is no long-term-support
-promise for 0.x releases.
+No production-ready version has been released. `0.9.0` is the current
+release-candidate source; the latest published release remains listed in
+`README.md`. The support window and supported platforms are defined in
+[`SUPPORT.md`](SUPPORT.md).
 
-The implemented application boundary is MCP stdio, guarded read-only query
-execution, and a separate guarded mutation path for published bounded
-insert/upsert projections. PostgreSQL connections require explicit
+The implemented application boundary includes MCP stdio, authenticated
+stateless loopback MCP HTTP behind a colocated HTTPS reverse proxy, guarded
+read-only query execution, and a separate guarded mutation path for published
+bounded insert/upsert projections. PostgreSQL connections require explicit
 `sslmode=require` or `sslmode=disable`; remote TLS uses the platform trust
-store and hostname verification. There is no HTTP service, remote
-authentication protocol, production RPO/RTO guarantee, or production
-hardening claim. The loopback Web demo is not a remotely supported transport.
-The `v0.5.0` release publishes keyless GitHub OIDC signatures for its
-checksums and immutable container image digest, plus image SBOM/provenance.
+store and hostname verification. There is no production RPO/RTO, HA, or
+production-hardening claim.
 
 The Apple Container gateway service is configured with container user root
 solely so `container-compose` can perform its `/etc/hosts` fallback. Its
@@ -67,6 +65,10 @@ invariant:
 - business DML, committed replay state, and committed audit finalization are
   atomic; ambiguous commit outcomes require same-key reconciliation;
 - mutation results and MCP logs do not expose generated SQL or input values.
+- authenticated HTTP rejects invalid Host, Origin, token, protocol metadata,
+  authority mapping, and request limits before execution;
+- client disconnect and execution timeout cancel an armed PostgreSQL operation
+  and close its audit lifecycle.
 
 ## Safe evaluation
 

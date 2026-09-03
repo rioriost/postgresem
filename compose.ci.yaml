@@ -40,3 +40,8 @@ services:
     build:
       args:
         POSTGRES_VERSION: ${POSTGRES_VERSION}
+
+  rc-test:
+    build:
+      args:
+        POSTGRES_VERSION: ${POSTGRES_VERSION}

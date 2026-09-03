@@ -8,11 +8,11 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The current source version is **0.8.0**; the latest published release is
-**0.7.0**. M10 adds set-based catalog scaling, deterministic 1,000-model
-scaffolding, a PostgreSQL-native operational report, and backup-gated local
-upgrade automation. It is not a production-readiness or long-term-support
-promise.
+The current source version is the **0.9.0 release candidate**; the latest
+published release is **0.7.0**. M11 freezes the candidate contracts, adds
+previous-binary rollback and query/ingestion operator gates, and publishes
+support, governance, and deprecation policy. It is not a production-readiness
+or SLA promise.
 
 ## What problem does postgresem solve?
 
@@ -67,7 +67,8 @@ procedures over a broad abstraction across many database dialects.
 
 ## Roadmap to 1.0
 
-The current source completes M10 as `0.8`, not `1.0`. M6's separate typed
+The current source implements the repository-controlled M11 scope as `0.9`,
+not `1.0`. M6's separate typed
 mutation contract remains limited to bounded inserts and explicitly modeled
 idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
 and authorization-aware catalog drift without weakening the existing
@@ -91,9 +92,12 @@ MCP `2026-07-28` HTTP resource server without moving identity or authorization
 out of PostgreSQL. M10 removes the measured catalog N+1 bottleneck, adds
 catalog-bound large-model scaffolding and operational/upgrade surfaces, and
 keeps persisted acceleration deferred because guarded execution was not the
-measured bottleneck. Version `0.9` continues with release-candidate gaps. Feature-count
-parity is not the objective: PostgreSQL remains the only execution engine and
-semantic source of truth through `1.0`.
+measured bottleneck. M11 freezes these contracts and adds release-candidate
+operation and rollback gates. Independent external security review and two
+28-day non-fixture pilots remain outstanding in
+[issue #4](https://github.com/rioriost/postgresem/issues/4). Feature-count parity
+is not the objective: PostgreSQL remains the only execution engine and semantic
+source of truth through `1.0`.
 
 See the [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 for the M6–M12 gates.
@@ -106,6 +110,11 @@ for the M6–M12 gates.
 - [Authenticated MCP HTTP deployment and SDK guidance](docs/mcp-http.md)
 - [Local commerce Web demo](examples/web_demo/README.md)
 - [Operations guide](docs/operations.md)
+- [M11 release-candidate checklist](docs/m11-release-candidate-checklist.md)
+- [Release-candidate operator workflow](docs/rc-operator-workflow.md)
+- [Support policy](SUPPORT.md)
+- [Governance](GOVERNANCE.md)
+- [Deprecation policy](docs/deprecation-policy.md)
 - [Error reference](docs/error-reference.md)
 - [Compatibility policy and support matrix](docs/compatibility.md)
 - [M10 reference comparison](docs/reference-comparison/2026-09-03.md)
@@ -123,7 +132,7 @@ for the M6–M12 gates.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What 0.8 implements
+## What 0.9 implements
 
 - LSQ v1 validation and deterministic compilation
 - Semantic Snapshot/Schema v2 backed by PostgreSQL, with Snapshot v1 loading
@@ -160,6 +169,9 @@ for the M6–M12 gates.
 - deterministic catalog-bound scaffolding for up to 1,000 review-only models
 - a fixed, privacy-preserving M10 operational dashboard
 - verified-backup-gated local Apple Container upgrade automation
+- a deterministic frozen release-candidate contract inventory
+- previous-release binary execution after isolated same-name restore
+- a combined guarded-query, governed-ingestion, replay, and audit workflow gate
 - local Apple Container Compose development stack using PostgreSQL 18
 - Linux Docker Compose and rootless Podman Quadlet deployment paths
 
@@ -262,10 +274,10 @@ make test
 make check
 ```
 
-The complete preview gate is:
+The complete repository release-candidate gate is:
 
 ```sh
-make preview-check
+make rc-check
 ```
 
 Run the M4 compatibility and performance surfaces directly:

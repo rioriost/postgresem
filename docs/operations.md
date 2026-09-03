@@ -1,7 +1,17 @@
-# Beta operations
+# Release-candidate operations
 
-This guide describes the current local/process-oriented beta. It is not a
+This guide describes the current local/process-oriented release candidate. It is not a
 production runbook.
+
+Inspect the frozen candidate boundary before deployment:
+
+```sh
+postgresem contract show
+```
+
+The checked inventory is in `contracts/rc-v1.json`. Contract-bearing changes
+must follow [ADR 0017](adr/0017-release-candidate-contract-freeze.md) and the
+[deprecation policy](deprecation-policy.md).
 
 The query executor remains read-only. Do not grant business-data write
 privileges to `postgresem_runtime` or its mapped query roles. Governed
@@ -368,6 +378,9 @@ The report observes PostgreSQL materialized views but does not create, refresh,
 or route queries to them. Persisted acceleration remains deferred because the
 M10 measurement identified catalog N+1 scanning as the bottleneck.
 
+`report beta` remains available for compatibility but is deprecated. New
+automation should use `report operations`.
+
 ## Upgrade order
 
 Forward migrations `0001` through `0010`, idempotent reruns, N-1 execution, and
@@ -394,6 +407,11 @@ The current binary is tested for guarded queries against the latest N-1 schema,
 then for the `0009` to `0010` upgrade. Apply all migrations before starting a
 gateway. Do not assume older combinations or downgrade support. There are no
 down migrations.
+
+CI also rebuilds the immutable M10 `0.8.0` binary, restores the fixture backup
+under the original database name, and executes a guarded query plus operations
+report with that previous binary. This is an isolated rollback rehearsal, not
+a production cutover procedure.
 
 ## Backup, export, and uninstall boundary
 
@@ -426,6 +444,9 @@ uninstall.
 | `truncated: true` | `byte_count`, requested outputs | narrow projection/filter/limit; never assume partial data is complete |
 
 See [error-reference.md](error-reference.md) for the exact current codes.
+
+The complete fixture-level RC query and ingestion workflow is documented in
+[rc-operator-workflow.md](rc-operator-workflow.md).
 
 ## Performance and compatibility checks
 

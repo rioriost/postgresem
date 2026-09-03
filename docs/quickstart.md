@@ -79,7 +79,7 @@ make doctor
 make dev-up
 ```
 
-`make doctor` should report `postgresem 0.8.0`, `macos/aarch64`, and
+`make doctor` should report `postgresem 0.9.0`, `macos/aarch64`, and
 Apple Container as available. `make dev-up` builds the gateway, starts
 PostgreSQL 18 on `127.0.0.1:55432`, applies migrations in order, publishes the
 idempotent commerce revision, and leaves `postgresem-db` and
