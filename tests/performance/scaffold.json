@@ -1,0 +1,7 @@
+{
+  "schema_version": "1",
+  "schema": "scale_catalog",
+  "relation_prefix": "model_",
+  "max_models": 1000,
+  "timezone": "UTC"
+}

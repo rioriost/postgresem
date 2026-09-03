@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::{
     catalog::{CatalogConstraint, CatalogError, CatalogRelation, CatalogSnapshot},
+    catalog_types::{portable_identifier, postgres_data_type as catalog_postgres_data_type},
     hash::sha256,
 };
 
@@ -830,48 +831,10 @@ fn catalog_foreign_keys(relation: &CatalogRelation) -> Vec<ImportedForeignKey> {
 }
 
 fn postgres_data_type(value: &str, path: &str) -> Result<DataType, OsiImportError> {
-    let value = value.to_ascii_lowercase();
-    if matches!(value.as_str(), "boolean" | "bool") {
-        Ok(DataType::Boolean)
-    } else if matches!(
-        value.as_str(),
-        "smallint" | "integer" | "bigint" | "int2" | "int4" | "int8"
-    ) {
-        Ok(DataType::Integer)
-    } else if value == "numeric"
-        || value == "decimal"
-        || value.starts_with("numeric(")
-        || value.starts_with("decimal(")
-    {
-        Ok(DataType::Numeric)
-    } else if value == "text"
-        || value == "character varying"
-        || value.starts_with("character varying(")
-        || value == "varchar"
-        || value.starts_with("varchar(")
-        || value == "character"
-        || value.starts_with("character(")
-        || value == "char"
-        || value.starts_with("char(")
-    {
-        Ok(DataType::Text)
-    } else if value == "date" {
-        Ok(DataType::Date)
-    } else if value == "timestamp without time zone"
-        || value.starts_with("timestamp(") && value.ends_with(" without time zone")
-    {
-        Ok(DataType::Timestamp)
-    } else if value == "timestamp with time zone"
-        || value == "timestamptz"
-        || value.starts_with("timestamp(") && value.ends_with(" with time zone")
-    {
-        Ok(DataType::TimestampTz)
-    } else {
-        Err(OsiImportError::UnsupportedPostgresType {
-            path: path.to_owned(),
-            value,
-        })
-    }
+    catalog_postgres_data_type(value).ok_or_else(|| OsiImportError::UnsupportedPostgresType {
+        path: path.to_owned(),
+        value: value.to_ascii_lowercase(),
+    })
 }
 
 const fn expected_metric_type(aggregation: Aggregation, field_type: DataType) -> DataType {
@@ -929,12 +892,6 @@ fn validate_identifier(path: &str, value: &str) -> Result<(), OsiImportError> {
             value: value.to_owned(),
         })
     }
-}
-
-fn portable_identifier(value: &str) -> bool {
-    let mut bytes = value.bytes();
-    matches!(bytes.next(), Some(b'A'..=b'Z' | b'a'..=b'z' | b'_'))
-        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 #[cfg(test)]

@@ -319,27 +319,81 @@ The result is not a publication operation. Review warnings, run `model diff`,
 and use the controlled revision workflow above. Imported models are query-only;
 writable projections must be authored and reviewed separately.
 
+## Large-catalog model scaffolding
+
+`model scaffold` creates a deterministic, review-only query candidate from a
+fingerprinted catalog snapshot:
+
+```sh
+postgresem model scaffold scaffold-request.json \
+  --catalog catalog-snapshot.json > scaffold-report.json
+```
+
+The request selects one schema and an optional relation-name prefix, requires a
+positive `max_models` no greater than 1,000, and may provide the canonical
+timezone `UTC` for temporal columns. `UTC` is required when selected relations
+contain `timestamp with time zone` or `timestamp without time zone`, so later
+date filtering and time-grain compilation cannot fail on an incomplete or
+database-dependent timezone.
+The command infers direct selectable fields, validated single-column primary
+keys, temporal dimensions, and a `row_count` metric only where a single-column
+primary key makes that candidate unambiguous. It does not infer relationships,
+business metrics, writable projections, or publication SQL.
+
+The command rejects stale or tampered fingerprints, ambiguous relation
+selectors, foreign tables, unsupported PostgreSQL types, duplicate or
+non-portable semantic identifiers, excessive model counts, and timezone-naive
+timestamps without an explicit timezone. Use `--snapshot-only` only when the
+review system expects the candidate snapshot rather than the report envelope.
+Always review and diff the result before controlled publication.
+
+## M10 operational report
+
+Run the fixed database-side dashboard through the audit credential:
+
+```sh
+postgresem report operations --window-hours 24
+# Apple Container quickstart:
+make report-operations
+```
+
+The report summarizes catalog size, semantic object counts, query/mutation
+terminal states, database connection and lock capacity, applied migrations,
+and materialized-view population state. It deliberately omits SQL, LSQ/LSM
+payloads, rows, principals, credentials, semantic names, and physical object
+names. The caller must be a member of `postgresem_auditor`; the function is
+fixed SQL and does not accept relation names or arbitrary predicates.
+
+The report observes PostgreSQL materialized views but does not create, refresh,
+or route queries to them. Persisted acceleration remains deferred because the
+M10 measurement identified catalog N+1 scanning as the bottleneck.
+
 ## Upgrade order
 
-Forward migrations `0001` through `0009`, idempotent reruns, N-1 execution, and
+Forward migrations `0001` through `0010`, idempotent reruns, N-1 execution, and
 N-1-to-current migration are tested.
 
 For a disposable/local preview upgrade:
 
 1. stop MCP clients;
-2. record the current version and applied migrations;
-3. export every current published project with `postgresem model export`;
-4. take an environment-approved database backup if the data matters;
-5. update source/image;
-6. run migrations before starting the new gateway (`make dev-up` does this);
-7. run model diff/validation, the MCP smoke, and audit checks;
-8. retain the old environment until acceptance.
+2. create and verify a pre-upgrade backup;
+3. update the source checkout;
+4. run `make upgrade-local BACKUP_DIR=backups/postgresem-...`;
+5. recreate the gateway from the updated image;
+6. run model diff/validation and the MCP smoke;
+7. retain the old environment until acceptance.
 
-The current binary is tested for read-only guarded queries against the latest
-N-1 schema. Mutation execution and reconciliation require migration 0008
-because their authority-scoped idempotency function contract changed. Apply
-all migrations before starting a mutation-capable gateway. Do not assume older
-combinations or downgrade support. There are no down migrations.
+The local upgrade command requires Apple Container, verifies the supplied
+backup archive and that its migration/revision manifests match the live
+pre-upgrade database, blocks on incomplete query or mutation audit rows,
+applies unapplied forward migrations, proves published hashes are unchanged,
+builds the current binary, and runs a guarded canary plus `report operations`.
+It is a local reference, not a production backup, rollout, or rollback product.
+
+The current binary is tested for guarded queries against the latest N-1 schema,
+then for the `0009` to `0010` upgrade. Apply all migrations before starting a
+gateway. Do not assume older combinations or downgrade support. There are no
+down migrations.
 
 ## Backup, export, and uninstall boundary
 
@@ -383,25 +437,27 @@ postgresem model diff \
   --from BEFORE.json --to AFTER.json --fail-on-breaking
 ```
 
-For the M4 scale smoke, run:
+For the M10 scale baseline, run:
 
 ```sh
 make test-performance
 ```
 
-This creates 100 fixture relations, scans the catalog twice, requires an
-identical fingerprint, and runs the release compiler benchmark with 100 models,
-100 warmups, 1,000 measured iterations, and a 50 ms p95 threshold. On failure,
-inspect:
+This creates 1,000 fixture relations, scans the catalog twice below the
+1,000 ms regression ceiling, requires an identical fingerprint, scaffolds
+1,000 deterministic model candidates, runs the release compiler benchmark,
+and measures repeated guarded execution including connections, mandatory
+audit, PostgreSQL authority checks, GRANT/RLS execution, and serialization.
+It also verifies the M10 operational report. Every execution must return the
+same semantic-result hash. On failure, inspect:
 
 ```sh
 container logs postgresem-performance-test
 ```
 
-The catalog check has no latency pass/fail threshold; its enforced conditions
-are the 100-relation count and deterministic fingerprint. The compiler
-threshold is a local regression ceiling, not an operational SLO. See
-[performance.md](performance.md) for methodology and dated reference results.
+All latency thresholds are repository-fixture regression ceilings, not
+operational SLOs. Native Linux amd64 and arm64 CI both emit machine-readable
+evidence. See [performance.md](performance.md) for methodology and boundaries.
 
 ## Current network boundary
 

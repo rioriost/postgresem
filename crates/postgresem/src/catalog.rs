@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, env};
+use std::{cmp::Ordering, collections::BTreeMap, env};
 
 use postgres::{Client, GenericClient, IsolationLevel, Row};
 use serde::{Deserialize, Serialize};
@@ -334,6 +334,7 @@ const ROLE_GRAPH_SQL: &str = r"
 
 const FUNCTION_GRANTS_SQL: &str = r"
     SELECT
+        p.oid::bigint AS function_oid,
         grantor.rolname AS grantor,
         CASE access.grantee
             WHEN 0 THEN 'public'
@@ -349,9 +350,13 @@ const FUNCTION_GRANTS_SQL: &str = r"
     ) AS access
     JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = access.grantor
     LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = access.grantee
-    WHERE p.oid = $1::bigint::oid
+    JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+    WHERE p.prokind IN ('f', 'w', 'a')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname !~ '^pg_toast'
+      AND n.nspname !~ '^pg_temp_'
       AND access.privilege_type = 'EXECUTE'
-    ORDER BY grantee, grantor, access.is_grantable
+    ORDER BY p.oid, grantee, grantor, access.is_grantable
 ";
 
 const ROLE_CONTEXT_SQL: &str = r"
@@ -377,6 +382,8 @@ const ROLE_CONTEXT_SQL: &str = r"
 
 const COLUMNS_SQL: &str = r"
     SELECT
+        n.nspname AS schema_name,
+        c.relname AS relation_name,
         a.attname AS column_name,
         a.attnum::integer AS ordinal,
         pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
@@ -386,15 +393,20 @@ const COLUMNS_SQL: &str = r"
     FROM pg_catalog.pg_class AS c
     JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
     JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid
-    WHERE n.nspname = $1
-      AND c.relname = $2
+    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname <> 'semantic'
+      AND n.nspname !~ '^pg_toast'
+      AND n.nspname !~ '^pg_temp_'
       AND a.attnum > 0
       AND NOT a.attisdropped
-    ORDER BY a.attnum
+    ORDER BY n.nspname, c.relname, a.attnum
 ";
 
 const CONSTRAINTS_SQL: &str = r"
     SELECT
+        n.nspname AS schema_name,
+        c.relname AS relation_name,
         con.conname AS constraint_name,
         CASE con.contype
             WHEN 'p' THEN 'primary_key'
@@ -475,14 +487,19 @@ const CONSTRAINTS_SQL: &str = r"
       ON referenced_namespace.oid = referenced_class.relnamespace
     LEFT JOIN pg_catalog.pg_index AS backing_index
       ON backing_index.indexrelid = con.conindid
-    WHERE n.nspname = $1
-      AND c.relname = $2
+    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname <> 'semantic'
+      AND n.nspname !~ '^pg_toast'
+      AND n.nspname !~ '^pg_temp_'
       AND con.contype IN ('p', 'u', 'f', 'c')
-    ORDER BY constraint_kind, con.conname
+    ORDER BY n.nspname, c.relname, constraint_kind, con.conname
 ";
 
 const POLICIES_SQL: &str = r"
     SELECT
+        n.nspname AS schema_name,
+        c.relname AS relation_name,
         policy.polname AS policy_name,
         CASE policy.polcmd
             WHEN 'r' THEN 'select'
@@ -511,9 +528,12 @@ const POLICIES_SQL: &str = r"
     FROM pg_catalog.pg_policy AS policy
     JOIN pg_catalog.pg_class AS c ON c.oid = policy.polrelid
     JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-    WHERE n.nspname = $1
-      AND c.relname = $2
-    ORDER BY policy.polname
+    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname <> 'semantic'
+      AND n.nspname !~ '^pg_toast'
+      AND n.nspname !~ '^pg_temp_'
+    ORDER BY n.nspname, c.relname, policy.polname
 ";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -857,6 +877,9 @@ fn scan(client: &mut Client) -> Result<CatalogSnapshot, CatalogError> {
 }
 
 fn scan_relations(client: &mut impl GenericClient) -> Result<Vec<CatalogRelation>, CatalogError> {
+    let mut columns = scan_columns(client)?;
+    let mut constraints = scan_constraints(client)?;
+    let mut policies = scan_policies(client)?;
     let rows = client
         .query(RELATIONS_SQL, &[])
         .map_err(|source| query_error("relations", source))?;
@@ -864,10 +887,11 @@ fn scan_relations(client: &mut impl GenericClient) -> Result<Vec<CatalogRelation
         .map(|row| {
             let schema: String = row.get("schema_name");
             let name: String = row.get("relation_name");
+            let key = (schema.clone(), name.clone());
             Ok(CatalogRelation {
-                columns: scan_columns(client, &schema, &name)?,
-                constraints: scan_constraints(client, &schema, &name)?,
-                policies: scan_policies(client, &schema, &name)?,
+                columns: columns.remove(&key).unwrap_or_default(),
+                constraints: constraints.remove(&key).unwrap_or_default(),
+                policies: policies.remove(&key).unwrap_or_default(),
                 schema,
                 name,
                 kind: parse_relation_kind(row.get("relation_kind"))?,
@@ -906,6 +930,7 @@ fn view_from_row(row: &Row) -> Option<CatalogView> {
 }
 
 fn scan_functions(client: &mut impl GenericClient) -> Result<Vec<CatalogFunction>, CatalogError> {
+    let mut grants = scan_function_grants(client)?;
     client
         .query(FUNCTIONS_SQL, &[])
         .map_err(|source| query_error("functions", source))?
@@ -924,7 +949,7 @@ fn scan_functions(client: &mut impl GenericClient) -> Result<Vec<CatalogFunction
                 owner_authorization: row
                     .get::<_, bool>("security_definer")
                     .then(|| role_context_from_owner_row(row)),
-                grants: scan_function_grants(client, oid)?,
+                grants: grants.remove(&oid).unwrap_or_default(),
             })
         })
         .collect()
@@ -976,20 +1001,22 @@ fn scan_role_graph_fingerprint(client: &mut impl GenericClient) -> Result<String
 
 fn scan_function_grants(
     client: &mut impl GenericClient,
-    oid: i64,
-) -> Result<Vec<CatalogFunctionGrant>, CatalogError> {
-    client
-        .query(FUNCTION_GRANTS_SQL, &[&oid])
+) -> Result<BTreeMap<i64, Vec<CatalogFunctionGrant>>, CatalogError> {
+    let mut grants = BTreeMap::<i64, Vec<CatalogFunctionGrant>>::new();
+    for row in client
+        .query(FUNCTION_GRANTS_SQL, &[])
         .map_err(|source| query_error("function grants", source))?
-        .iter()
-        .map(|row| {
-            Ok(CatalogFunctionGrant {
+    {
+        grants
+            .entry(row.get("function_oid"))
+            .or_default()
+            .push(CatalogFunctionGrant {
                 grantor: row.get("grantor"),
                 grantee: row.get("grantee"),
                 grantable: row.get("is_grantable"),
-            })
-        })
-        .collect()
+            });
+    }
+    Ok(grants)
 }
 
 fn role_context_from_owner_row(row: &Row) -> CatalogRoleContext {
@@ -1004,16 +1031,17 @@ fn role_context_from_owner_row(row: &Row) -> CatalogRoleContext {
 
 fn scan_columns(
     client: &mut impl GenericClient,
-    schema: &str,
-    relation: &str,
-) -> Result<Vec<CatalogColumn>, CatalogError> {
-    client
-        .query(COLUMNS_SQL, &[&schema, &relation])
+) -> Result<BTreeMap<(String, String), Vec<CatalogColumn>>, CatalogError> {
+    let mut columns = BTreeMap::<(String, String), Vec<CatalogColumn>>::new();
+    for row in client
+        .query(COLUMNS_SQL, &[])
         .map_err(|source| query_error("columns", source))?
-        .iter()
-        .map(|row| {
-            let ordinal: i32 = row.get("ordinal");
-            Ok(CatalogColumn {
+    {
+        let ordinal: i32 = row.get("ordinal");
+        columns
+            .entry((row.get("schema_name"), row.get("relation_name")))
+            .or_default()
+            .push(CatalogColumn {
                 name: row.get("column_name"),
                 ordinal: u32::try_from(ordinal)
                     .map_err(|_| CatalogError::InvalidColumnOrdinal(ordinal))?,
@@ -1021,22 +1049,25 @@ fn scan_columns(
                 nullable: row.get("nullable"),
                 comment: row.get("column_comment"),
                 select_grant: row.get("column_select"),
-            })
-        })
-        .collect()
+            });
+    }
+    Ok(columns)
 }
 
 fn scan_constraints(
     client: &mut impl GenericClient,
-    schema: &str,
-    relation: &str,
-) -> Result<Vec<CatalogConstraint>, CatalogError> {
-    client
-        .query(CONSTRAINTS_SQL, &[&schema, &relation])
+) -> Result<BTreeMap<(String, String), Vec<CatalogConstraint>>, CatalogError> {
+    let mut constraints = BTreeMap::<(String, String), Vec<CatalogConstraint>>::new();
+    for row in client
+        .query(CONSTRAINTS_SQL, &[])
         .map_err(|source| query_error("constraints", source))?
-        .iter()
-        .map(constraint_from_row)
-        .collect()
+    {
+        constraints
+            .entry((row.get("schema_name"), row.get("relation_name")))
+            .or_default()
+            .push(constraint_from_row(&row)?);
+    }
+    Ok(constraints)
 }
 
 fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
@@ -1113,15 +1144,18 @@ fn constraint_from_row(row: &Row) -> Result<CatalogConstraint, CatalogError> {
 
 fn scan_policies(
     client: &mut impl GenericClient,
-    schema: &str,
-    relation: &str,
-) -> Result<Vec<RowLevelSecurityPolicy>, CatalogError> {
-    client
-        .query(POLICIES_SQL, &[&schema, &relation])
+) -> Result<BTreeMap<(String, String), Vec<RowLevelSecurityPolicy>>, CatalogError> {
+    let mut policies = BTreeMap::<(String, String), Vec<RowLevelSecurityPolicy>>::new();
+    for row in client
+        .query(POLICIES_SQL, &[])
         .map_err(|source| query_error("RLS policies", source))?
-        .iter()
-        .map(policy_from_row)
-        .collect()
+    {
+        policies
+            .entry((row.get("schema_name"), row.get("relation_name")))
+            .or_default()
+            .push(policy_from_row(&row)?);
+    }
+    Ok(policies)
 }
 
 fn policy_from_row(row: &Row) -> Result<RowLevelSecurityPolicy, CatalogError> {

@@ -7,9 +7,11 @@ use postgresem_compiler::{
 };
 use serde_json::json;
 
+mod authoring;
 mod benchmark;
 mod catalog;
 mod catalog_diff;
+mod catalog_types;
 mod database;
 mod doctor;
 mod executor;
@@ -80,6 +82,38 @@ enum BenchmarkCommands {
         #[arg(long, default_value_t = 1000)]
         iterations: usize,
         #[arg(long, default_value_t = 50.0)]
+        threshold_ms: f64,
+    },
+    Execution {
+        path: PathBuf,
+        #[arg(long)]
+        project: String,
+        #[arg(
+            long,
+            default_value = "DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_DB_ROLE",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        db_role_env: String,
+        #[arg(long, default_value_t = 5)]
+        warmup: usize,
+        #[arg(long, default_value_t = 25)]
+        iterations: usize,
+        #[arg(long, default_value_t = 1000.0)]
         threshold_ms: f64,
     },
 }
@@ -157,6 +191,13 @@ enum ModelCommands {
     Import {
         #[command(subcommand)]
         command: ModelImportCommands,
+    },
+    Scaffold {
+        request: PathBuf,
+        #[arg(long)]
+        catalog: PathBuf,
+        #[arg(long)]
+        snapshot_only: bool,
     },
 }
 
@@ -267,6 +308,24 @@ enum ReportCommands {
         #[arg(long, default_value_t = 24)]
         window_hours: u32,
     },
+    Operations {
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_DATABASE_URL",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_database_url_env: String,
+        #[arg(
+            long,
+            default_value = "POSTGRESEM_AUDIT_WRITER_PASSWORD",
+            value_name = "NAME",
+            value_parser = parse_environment_variable_name
+        )]
+        audit_password_env: String,
+        #[arg(long, default_value_t = 24)]
+        window_hours: u32,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -295,6 +354,28 @@ fn run() -> Result<(), Box<dyn Error>> {
                     threshold_ms,
                 },
         } => benchmark_compiler(models, warmup, iterations, threshold_ms),
+        Commands::Benchmark {
+            command:
+                BenchmarkCommands::Execution {
+                    path,
+                    project,
+                    database_url_env,
+                    audit_database_url_env,
+                    db_role_env,
+                    warmup,
+                    iterations,
+                    threshold_ms,
+                },
+        } => benchmark_execution(
+            &path,
+            &project,
+            &database_url_env,
+            &audit_database_url_env,
+            &db_role_env,
+            warmup,
+            iterations,
+            threshold_ms,
+        ),
         Commands::Catalog {
             command: CatalogCommands::Scan { database_url_env },
         } => scan_catalog(&database_url_env),
@@ -334,6 +415,14 @@ fn run() -> Result<(), Box<dyn Error>> {
                         },
                 },
         } => import_osi(&from, &catalog, semantic_model.as_deref(), snapshot_only),
+        Commands::Model {
+            command:
+                ModelCommands::Scaffold {
+                    request,
+                    catalog,
+                    snapshot_only,
+                },
+        } => scaffold_model(&request, &catalog, snapshot_only),
         Commands::Mutation {
             command: MutationCommands::Validate { path, snapshot },
         } => validate_mutation(&path, &snapshot),
@@ -405,6 +494,14 @@ fn run() -> Result<(), Box<dyn Error>> {
                     window_hours,
                 },
         } => beta_report(&audit_database_url_env, &audit_password_env, window_hours),
+        Commands::Report {
+            command:
+                ReportCommands::Operations {
+                    audit_database_url_env,
+                    audit_password_env,
+                    window_hours,
+                },
+        } => operations_report(&audit_database_url_env, &audit_password_env, window_hours),
         Commands::Snapshot {
             command: SnapshotCommands::Hash { path },
         } => hash_snapshot(&path),
@@ -417,6 +514,16 @@ fn beta_report(
     window_hours: u32,
 ) -> Result<(), Box<dyn Error>> {
     let result = report::beta(audit_database_url_env, audit_password_env, window_hours)?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
+fn operations_report(
+    audit_database_url_env: &str,
+    audit_password_env: &str,
+    window_hours: u32,
+) -> Result<(), Box<dyn Error>> {
+    let result = report::operations(audit_database_url_env, audit_password_env, window_hours)?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }
@@ -439,6 +546,46 @@ fn benchmark_compiler(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn benchmark_execution(
+    path: &PathBuf,
+    project: &str,
+    database_url_env: &str,
+    audit_database_url_env: &str,
+    db_role_env: &str,
+    warmup: usize,
+    iterations: usize,
+    threshold_ms: f64,
+) -> Result<(), Box<dyn Error>> {
+    let config = executor::ExecutorConfig::from_environment(
+        database_url_env,
+        audit_database_url_env,
+        db_role_env,
+    )?;
+    let context = executor::ExecutionContext::new(
+        format!("database-role:{}", config.database_role()),
+        "benchmark",
+    )?;
+    let result = benchmark::execution_baseline(
+        &fs::read(path)?,
+        project,
+        &config,
+        &context,
+        warmup,
+        iterations,
+        threshold_ms,
+    )?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    if !result.passed {
+        return Err(format!(
+            "guarded execution p95 {:.3} ms exceeded {:.3} ms threshold",
+            result.p95_ms, result.threshold_ms
+        )
+        .into());
+    }
+    Ok(())
+}
+
 fn diff_models(from: &PathBuf, to: &PathBuf, fail_on_breaking: bool) -> Result<(), Box<dyn Error>> {
     let before: SemanticSnapshot = serde_json::from_slice(&fs::read(from)?)?;
     let after: SemanticSnapshot = serde_json::from_slice(&fs::read(to)?)?;
@@ -446,6 +593,21 @@ fn diff_models(from: &PathBuf, to: &PathBuf, fail_on_breaking: bool) -> Result<(
     println!("{}", serde_json::to_string_pretty(&diff)?);
     if fail_on_breaking && diff.has_breaking_changes() {
         return Err("semantic model diff contains breaking changes".into());
+    }
+    Ok(())
+}
+
+fn scaffold_model(
+    request: &PathBuf,
+    catalog: &PathBuf,
+    snapshot_only: bool,
+) -> Result<(), Box<dyn Error>> {
+    let catalog = serde_json::from_slice(&fs::read(catalog)?)?;
+    let result = authoring::scaffold(&fs::read(request)?, &catalog)?;
+    if snapshot_only {
+        println!("{}", serde_json::to_string_pretty(&result.snapshot)?);
+    } else {
+        println!("{}", serde_json::to_string_pretty(&result)?);
     }
     Ok(())
 }
@@ -726,6 +888,56 @@ mod tests {
                 }
             }) if threshold_ms == 50.0
         ));
+    }
+
+    #[test]
+    fn execution_benchmark_defaults_to_the_m10_baseline() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem",
+                "benchmark",
+                "execution",
+                "query.json",
+                "--project",
+                "commerce",
+            ]),
+            Ok(Cli {
+                command: Commands::Benchmark {
+                    command: BenchmarkCommands::Execution {
+                        path,
+                        project,
+                        database_url_env,
+                        audit_database_url_env,
+                        db_role_env,
+                        warmup: 5,
+                        iterations: 25,
+                        threshold_ms,
+                    }
+                }
+            }) if path.to_str() == Some("query.json")
+                && project == "commerce"
+                && database_url_env == "DATABASE_URL"
+                && audit_database_url_env == "POSTGRESEM_AUDIT_DATABASE_URL"
+                && db_role_env == "POSTGRESEM_DB_ROLE"
+                && threshold_ms == 1000.0
+        ));
+
+        for forbidden in [
+            vec!["--database-url", "postgresql://localhost/app"],
+            vec!["--audit-database-url", "postgresql://localhost/audit"],
+            vec!["--db-role", "postgresem_analyst"],
+        ] {
+            let mut arguments = vec![
+                "postgresem",
+                "benchmark",
+                "execution",
+                "query.json",
+                "--project",
+                "commerce",
+            ];
+            arguments.extend(forbidden);
+            assert!(Cli::try_parse_from(arguments).is_err());
+        }
     }
 
     #[test]

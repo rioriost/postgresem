@@ -1,19 +1,123 @@
-# M4 performance baseline
+# M10 scale baseline
+
+M10 starts with a reproducible PostgreSQL-native baseline before introducing
+connection pools, prepared-plan caches, materialized views, or optional
+pre-aggregation. See
+[ADR 0016](adr/0016-postgresql-native-scale-baseline.md).
+
+Run:
+
+```sh
+make test-performance
+```
+
+The PostgreSQL 18 fixture now:
+
+1. creates 1,000 relations and requires two complete catalog scans to have the
+   same fingerprint and remain below a 1,000 ms regression ceiling;
+2. scaffolds the 1,000 catalog relations twice and requires the same revision
+   hash;
+3. compiles against 1,000 synthetic models with a 50 ms p95 regression ceiling;
+4. runs 5 warmup and 25 measured guarded executions with a broad 1,000 ms p95
+   regression ceiling; and
+5. requires every guarded execution to produce the same semantic-result hash
+   after excluding its unique audit query ID and verifies `report operations`.
+
+The guarded-execution measurement includes connection establishment, published
+model loading, LSQ validation and compilation, mandatory audit writes,
+PostgreSQL authority checks, GRANT/RLS execution, serialization, and terminal
+audit. It deliberately does not isolate PostgreSQL data execution from gateway
+cost yet; the first baseline identifies where follow-up instrumentation and
+optimization are justified.
+
+CI runs the complete baseline on native Linux amd64 and arm64 and retains the
+PostgreSQL 18 matrix run. Evidence is compact JSON and contains no LSQ, SQL,
+parameters, credentials, principals, query IDs, or result rows.
+
+These thresholds are repository-fixture regression signals, not production
+SLOs, capacity guidance, or hardware-independent latency guarantees.
+
+## Initial Apple Container arm64 measurement
+
+The first M10 run was recorded on **2026-09-03** from commit `4fccbff` plus the
+uncommitted M10 baseline changes, using macOS 26.6.2, Apple Container 1.3.1,
+its recommended Kata 3.32.0 arm64 kernel, PostgreSQL 18.6, and a release
+`postgresem` binary:
+
+| Measurement | Result |
+|---|---:|
+| first 1,000-relation catalog scan | 2,208.054 ms |
+| second 1,000-relation catalog scan | 2,061.241 ms |
+| catalog fingerprint | deterministic |
+| 1,000-model compiler p50 | 0.856541 ms |
+| 1,000-model compiler p95 | 0.903458 ms |
+| 1,000-model compiler max | 1.046500 ms |
+| guarded execution p50 | 13.887500 ms |
+| guarded execution p95 | 15.149375 ms |
+| guarded execution max | 15.404625 ms |
+| guarded execution result | deterministic |
+
+For this fixture, complete catalog scanning is the first measured dominant
+path. That observation prioritizes catalog-scale investigation before adding
+connection pooling, prepared-plan caching, or persisted acceleration. It does
+not establish that catalog scanning is the limiting path for another database.
+
+## Post-optimization Apple Container arm64 measurement
+
+After replacing the relation/column/constraint/policy and function-grant N+1
+lookups with set-based PostgreSQL scans, the same environment and fixture
+recorded:
+
+| Measurement | Result |
+|---|---:|
+| first 1,000-relation catalog scan | 139.832 ms |
+| second 1,000-relation catalog scan | 99.245 ms |
+| catalog threshold | 1,000 ms, passed |
+| scaffolded models | 1,000, deterministic |
+| 1,000-model compiler p50 | 0.802875 ms |
+| 1,000-model compiler p95 | 0.813375 ms |
+| 1,000-model compiler max | 0.828625 ms |
+| guarded execution p50 | 14.249917 ms |
+| guarded execution p95 | 14.628500 ms |
+| guarded execution max | 15.088083 ms |
+| guarded execution result | deterministic |
+| current migration reported | `0010_m10_operational_report` |
+
+The catalog path improved by more than an order of magnitude while preserving
+the complete canonical fingerprint. Guarded-execution latency did not indicate
+a need for connection pooling, prepared-plan caching, or persisted
+pre-aggregation in this fixture, so M10 does not add those mechanisms.
+
+## Apple Container amd64/Rosetta reproduction
+
+The same M10 gate also passed in an amd64 userspace under Apple Container
+Rosetta on the arm64 maintainer host:
+
+| Measurement | Result |
+|---|---:|
+| first/second catalog scan | 225.016 / 181.502 ms |
+| compiler p95 | 2.440041 ms |
+| guarded execution p95 | 22.496333 ms |
+| scaffold revision hash | identical to arm64 |
+| semantic-result hash | identical to arm64 |
+
+This is useful local cross-architecture reproduction, but it is not native
+amd64 evidence. CI runs the scale gate on native Linux amd64 and native Linux
+arm64 and retains each JSON artifact.
+
+## M4 historical baseline
 
 The developer preview includes two reproducible performance/correctness
 surfaces:
 
 1. a standalone synthetic compiler benchmark; and
-2. `make test-performance`, which combines a 100-relation PostgreSQL catalog
-   determinism check with the compiler benchmark.
+2. the original integrated fixture, which combined a 100-relation PostgreSQL
+   catalog determinism check with the compiler benchmark.
 
 These are development regression signals, not production SLOs, capacity
 guidance, or universal latency guarantees.
 
-The [CI workflow](../.github/workflows/ci.yml) configures the integrated
-performance service only for its PostgreSQL 18 matrix job. That configuration
-does not establish passing GitHub evidence; the dated Apple Container result
-below is the current recorded measurement.
+The dated Apple Container result below preserves the historical M4 measurement.
 
 ## Standalone compiler benchmark
 
@@ -76,16 +180,9 @@ result serialization, MCP framing, and audit latency.
 Model counts, warmups, iterations, and threshold must be positive. The current
 implementation rejects more than 10,000 synthetic models.
 
-## Integrated 100-relation check
+## Historical integrated 100-relation check
 
-With a local-only `.env`:
-
-```sh
-make test-performance
-```
-
-The target builds the integration image with a release `postgresem` binary and
-starts `postgresem-performance-test`. The test:
+The M4 test:
 
 1. creates 100 PostgreSQL relations in the `preview_catalog` fixture schema;
 2. runs `postgresem catalog scan` twice;
@@ -93,8 +190,7 @@ starts `postgresem-performance-test`. The test:
 4. requires the two complete catalog fingerprints to be identical;
 5. runs the compiler benchmark with 100 models, 100 warmups, 1,000 measured
    iterations, and a 50 ms threshold;
-6. prints one compact combined JSON record and
-   `developer preview performance checks passed`.
+6. printed one compact combined JSON record.
 
 The combined output shape is:
 
@@ -154,16 +250,18 @@ The 50 ms value is deliberately a broad M4 compiler regression ceiling. It
 must not be quoted as expected p95, and it does not apply to catalog scanning
 or database execution.
 
-## Recording a comparable run
+## Recording a comparable M10 run
 
 Capture:
 
 - date, commit, package version, and whether the binary is a release build;
-- macOS architecture and runtime versions from `make doctor`;
+- Linux architecture and container runtime versions;
 - PostgreSQL image;
 - exact benchmark arguments;
-- catalog scan times and whether fingerprints matched;
+- 1,000-relation catalog scan times and whether fingerprints matched;
 - compiler p50, p95, max, threshold, and `passed`;
+- guarded-execution p50, p95, max, result hash, determinism, threshold, and
+  `passed`;
 - background load or other material environment differences.
 
 Do not include `.env`, credentials, connection strings, source data, raw query

@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-03
+
+### Added
+
+- Add a PostgreSQL 18 scale gate covering 1,000 catalog
+  relations, 1,000 synthetic models, and repeated guarded execution on native
+  Linux amd64 and arm64.
+- Add `postgresem benchmark execution` with bounded warmups/iterations,
+  mandatory-audit and PostgreSQL-authority coverage, and fail-closed semantic
+  result determinism evidence.
+- Add deterministic catalog-bound `model scaffold` authoring for up to 1,000
+  models, with strict catalog fingerprint, type, identifier, key, and timezone
+  validation and a canonical UTC-only scaffold timezone.
+- Add the privacy-preserving `report operations` dashboard and a verified
+  backup-gated Apple Container upgrade automation path.
+
+### Changed
+
+- Replace relation and function catalog N+1 lookups with set-based PostgreSQL
+  scans while preserving canonical catalog fingerprints and drift semantics.
+- Advance the source package to M10 `0.8.0` and database migrations through
+  `0010_m10_operational_report`.
+- Extend N-1 and same-name restore recovery to cover the M9-to-M10 migration,
+  operational reporting, and deterministic 1,000-model authoring.
+
+### Security
+
+- Keep scale authoring review-only and fail closed on ambiguous selectors,
+  unsupported types, foreign tables, non-portable identifiers, excessive
+  model counts, and tampered catalog evidence.
+- Keep operational reporting behind the audit role and omit SQL, semantic
+  requests, result rows, principals, credentials, and physical object names.
+- Preserve PostgreSQL GRANT/RLS enforcement and mandatory audit boundaries in
+  every measured and upgrade-canary execution.
+
 ## [0.7.0] - 2026-09-02
 
 ### Added

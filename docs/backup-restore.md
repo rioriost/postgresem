@@ -41,15 +41,17 @@ for the source data and audit metadata.
 `make test-recovery` runs only against the isolated repository fixture cluster.
 It:
 
-1. builds the N-1 schema through `0003_guarded_execution_audit`;
+1. exercises legacy mutation migrations and holds the N-1 schema at
+   `0009_mutation_reconcile_precedence`;
 2. runs the current binary and a guarded query against N-1;
-3. applies `0004_beta_operational_report`;
-4. creates a full custom-format database dump;
-5. temporarily moves the fixture source database aside;
-6. restores the dump under the original database name;
-7. verifies the published semantic hash;
-8. runs a guarded query and the beta operational report;
-9. restores the original fixture database.
+3. applies `0010_m10_operational_report`;
+4. verifies the published semantic hash and M10 operational report;
+5. proves deterministic scaffolding from 1,000 catalog relations;
+6. creates a full custom-format database dump;
+7. temporarily moves the fixture source database aside;
+8. restores the dump under the original database name;
+9. runs a guarded query and both operational reports;
+10. restores the original fixture database.
 
 Do not copy this rename procedure into a shared or production cluster. Restore
 production backups into an isolated cluster or recovery environment that can
@@ -64,10 +66,22 @@ controlled cutover process.
 4. Record the binary version, migration list, and published revision hashes.
 5. Apply database migrations.
 6. Deploy the current binary.
-7. Run model export/diff, a guarded canary query, and `postgresem report beta`.
+7. Run model export/diff, a guarded canary query, and
+   `postgresem report operations`.
 8. Resume traffic only after all checks pass.
+
+For the disposable Apple Container quickstart, steps 2–7 are automated after
+the backup is created:
+
+```sh
+make backup BACKUP_ROOT=backups
+make upgrade-local BACKUP_DIR=backups/postgresem-<timestamp>
+```
+
+The command verifies that the supplied backup matches the live pre-upgrade
+migration and published-revision manifests before changing the database. It is
+not a replacement for a production platform backup or controlled rollout.
 
 If validation fails, contain the deployment, preserve logs and audit evidence,
 restore the pre-upgrade backup under the original name, deploy the previous
 binary, and repeat the canary checks.
-

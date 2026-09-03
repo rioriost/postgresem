@@ -1025,6 +1025,13 @@ PostgreSQL 16–18 CI exercise the authenticated transport.
 
 ### M10: 0.8 — PostgreSQL-native Scale and Operations
 
+**Implementation status:** complete in the `0.8.0` source tree. ADR 0016,
+set-based catalog scanning, deterministic 1,000-model scaffolding, the M10
+operational report, backup-gated local upgrade automation, dated reference
+comparison, and native Linux amd64/arm64 scale evidence implement this gate.
+Persisted acceleration remains intentionally deferred because catalog
+introspection, not guarded execution, was the measured bottleneck.
+
 - Address measured bottlenecks with PostgreSQL-native techniques such as
   prepared plans, connection management, materialized views, or optional
   pre-aggregation; do not add a second authoritative datastore by default.

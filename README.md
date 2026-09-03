@@ -8,11 +8,11 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The latest published release and current source version are **0.7.0**. The 0.7
-release adds authenticated stateless MCP HTTP, exact OAuth
-identity to PostgreSQL role mapping, multi-user RLS execution, remote mutation
-gates, and disconnect cancellation. It is not a production-readiness or
-long-term-support promise.
+The current source version is **0.8.0**; the latest published release is
+**0.7.0**. M10 adds set-based catalog scaling, deterministic 1,000-model
+scaffolding, a PostgreSQL-native operational report, and backup-gated local
+upgrade automation. It is not a production-readiness or long-term-support
+promise.
 
 ## What problem does postgresem solve?
 
@@ -67,7 +67,7 @@ procedures over a broad abstraction across many database dialects.
 
 ## Roadmap to 1.0
 
-The current source completes M9 as `0.7`, not `1.0`. M6's separate typed
+The current source completes M10 as `0.8`, not `1.0`. M6's separate typed
 mutation contract remains limited to bounded inserts and explicitly modeled
 idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
 and authorization-aware catalog drift without weakening the existing
@@ -88,8 +88,10 @@ explicit. M8 uses that evidence to add explicit metric aggregation anchors and
 a two-stage PostgreSQL plan that removes duplicate child rows at the declared
 root entity grain before applying the requested aggregate. M9 adds a stateless
 MCP `2026-07-28` HTTP resource server without moving identity or authorization
-out of PostgreSQL. Versions `0.8` and `0.9` continue with scale, operations,
-and release-candidate gaps. Feature-count
+out of PostgreSQL. M10 removes the measured catalog N+1 bottleneck, adds
+catalog-bound large-model scaffolding and operational/upgrade surfaces, and
+keeps persisted acceleration deferred because guarded execution was not the
+measured bottleneck. Version `0.9` continues with release-candidate gaps. Feature-count
 parity is not the objective: PostgreSQL remains the only execution engine and
 semantic source of truth through `1.0`.
 
@@ -106,7 +108,7 @@ for the M6–M12 gates.
 - [Operations guide](docs/operations.md)
 - [Error reference](docs/error-reference.md)
 - [Compatibility policy and support matrix](docs/compatibility.md)
-- [M7 reference comparison](docs/reference-comparison/2026-09-01.md)
+- [M10 reference comparison](docs/reference-comparison/2026-09-03.md)
 - [Performance baseline and reproduction](docs/performance.md)
 - [Developer-preview exit checklist](docs/developer-preview-checklist.md)
 - [M5 beta checklist](docs/beta-checklist.md)
@@ -121,7 +123,7 @@ for the M6–M12 gates.
 - [Architecture decisions](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
 
-## What 0.7 implements
+## What 0.8 implements
 
 - LSQ v1 validation and deterministic compilation
 - Semantic Snapshot/Schema v2 backed by PostgreSQL, with Snapshot v1 loading
@@ -151,7 +153,13 @@ for the M6–M12 gates.
   that is cross-checked against PostgreSQL catalog evidence
 - pinned Wren AI, Cube, Malloy, and MetricFlow runtime comparisons against one
   PostgreSQL 18 task, with machine-readable evidence
-- a 100-model compiler baseline and deterministic 100-relation catalog check
+- an M10 scale baseline with 1,000-model compilation, deterministic
+  1,000-relation catalog scans, and guarded-execution result hashing
+- set-based PostgreSQL catalog scanning with a 1-second 1,000-relation
+  regression gate
+- deterministic catalog-bound scaffolding for up to 1,000 review-only models
+- a fixed, privacy-preserving M10 operational dashboard
+- verified-backup-gated local Apple Container upgrade automation
 - local Apple Container Compose development stack using PostgreSQL 18
 - Linux Docker Compose and rootless Podman Quadlet deployment paths
 
@@ -208,6 +216,8 @@ and unknown semantic objects receive the same public “not available” errors.
   implemented.
 - N-1 and same-name restore paths are fixture-tested, but production backup,
   RPO/RTO, disaster recovery, and down migrations remain operator-owned.
+- The M10 operational report observes materialized-view state but does not
+  create, refresh, or route queries to materialized views or pre-aggregations.
 - `v0.7.0` checksums and immutable container image digest are keyless
   signed by the GitHub release workflow.
 - PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,

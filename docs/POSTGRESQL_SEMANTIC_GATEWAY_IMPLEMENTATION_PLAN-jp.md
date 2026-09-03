@@ -980,6 +980,12 @@ amd64/arm64およびPostgreSQL 16–18 CIが認証済みtransportを実行する
 
 ### M10: 0.8 — PostgreSQL-native scale・operations
 
+**実装status:** `0.8.0` source treeで完了。ADR 0016、set-based catalog scan、
+決定的な1,000-model scaffold、M10 operational report、backup gate付きlocal
+upgrade automation、日付付きreference比較、native Linux amd64/arm64 scale
+evidenceでこのgateを実装した。計測上のbottleneckはguarded executionではなくcatalog
+introspectionだったため、persisted accelerationは意図的にdeferしている。
+
 - prepared plan、connection管理、materialized view、optional pre-aggregation等の
   PostgreSQL-native手法で計測済みbottleneckを解消し、既定で第二のauthoritative datastoreを
   追加しない。

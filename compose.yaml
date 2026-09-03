@@ -239,9 +239,11 @@ services:
       PGDATABASE: postgresem_dev
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRESEM_RUNTIME_PASSWORD: ${POSTGRESEM_RUNTIME_PASSWORD}
+      POSTGRESEM_AUDIT_WRITER_PASSWORD: ${POSTGRESEM_AUDIT_WRITER_PASSWORD}
     volumes:
       - ./tests:/tests:ro
-    entrypoint: ["python3", "/tests/performance/preview.py"]
+    entrypoint: ["python3", "/tests/performance/scale.py"]
 
   recovery-test:
     build:

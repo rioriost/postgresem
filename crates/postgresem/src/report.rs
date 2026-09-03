@@ -19,9 +19,9 @@ pub enum ReportError {
     InvalidEnvironmentVariable(String),
     #[error("failed to connect using audit URL environment variable {0}")]
     AuditConnect(String),
-    #[error("beta operational report is unavailable; apply current migrations")]
+    #[error("operational report is unavailable; apply current migrations")]
     ReportUnavailable,
-    #[error("beta operational report returned an invalid JSON value")]
+    #[error("operational report returned an invalid JSON value")]
     InvalidReport,
 }
 
@@ -29,6 +29,33 @@ pub fn beta(
     audit_database_url_variable: &str,
     audit_password_variable: &str,
     window_hours: u32,
+) -> Result<Value, ReportError> {
+    report(
+        audit_database_url_variable,
+        audit_password_variable,
+        window_hours,
+        "semantic.beta_operational_report",
+    )
+}
+
+pub fn operations(
+    audit_database_url_variable: &str,
+    audit_password_variable: &str,
+    window_hours: u32,
+) -> Result<Value, ReportError> {
+    report(
+        audit_database_url_variable,
+        audit_password_variable,
+        window_hours,
+        "semantic.m10_operational_report",
+    )
+}
+
+fn report(
+    audit_database_url_variable: &str,
+    audit_password_variable: &str,
+    window_hours: u32,
+    function: &'static str,
 ) -> Result<Value, ReportError> {
     if !(1..=MAX_WINDOW_HOURS).contains(&window_hours) {
         return Err(ReportError::InvalidWindow);
@@ -45,15 +72,15 @@ pub fn beta(
     let mut client = database::connect(&conninfo, Some(&password))
         .map_err(|_| ReportError::AuditConnect(audit_database_url_variable.to_owned()))?;
     let window_hours = i32::try_from(window_hours).map_err(|_| ReportError::InvalidWindow)?;
-    let row = client
-        .query_one(
-            "
-            SELECT semantic.beta_operational_report(
-              clock_timestamp() - make_interval(hours => $1)
-            )
-            ",
-            &[&window_hours],
+    let statement = format!(
+        "
+        SELECT {function}(
+          clock_timestamp() - make_interval(hours => $1)
         )
+        "
+    );
+    let row = client
+        .query_one(&statement, &[&window_hours])
         .map_err(|_| ReportError::ReportUnavailable)?;
     row.try_get(0).map_err(|_| ReportError::InvalidReport)
 }
@@ -75,7 +102,7 @@ fn valid_environment_variable_name(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_WINDOW_HOURS, ReportError, beta};
+    use super::{MAX_WINDOW_HOURS, ReportError, beta, operations};
 
     #[test]
     fn beta_report_rejects_invalid_windows_before_reading_environment() {
@@ -93,6 +120,11 @@ mod tests {
     fn beta_report_rejects_invalid_environment_names() {
         assert!(matches!(
             beta("INVALID-NAME", "PASSWORD", 24),
+            Err(ReportError::InvalidEnvironmentVariableName(variable))
+                if variable == "INVALID-NAME"
+        ));
+        assert!(matches!(
+            operations("DATABASE_URL", "INVALID-NAME", 24),
             Err(ReportError::InvalidEnvironmentVariableName(variable))
                 if variable == "INVALID-NAME"
         ));

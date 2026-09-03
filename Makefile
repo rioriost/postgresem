@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup report-beta fmt check test test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
+.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery preview-check beta-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -38,10 +38,20 @@ verify-backup:
 	@test -n "$(BACKUP_DIR)" || (echo "set BACKUP_DIR to a backup directory" >&2; exit 1)
 	scripts/verify-backup.sh "$(BACKUP_DIR)"
 
+upgrade-local:
+	@test -n "$(BACKUP_DIR)" || (echo "set BACKUP_DIR to a verified pre-upgrade backup directory" >&2; exit 1)
+	scripts/upgrade-local.sh "$(BACKUP_DIR)"
+
 report-beta:
 	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
 	@container-compose up --env-file .env -d --build gateway </dev/null 1>&2
 	@container exec --user postgresem postgresem-gateway postgresem report beta \
+		--audit-database-url-env MCP_AUDIT_DATABASE_URL
+
+report-operations:
+	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
+	@container-compose up --env-file .env -d --build gateway </dev/null 1>&2
+	@container exec --user postgresem postgresem-gateway postgresem report operations \
 		--audit-database-url-env MCP_AUDIT_DATABASE_URL
 
 dev-down:
@@ -152,7 +162,7 @@ test-performance:
 	@attempt=0; \
 	while [ $$attempt -lt 120 ]; do \
 		logs="$$(container logs postgresem-performance-test 2>&1)"; \
-		if printf '%s\n' "$$logs" | grep -q "developer preview performance checks passed"; then \
+		if printf '%s\n' "$$logs" | grep -q "M10 scale baseline checks passed"; then \
 			printf '%s\n' "$$logs"; \
 			exit 0; \
 		fi; \
@@ -163,7 +173,7 @@ test-performance:
 		attempt=$$((attempt + 1)); \
 		sleep 1; \
 	done; \
-	echo "performance integration test timed out" >&2; \
+	echo "M10 scale baseline test timed out" >&2; \
 	exit 1
 
 test-recovery:
@@ -172,7 +182,7 @@ test-recovery:
 	@attempt=0; \
 	while [ $$attempt -lt 180 ]; do \
 		logs="$$(container logs postgresem-recovery-test 2>&1)"; \
-		if printf '%s\n' "$$logs" | grep -q "N-1 migration and backup/restore recovery checks passed"; then \
+		if printf '%s\n' "$$logs" | grep -q "M10 N-1 migration, scale authoring, and backup/restore recovery checks passed"; then \
 			printf '%s\n' "$$logs"; \
 			exit 0; \
 		fi; \

@@ -2,8 +2,8 @@
 
 ## Version policy
 
-The project uses Semantic Versioning. The latest published release and current
-source package are `0.7.0`. Before 1.0:
+The project uses Semantic Versioning. The current source package is `0.8.0`;
+the latest published release is `0.7.0`. Before 1.0:
 
 - patch/prerelease increments should preserve documented behavior except for
   security or correctness fixes;
@@ -33,8 +33,8 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | compiler semantics | `0.2.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
-| database migrations | `0001`–`0009` | forward-only; N-1 upgrade, Snapshot v1 upgrade, and same-name restore are tested; no down migrations |
-| source package | `0.7.0` | M9 authenticated stateless MCP HTTP and multi-user PostgreSQL authority mapping |
+| database migrations | `0001`–`0010` | forward-only; M9-to-M10 N-1 upgrade, Snapshot v1 upgrade, scale authoring, and same-name restore are tested; no down migrations |
+| source package | `0.8.0` | M10 PostgreSQL-native scale, authoring, operations, and local upgrade automation |
 | latest published package | `0.7.0` | signed M9 release with authenticated HTTP integration |
 
 Migration 0008 changes new mutation idempotency records from a project-global
@@ -46,6 +46,8 @@ their keys.
 
 Migration 0009 gives current `principal-v1` state deterministic precedence if
 both current and matching legacy authority rows exist for one retry key.
+Migration 0010 adds the fixed, audit-role-only M10 operational report without
+changing published semantic revisions or query/mutation authorization.
 Authority and JWKS rotation requires an atomic file replacement plus process
 restart; hot reload is not part of the 0.7 contract.
 

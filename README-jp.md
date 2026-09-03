@@ -8,10 +8,10 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-最新の公開リリースと現在のsource versionは**0.7.0**です。0.7 releaseでは、
-認証済みstateless MCP HTTP、OAuth identityからPostgreSQL roleへの
-完全一致mapping、multi-user RLS実行、remote mutation gate、切断時cancellationを
-追加しました。production readinessやlong-term supportを保証するものではありません。
+現在のsource versionは**0.8.0**、最新の公開releaseは**0.7.0**です。M10では、
+set-based catalog scaling、決定的な1,000-model scaffold、PostgreSQL-native
+operational report、backup gate付きlocal upgrade automationを追加しました。
+production readinessやlong-term supportを保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -63,7 +63,7 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 
 ## 1.0までのロードマップ
 
-現在のsourceはM9を`1.0`ではなく`0.7`として完了しています。M6の独立した型付き
+現在のsourceはM10を`1.0`ではなく`0.8`として完了しています。M6の独立した型付き
 mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
 です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
 authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` query executor
@@ -82,8 +82,11 @@ datasetに対して実行しました。全referenceが同じ期待aggregateを�
 aggregation anchorと、要求されたaggregateを適用する前に宣言済みroot entity grainで
 duplicate child rowを除去する二段階PostgreSQL planを追加しました。M9ではidentityと
 authorizationをPostgreSQLから移動させず、stateless MCP `2026-07-28` HTTP resource
-serverを追加しました。`0.8`と`0.9`ではscale、operations、release candidateのgapへ
-進みます。feature数のparityは目的とせず、`1.0`まで
+serverを追加しました。M10では計測されたcatalog N+1 bottleneckを解消し、
+catalog-boundなlarge-model scaffoldとoperations/upgrade surfaceを追加しました。
+guarded executionは計測上のbottleneckではなかったため、persisted accelerationは
+deferしています。`0.9`ではrelease candidateのgapへ進みます。feature数のparityは
+目的とせず、`1.0`まで
 PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
 
 M6〜M12のgateは
@@ -100,7 +103,7 @@ M6〜M12のgateは
 - [運用ガイド](docs/operations.md)
 - [エラーリファレンス](docs/error-reference.md)
 - [互換性policyとsupport matrix](docs/compatibility.md)
-- [M7 reference比較](docs/reference-comparison/2026-09-01.md)
+- [M10 reference比較](docs/reference-comparison/2026-09-03.md)
 - [Performance baselineと再現手順](docs/performance.md)
 - [Developer preview exit checklist](docs/developer-preview-checklist.md)
 - [M5 beta checklist](docs/beta-checklist.md)
@@ -115,7 +118,7 @@ M6〜M12のgateは
 - [Architecture Decision Record](docs/adr/)
 - [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
 
-## 0.7で実装されているもの
+## 0.8で実装されているもの
 
 - LSQ v1 validationと決定的compile
 - PostgreSQLをbacking storeとするSemantic Snapshot/Schema v2。Snapshot v1の読み込みと
@@ -145,7 +148,12 @@ M6〜M12のgateは
   Apache Ossie `0.1.1`一方向import
 - 同一PostgreSQL 18 taskに対するWren AI、Cube、Malloy、MetricFlowの固定runtime比較と
   machine-readable evidence
-- 100 modelのcompiler baselineと決定的な100 relation catalog check
+- 1,000 modelのcompiler、決定的な1,000 relation catalog scan、
+  guarded execution result hashを含むM10 scale baseline
+- 1,000 relationを1秒未満に保つregression gate付きset-based catalog scan
+- 最大1,000のreview-only modelを生成する決定的catalog-bound scaffold
+- fixedかつprivacy-preservingなM10 operational dashboard
+- verified backupをgateとするlocal Apple Container upgrade automation
 - PostgreSQL 18を使用するローカルApple Container Compose開発stack
 - Linux Docker Composeとrootless Podman Quadlet deployment path
 
@@ -198,6 +206,8 @@ objectと未知のsemantic objectには、同じ公開用「not available」erro
   resumable session、GET event stream、connection poolingは未実装です。
 - N-1および同名restore pathはfixtureでtestされていますが、本番backup、RPO/RTO、
   disaster recovery、down migrationはoperatorの責任です。
+- M10 operational reportはmaterialized view stateを観測しますが、materialized
+  view/pre-aggregationの作成、refresh、query routingは行いません。
 - `v0.7.0`のchecksumとimmutable container image digestは、GitHub release
   workflowによりkeyless署名されています。
 - PostgreSQL 18が検証済みのローカル開発targetです。PostgreSQL 16、17、18はDocker

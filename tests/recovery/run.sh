@@ -66,6 +66,11 @@ run_guarded_query() {
   printf '%s\n' "$result" | grep -q '"truncated": false'
 }
 
+verify_scale_authoring() {
+  database=$1
+  PGDATABASE=$database python3 /tests/recovery/scale_authoring.py
+}
+
 restore_original_database() {
   if [ "$source_held" = true ]; then
     drop_database "$source_database"
@@ -146,8 +151,8 @@ END;
 $$;
 SQL
 
-unset POSTGRESEM_MIGRATION_MAX_VERSION
-sh /migrations/run.sh
+POSTGRESEM_MIGRATION_MAX_VERSION=0009_mutation_reconcile_precedence \
+  sh /migrations/run.sh
 if [ "$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
@@ -187,6 +192,25 @@ $$;
 SQL
 verify_revision "$n_minus_one_database" "$current_revision"
 run_guarded_query "$n_minus_one_database"
+postgresem report beta --window-hours 1 |
+  grep -q '"audit_complete": true'
+
+unset POSTGRESEM_MIGRATION_MAX_VERSION
+sh /migrations/run.sh
+if [ "$(
+  psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
+    -c 'SELECT count(*) FROM semantic.schema_migration'
+)" != "10" ]; then
+  echo "N-1 upgrade did not apply migration 0010" >&2
+  exit 1
+fi
+postgresem report operations --window-hours 1 |
+  grep -q '"current": "0010_m10_operational_report"'
+postgresem report operations --window-hours 1 |
+  grep -q '"query_audit_complete": true'
+verify_revision "$n_minus_one_database" "$current_revision"
+run_guarded_query "$n_minus_one_database"
+verify_scale_authoring "$n_minus_one_database"
 
 drop_database "$legacy_authority_database"
 create_database "$legacy_authority_database"
@@ -286,7 +310,7 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "9" ]; then
+if [ "$migration_count" != "10" ]; then
   echo "pre-0008 upgrade did not apply the complete migration set" >&2
   exit 1
 fi
@@ -294,6 +318,8 @@ postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
+postgresem report operations --window-hours 1 |
+  grep -q '"current": "0010_m10_operational_report"'
 verify_revision "$legacy_authority_database" "$current_revision"
 configure_mutation_urls "$legacy_authority_database"
 export POSTGRESEM_IDEMPOTENCY_KEY=recovery-legacy-idempotency
@@ -319,6 +345,8 @@ run_guarded_query "$legacy_v1_database"
 unset POSTGRESEM_MIGRATION_MAX_VERSION
 sh /migrations/run.sh
 verify_revision "$legacy_v1_database" "$legacy_v1_revision"
+postgresem report operations --window-hours 1 |
+  grep -q '"current": "0010_m10_operational_report"'
 
 export PGDATABASE=$n_minus_one_database
 configure_gateway_urls "$n_minus_one_database"
@@ -349,6 +377,8 @@ postgresem report beta --window-hours 1 |
   grep -q '"incomplete": 1'
 postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": false'
+postgresem report operations --window-hours 1 |
+  grep -q '"query_audit_complete": false'
 
 PGUSER=postgresem_audit_writer \
   PGPASSWORD="$POSTGRESEM_AUDIT_WRITER_PASSWORD" \
@@ -369,14 +399,16 @@ postgresem report beta --window-hours 1 |
   grep -q '"incomplete": 0'
 postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
+postgresem report operations --window-hours 1 |
+  grep -q '"query_audit_complete": true'
 
 if PGUSER=postgresem_audit_writer \
   PGPASSWORD="$POSTGRESEM_AUDIT_WRITER_PASSWORD" \
   psql --no-psqlrc -v ON_ERROR_STOP=1 \
-    -c "SELECT semantic.beta_operational_report(clock_timestamp() - interval '366 days')" \
+    -c "SELECT semantic.m10_operational_report(clock_timestamp() - interval '366 days')" \
     >/dev/null 2>&1
 then
-  echo "database report accepted an unbounded history window" >&2
+  echo "M10 operational report accepted an unbounded history window" >&2
   exit 1
 fi
 
@@ -396,6 +428,8 @@ verify_revision "$source_database" "$current_revision"
 run_guarded_query "$source_database"
 postgresem report beta --window-hours 1 |
   grep -q '"validation_compile_p95_under_50_ms"'
+postgresem report operations --window-hours 1 |
+  grep -q '"current": "0010_m10_operational_report"'
 restore_original_database
 
-echo "N-1 migration and backup/restore recovery checks passed"
+echo "M10 N-1 migration, scale authoring, and backup/restore recovery checks passed"
