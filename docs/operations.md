@@ -1,16 +1,16 @@
-# Release-candidate operations
+# Stable operations
 
-This guide describes the current local/process-oriented release candidate. It is not a
-production runbook.
+This guide describes the current local/process-oriented stable contract. It is
+not a production architecture, HA, RPO/RTO, or regulatory runbook.
 
-Inspect the frozen candidate boundary before deployment:
+Inspect the stable boundary before deployment:
 
 ```sh
 postgresem contract show
 ```
 
-The checked inventory is in `contracts/rc-v1.json`. Contract-bearing changes
-must follow [ADR 0017](adr/0017-release-candidate-contract-freeze.md) and the
+The checked inventory is in `contracts/stable-v1.json`. Contract-bearing
+changes must follow [ADR 0018](adr/0018-stable-contract-and-release-evidence.md) and the
 [deprecation policy](deprecation-policy.md).
 
 The query executor remains read-only. Do not grant business-data write

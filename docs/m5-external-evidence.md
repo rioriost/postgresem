@@ -14,8 +14,10 @@ CI, and automated demo traffic do not count.
 For each deployment:
 
 1. Assign a stable, non-sensitive pseudonym.
-2. Record the PostgreSQL version and immutable postgresem release, commit, or
-   image digest.
+2. Record the PostgreSQL version and immutable postgresem full commit or image
+   digest. A release tag may be described in the evidence, but the
+   machine-readable gate records its resolved commit or image digest rather
+   than trusting the tag name alone.
 3. Record a UTC start date before the first qualifying audited query.
 4. Capture at least four weekly checkpoints covering at least 28 continuous
    days.
@@ -66,6 +68,7 @@ The review record must identify:
 
 - reviewer and organization, including relevant project relationships;
 - immutable commit, release tag, and image digest in scope;
+- SHA-256 digest of the reviewed `contracts/stable-v1.json`;
 - review and retest dates;
 - trust boundaries, code/configuration scope, methodology, and exclusions;
 - findings and severity;

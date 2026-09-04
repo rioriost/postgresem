@@ -1,10 +1,12 @@
 # Support policy
 
-## Release-candidate scope
+## Stable scope
 
-`0.9.x` is the supported release-candidate line before 1.0. It is intended for
-approved non-production pilots and release qualification, not for workloads
-that require a production SLA, regulatory certification, or guaranteed RPO/RTO.
+`1.0.x` is the stable contract line once `v1.0.0` is formally published.
+The source tree may be prepared at version `1.0.0` before publication, but
+formal support starts only from the signed release. Stable means the documented
+interfaces follow the compatibility policy; it is not a commercial SLA,
+regulatory certification, or guaranteed RPO/RTO.
 
 The repository supports:
 
@@ -24,9 +26,12 @@ postgresem contract show
 
 ## Support windows
 
-- The latest `0.9.x` release receives correctness and security fixes until 1.0
-  is published.
-- After 1.0, the final `0.9.x` release receives security fixes for 90 days.
+- The latest `1.0.x` release receives correctness and security fixes until the
+  next supported stable minor is published.
+- Each superseded stable minor receives security fixes for 12 months after the
+  next stable minor, or 18 months after its initial release, whichever is
+  later.
+- The final `0.9.x` release receives security fixes for 90 days after 1.0.
 - Older preview lines receive no fixes except when required to provide a safe
   upgrade path to the supported line.
 - Support periods are best-effort open-source maintenance commitments, not

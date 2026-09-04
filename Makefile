@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-contracts test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery test-rc-workflow preview-check beta-check rc-check
+.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-contracts test-release-evidence test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery test-rc-workflow preview-check beta-check rc-check stable-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -71,6 +71,10 @@ test-contracts:
 	trap 'rm -f "$$output"' EXIT; \
 	cargo run --quiet -p postgresem -- contract show >"$$output"; \
 	python3 tests/contracts/verify.py --actual-manifest "$$output"
+
+test-release-evidence:
+	python3 -m unittest tests/contracts/test_verify_release_evidence.py
+	python3 tests/contracts/verify_release_evidence.py
 
 test-install:
 	tests/install/security.sh
@@ -227,3 +231,5 @@ preview-check: fmt check test test-contracts test-reference-comparison test-db t
 beta-check: preview-check test-install test-web-demo test-recovery
 
 rc-check: beta-check test-rc-workflow
+
+stable-check: rc-check test-release-evidence

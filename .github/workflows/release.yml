@@ -24,6 +24,7 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Match tag and workspace version
@@ -43,8 +44,15 @@ jobs:
           print(f"verified release version {version}")
           PY
 
-      - name: Verify frozen RC contracts
+      - name: Verify frozen stable contracts
         run: python3 tests/contracts/verify.py
+
+      - name: Require accepted stable 1.x external evidence
+        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
+        run: |
+          python3 tests/contracts/verify_release_evidence.py \
+            --released-tag "${GITHUB_REF_NAME}" \
+            --released-commit "${GITHUB_SHA}"
 
   binaries:
     name: ${{ matrix.asset_os }} ${{ matrix.asset_arch }}
@@ -118,6 +126,8 @@ jobs:
           cp -R contracts/. "${root}/contracts/"
           cp docs/compatibility.md docs/deprecation-policy.md \
             docs/m11-release-candidate-checklist.md \
+            docs/m12-stable-release-checklist.md \
+            docs/final-differentiation.md \
             docs/rc-operator-workflow.md \
             "${root}/docs/"
           cp CHANGELOG.md GOVERNANCE.md LICENSE README.md SECURITY.md SUPPORT.md \
@@ -186,7 +196,7 @@ jobs:
           "dist/smoke/${archive}/postgresem" contract show \
             >dist/smoke/contract.json
           cmp \
-            <(python3 -c 'import json; print(json.dumps(json.load(open("contracts/rc-v1.json"))["manifest"], sort_keys=True))') \
+            <(python3 -c 'import json; print(json.dumps(json.load(open("contracts/stable-v1.json"))["manifest"], sort_keys=True))') \
             <(python3 -c 'import json; print(json.dumps(json.load(open("dist/smoke/contract.json")), sort_keys=True))')
 
       - name: Start Linux release smoke database

@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Prepared for 1.0.0
+
+- Promote the unchanged M11 candidate boundary to the stable v1 contract while
+  preserving `contracts/rc-v1.json` as immutable historical evidence.
+- Add explicit 1.x compatibility, deprecation, support, governance, and final
+  differentiation documents.
+- Add a fail-closed `v1.0.0` release gate requiring an accepted independent
+  security review and exactly two distinct 28-day non-fixture pilot records.
+- Prevent repeated creation of the 1,000-table recovery fixture, avoiding a
+  PostgreSQL 17 CI crash caused by temporary peak storage exhaustion.
+
+Formal `v1.0.0` publication remains blocked until the external evidence in
+`contracts/release-evidence-v1.json` is accepted.
+
 ## [0.9.0] - 2026-09-03
 
 ### Added

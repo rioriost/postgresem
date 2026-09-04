@@ -1,8 +1,8 @@
 # Error reference
 
-This is the frozen candidate public/stored taxonomy implemented through the
-current `0.9.0` source. Changes follow the
-[release-candidate deprecation policy](deprecation-policy.md).
+This is the stable v1 public/stored taxonomy implemented by the current
+`1.0.0` source. Changes follow the
+[stable deprecation policy](deprecation-policy.md).
 
 ## Response envelopes
 

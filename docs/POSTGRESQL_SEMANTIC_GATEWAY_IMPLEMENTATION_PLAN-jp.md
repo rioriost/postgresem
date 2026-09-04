@@ -1014,13 +1014,19 @@ recovery rehearsalが通り、release-candidate利用者がquery/ingestion workf
 
 ### M12: 1.0 — Stable PostgreSQL Semantic Gateway
 
+**Repository実装status:** 準備済み`1.0.0` source treeで完了。ADR 0018、stable
+contract manifest、compatibility/support policy、最終差別化statement、
+fail-closedなexternal-evidence gateでrepository管理下のscopeを実装した。独立external
+security reviewと受理済み28日間non-fixture pilot record 2件が存在するまで、正式な
+`v1.0.0`公開はissue #4によりblockされたままとする。
+
 - stable contractとcompatibility/support期間を公開する。
 - maintainer、release cadence、vulnerability response、sustainability ownershipを確立する。
 - 最終reference比較と差別化statementを公開する。
 
 **Exit gate**: correctness、mutation safety、security、migratability、operability、Linux
 portability、interoperability、differentiation、governance、maintainer sustainabilityの
-全gateを満たす。
+全gateを満たす。repository automationで未完了の独立evidenceを代替してはならない。
 
 ## 20. MVPから正式プロジェクトへの段階
 

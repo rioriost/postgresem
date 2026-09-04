@@ -6,7 +6,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MANIFEST_PATH = ROOT / "contracts" / "rc-v1.json"
+STABLE_MANIFEST_PATH = ROOT / "contracts" / "stable-v1.json"
+RC_MANIFEST_PATH = ROOT / "contracts" / "rc-v1.json"
+RC_MANIFEST_SHA256 = (
+    "sha256:09362495edaa7a4f22e93434c9e37eb414d0c976abd5a6c0f94fdc0113d31dd8"
+)
 CONTRACT_ARTIFACTS = [
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
@@ -53,6 +57,7 @@ CONTRACT_ARTIFACTS = [
     "scripts/upgrade-local.sh",
     "scripts/verify-backup.sh",
     "tests/integration/mcp_http.py",
+    "tests/contracts/verify_release_evidence.py",
     "tests/rc/operator.sh",
     "tests/recovery/run.sh",
 ]
@@ -82,11 +87,16 @@ def main():
     parser.add_argument("--refresh", action="store_true")
     arguments = parser.parse_args()
 
-    document = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    if digest(RC_MANIFEST_PATH) != RC_MANIFEST_SHA256:
+        raise AssertionError(
+            "historical contracts/rc-v1.json changed after stable promotion"
+        )
+
+    document = json.loads(STABLE_MANIFEST_PATH.read_text(encoding="utf-8"))
     artifacts = expected_artifacts()
     if arguments.refresh:
         document["artifacts"] = artifacts
-        MANIFEST_PATH.write_text(
+        STABLE_MANIFEST_PATH.write_text(
             json.dumps(document, indent=2, sort_keys=False) + "\n",
             encoding="utf-8",
         )
@@ -94,8 +104,8 @@ def main():
 
     if document.get("artifacts") != artifacts:
         raise AssertionError(
-            "release-candidate contract artifacts changed; "
-            "classify the change and refresh contracts/rc-v1.json"
+            "stable contract artifacts changed; classify the change and "
+            "refresh contracts/stable-v1.json"
         )
     if arguments.actual_manifest is not None:
         actual = json.loads(arguments.actual_manifest.read_text(encoding="utf-8"))

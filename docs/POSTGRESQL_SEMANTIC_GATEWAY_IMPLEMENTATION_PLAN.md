@@ -1065,6 +1065,13 @@ users can operate query and ingestion workflows.
 
 ### M12: 1.0 — Stable PostgreSQL Semantic Gateway
 
+**Repository implementation status:** complete in the prepared `1.0.0` source
+tree. ADR 0018, the stable contract manifest, compatibility/support policy,
+final differentiation statement, and fail-closed external-evidence gate cover
+the repository-controlled scope. Formal `v1.0.0` publication remains blocked
+by issue #4 until the independent external security review and two accepted
+28-day non-fixture pilot records exist.
+
 - Publish stable contracts and documented compatibility/support periods.
 - Establish maintainers, release cadence, vulnerability response, and
   sustainability ownership.
@@ -1072,7 +1079,8 @@ users can operate query and ingestion workflows.
 
 **Exit gate**: Correctness, mutation safety, security, migratability,
 operability, Linux portability, interoperability, differentiation, governance,
-and maintainer sustainability gates are all met.
+and maintainer sustainability gates are all met. Repository automation must
+not substitute for the outstanding independent evidence.
 
 ## 20. Stages from MVP to Official Project
 

@@ -8,10 +8,10 @@
 Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
 パラメータ化operationを実行します。
 
-現在のsource versionは**0.9.0 release candidate**、最新の公開releaseは
-**0.7.0**です。M11ではcandidate contractをfreezeし、previous-binary rollback、
-query/ingestion operator gate、support/governance/deprecation policyを追加しました。
-production readinessやSLAを保証するものではありません。
+現在のsourceには**repository準備済み1.0.0 stable contract**が含まれ、最新の公開
+releaseは**0.7.0**です。正式な`v1.0.0` releaseは、独立external security reviewと
+受理済み28日間non-fixture pilot 2件が記録されるまでblockされます。stable互換性は
+production SLA、HA、RPO/RTO、規制対応を保証するものではありません。
 
 ## postgresemはどのような問題を解決するのか？
 
@@ -61,9 +61,9 @@ nameをLSQでqueryします。決定的compilerは、上限付きのパラメー
 よりも、PostgreSQLの型、catalog metadata、role、RLS、transaction、backup手順との
 深い統合を優先します。
 
-## 1.0までのロードマップ
+## 1.0 release状況
 
-現在のsourceはrepository管理下のM11 scopeを`1.0`ではなく`0.9`として実装しています。
+現在のsourceはrepository管理下のM12 scopeを`1.0.0`として実装しています。
 M6の独立した型付き
 mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
 です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
@@ -87,7 +87,9 @@ serverを追加しました。M10では計測されたcatalog N+1 bottleneckを�
 catalog-boundなlarge-model scaffoldとoperations/upgrade surfaceを追加しました。
 guarded executionは計測上のbottleneckではなかったため、persisted accelerationは
 deferしています。M11ではこれらのcontractをfreezeし、release-candidate operationと
-rollback gateを追加しました。独立external security reviewと2件の28日間non-fixture
+rollback gateを追加しました。M12では同じ境界をstableへ昇格し、1.x互換性/support
+期間、fail-closedな正式release evidence gate、最終差別化statementを追加しました。
+独立external security reviewと2件の28日間non-fixture
 pilotは[issue #4](https://github.com/rioriost/postgresem/issues/4)で未完了です。
 feature数のparityは目的とせず、`1.0`まで
 PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
@@ -105,6 +107,8 @@ M6〜M12のgateは
 - [ローカルCommerce Web demo](examples/web_demo/README.md)
 - [運用ガイド](docs/operations.md)
 - [M11 release-candidate checklist](docs/m11-release-candidate-checklist.md)
+- [M12 stable release checklist](docs/m12-stable-release-checklist.md)
+- [最終1.0差別化statement](docs/final-differentiation.md)
 - [Release-candidate operator workflow](docs/rc-operator-workflow.md)
 - [Support policy](SUPPORT.md)
 - [Governance](GOVERNANCE.md)
@@ -162,7 +166,7 @@ M6〜M12のgateは
 - 最大1,000のreview-only modelを生成する決定的catalog-bound scaffold
 - fixedかつprivacy-preservingなM10 operational dashboard
 - verified backupをgateとするlocal Apple Container upgrade automation
-- 決定的なfrozen release-candidate contract inventory
+- 決定的なfrozen stable v1 contract inventory
 - isolated same-name restore後のprevious-release binary実行
 - guarded query、governed ingestion、replay、auditを結合したworkflow gate
 - PostgreSQL 18を使用するローカルApple Container Compose開発stack
@@ -205,7 +209,7 @@ MCP diagnosticはstructured JSONとしてstderrへ出力され、request value�
 data、SQL、result row、private name、principal dataを含みません。hiddenなsemantic
 objectと未知のsemantic objectには、同じ公開用「not available」errorを返します。
 
-## Betaの制限事項
+## Stableの制限事項
 
 - PostgreSQL connectionには明示的な`sslmode`が必要です。remote connectionでは
   `sslmode=require`を使用してください。`sslmode=disable`は、ローカルまたは別途
@@ -261,11 +265,14 @@ make test
 make check
 ```
 
-preview全体のgateは次のcommandで実行します。
+正式1.0公開前の完全なgateは次のcommandで実行します。
 
 ```sh
-make preview-check
+make stable-check
 ```
+
+受理済みexternal evidenceがない間、`make stable-check`は意図的に失敗します。
+repository管理下のqualification suiteには`make rc-check`を使用します。
 
 M4のcompatibilityおよびperformance surfaceは、次のcommandで直接実行できます。
 

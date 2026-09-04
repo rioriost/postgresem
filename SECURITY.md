@@ -2,10 +2,12 @@
 
 ## Supported versions and scope
 
-No production-ready version has been released. `0.9.0` is the current
-release-candidate source; the latest published release remains listed in
-`README.md`. The support window and supported platforms are defined in
-[`SUPPORT.md`](SUPPORT.md).
+The source tree contains the prepared `1.0.0` stable contract, but no formal
+`v1.0.0` release exists until the external gates in
+[`docs/m12-stable-release-checklist.md`](docs/m12-stable-release-checklist.md)
+are accepted and the signed tag workflow completes. The latest published
+release remains listed in `README.md`. Support windows and platforms are
+defined in [`SUPPORT.md`](SUPPORT.md).
 
 The implemented application boundary includes MCP stdio, authenticated
 stateless loopback MCP HTTP behind a colocated HTTPS reverse proxy, guarded

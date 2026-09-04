@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "release": "1.0.0",
+  "status": "pending",
+  "independent_security_review": {
+    "evidence_url": null,
+    "reviewed_commit": null,
+    "reviewed_contract_digest": null,
+    "reviewed_image_digest": null,
+    "retest_completed_at": null,
+    "unresolved_p0_p1": null
+  },
+  "field_pilots": []
+}

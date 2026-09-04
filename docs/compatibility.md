@@ -1,15 +1,18 @@
-# Release-candidate compatibility and release roadmap
+# Stable compatibility and release roadmap
 
 ## Version policy
 
-The project uses Semantic Versioning. The current source package is `0.9.0`;
-the latest published release is `0.7.0`. Before 1.0:
+The project uses Semantic Versioning. The current source package is the
+repository-prepared `1.0.0` stable contract; the latest published release is
+`0.7.0`. Formal `v1.0.0` publication remains blocked by the external evidence
+gate. For 1.x:
 
-- patch/prerelease increments should preserve documented behavior except for
+- patch releases preserve documented behavior except for
   security or correctness fixes;
-- a `0.x` minor or new prerelease may contain documented breaking changes;
-- no 0.x release is a production-readiness or long-term-support promise;
-- release notes and a migration note are required for a known breaking change.
+- minor releases may add backward-compatible contracts and migrations;
+- breaking request or response meaning requires a new contract version and
+  deprecation window;
+- release notes and migration guidance are required for compatibility changes.
 
 When practical, a public feature is deprecated for at least one preview minor
 before removal. Unsafe, privacy-breaking, or incorrect behavior may be removed
@@ -34,8 +37,8 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
 | database migrations | `0001`–`0010` | forward-only; M9-to-M10 N-1 upgrade, Snapshot v1 upgrade, scale authoring, and same-name restore are tested; no down migrations |
-| release-candidate inventory | `schema_version: "1"` | `postgresem contract show`; checked manifest and contract-bearing artifact hashes |
-| source package | `0.9.0` | M11 frozen candidate contracts, previous-binary rollback rehearsal, operator workflow, and support/governance policy |
+| stable contract inventory | `schema_version: "1"` | `postgresem contract show`; checked stable manifest and contract-bearing artifact hashes |
+| source package | `1.0.0` | M12 stable contracts and fail-closed external-evidence release gate |
 | latest published package | `0.7.0` | signed M9 release with authenticated HTTP integration |
 
 Migration 0008 changes new mutation idempotency records from a project-global
@@ -52,10 +55,11 @@ changing published semantic revisions or query/mutation authorization.
 Authority and JWKS rotation requires an atomic file replacement plus process
 restart; hot reload is not part of the 0.7 contract.
 
-ADR 0017 freezes the candidate versions above. Changes to frozen request
+ADR 0017 froze the candidate versions above; ADR 0018 promotes them to the
+stable v1 boundary. Changes to frozen request
 shapes, meanings, error semantics, MCP resources, migration/audit signatures,
 or CLI output schemas require compatibility classification and an intentional
-manifest update. See [deprecation policy](deprecation-policy.md).
+stable-manifest update. See [deprecation policy](deprecation-policy.md).
 
 LSQ v1 names the serialized shape and current type/time/null semantics. Before
 1.0, a breaking shape or meaning change must either increment the LSQ schema
@@ -315,7 +319,8 @@ supply-chain artifact.
 
 ## Known limitations
 
-- beta, not production-ready;
+- formal `v1.0.0` publication is blocked until independent review and two
+  accepted 28-day non-fixture pilots are recorded;
 - authenticated HTTP does not terminate TLS and requires a colocated reverse
   proxy; authority/JWKS hot reload and runtime OIDC discovery are absent;
 - remote PostgreSQL TLS requires a platform-trusted certificate and hostname;

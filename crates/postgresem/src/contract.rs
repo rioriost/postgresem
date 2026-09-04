@@ -22,8 +22,8 @@ const CURRENT_MIGRATION: &str = "0010_m10_operational_report";
 #[derive(Debug, PartialEq, Serialize)]
 pub struct ContractManifest {
     schema_version: &'static str,
-    release_candidate: &'static str,
-    status: &'static str,
+    release: &'static str,
+    contract_status: &'static str,
     contracts: Contracts,
     protocols: Protocols,
     cli_commands: [&'static str; 10],
@@ -78,8 +78,8 @@ struct DeprecatedSurface {
 pub fn manifest() -> ContractManifest {
     ContractManifest {
         schema_version: "1",
-        release_candidate: env!("CARGO_PKG_VERSION"),
-        status: "release_candidate",
+        release: env!("CARGO_PKG_VERSION"),
+        contract_status: "stable",
         contracts: Contracts {
             lsq: [LSQ_SCHEMA_VERSION],
             lsm: [LSM_SCHEMA_VERSION],
@@ -132,7 +132,7 @@ pub fn manifest() -> ContractManifest {
         deprecated: [DeprecatedSurface {
             surface: "report beta",
             replacement: "report operations",
-            removal_before: None,
+            removal_before: Some("2.0.0"),
         }],
         deferred: [
             "automatic_materialized_view_routing",
@@ -153,9 +153,10 @@ mod tests {
     use super::manifest;
 
     #[test]
-    fn manifest_matches_frozen_release_candidate() {
+    fn manifest_matches_frozen_stable_contract() {
         let expected: Value =
-            serde_json::from_str(include_str!("../../../contracts/rc-v1.json")).expect("manifest");
+            serde_json::from_str(include_str!("../../../contracts/stable-v1.json"))
+                .expect("manifest");
         assert_eq!(
             serde_json::to_value(manifest()).expect("serialize manifest"),
             expected["manifest"]

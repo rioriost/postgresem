@@ -8,11 +8,11 @@ Logical Semantic Mutations (LSM), resolves them against an immutable published
 semantic revision, and executes deterministic parameterized operations through
 separate guarded PostgreSQL query and mutation boundaries.
 
-The current source version is the **0.9.0 release candidate**; the latest
-published release is **0.7.0**. M11 freezes the candidate contracts, adds
-previous-binary rollback and query/ingestion operator gates, and publishes
-support, governance, and deprecation policy. It is not a production-readiness
-or SLA promise.
+The current source contains the **repository-prepared 1.0.0 stable contract**;
+the latest published release is **0.7.0**. The formal `v1.0.0` release remains
+blocked until an independent external security review and two accepted 28-day
+non-fixture pilots are recorded. Stable compatibility is not a production
+SLA, HA, RPO/RTO, or regulatory promise.
 
 ## What problem does postgresem solve?
 
@@ -65,10 +65,10 @@ This approach is intentionally PostgreSQL-specific. It favors deep integration
 with PostgreSQL types, catalog metadata, roles, RLS, transactions, and backup
 procedures over a broad abstraction across many database dialects.
 
-## Roadmap to 1.0
+## 1.0 release status
 
-The current source implements the repository-controlled M11 scope as `0.9`,
-not `1.0`. M6's separate typed
+The current source implements the repository-controlled M12 scope as `1.0.0`.
+M6's separate typed
 mutation contract remains limited to bounded inserts and explicitly modeled
 idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
 and authorization-aware catalog drift without weakening the existing
@@ -92,8 +92,11 @@ MCP `2026-07-28` HTTP resource server without moving identity or authorization
 out of PostgreSQL. M10 removes the measured catalog N+1 bottleneck, adds
 catalog-bound large-model scaffolding and operational/upgrade surfaces, and
 keeps persisted acceleration deferred because guarded execution was not the
-measured bottleneck. M11 freezes these contracts and adds release-candidate
-operation and rollback gates. Independent external security review and two
+measured bottleneck. M11 froze these contracts and added release-candidate
+operation and rollback gates. M12 promotes the unchanged boundary to stable,
+defines 1.x compatibility/support periods, adds a fail-closed formal-release
+evidence gate, and publishes the final differentiation statement. Independent
+external security review and two
 28-day non-fixture pilots remain outstanding in
 [issue #4](https://github.com/rioriost/postgresem/issues/4). Feature-count parity
 is not the objective: PostgreSQL remains the only execution engine and semantic
@@ -111,6 +114,8 @@ for the M6–M12 gates.
 - [Local commerce Web demo](examples/web_demo/README.md)
 - [Operations guide](docs/operations.md)
 - [M11 release-candidate checklist](docs/m11-release-candidate-checklist.md)
+- [M12 stable release checklist](docs/m12-stable-release-checklist.md)
+- [Final 1.0 differentiation](docs/final-differentiation.md)
 - [Release-candidate operator workflow](docs/rc-operator-workflow.md)
 - [Support policy](SUPPORT.md)
 - [Governance](GOVERNANCE.md)
@@ -169,7 +174,7 @@ for the M6–M12 gates.
 - deterministic catalog-bound scaffolding for up to 1,000 review-only models
 - a fixed, privacy-preserving M10 operational dashboard
 - verified-backup-gated local Apple Container upgrade automation
-- a deterministic frozen release-candidate contract inventory
+- a deterministic frozen stable v1 contract inventory
 - previous-release binary execution after isolated same-name restore
 - a combined guarded-query, governed-ingestion, replay, and audit workflow gate
 - local Apple Container Compose development stack using PostgreSQL 18
@@ -215,7 +220,7 @@ MCP diagnostics go to stderr as structured JSON and omit request values,
 connection data, SQL, result rows, private names, and principal data. Hidden
 and unknown semantic objects receive the same public “not available” errors.
 
-## Beta limitations
+## Stable limitations
 
 - PostgreSQL connections require an explicit `sslmode`. Use
   `sslmode=require` for remote connections; `sslmode=disable` is accepted only
@@ -274,11 +279,14 @@ make test
 make check
 ```
 
-The complete repository release-candidate gate is:
+The complete repository gate before formal 1.0 publication is:
 
 ```sh
-make rc-check
+make stable-check
 ```
+
+`make stable-check` intentionally fails while accepted external evidence is
+absent. Use `make rc-check` for the repository-controlled qualification suite.
 
 Run the M4 compatibility and performance surfaces directly:
 

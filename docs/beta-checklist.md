@@ -20,6 +20,7 @@ that must come from independent environments.
 | independent security review | **outstanding** | external evidence required; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
 | two non-fixture databases operated for four weeks | **outstanding** | one evidence record per database is required; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
 | P0/P1 security or correctness defects during field period | **not measurable yet** | accepted 28-day field records are not yet available; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
+| machine-readable 1.0 evidence gate | implemented, pending evidence | `contracts/release-evidence-v1.json`; `v1.0.0` release validation fails closed until accepted URLs and immutable identities replace pending values |
 
 ## Beta SLO candidates
 

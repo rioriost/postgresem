@@ -44,8 +44,11 @@ jobs:
       - name: Run workspace tests
         run: cargo test --locked --workspace --all-features
 
-      - name: Verify frozen RC contracts
-        run: make test-contracts
+      - name: Verify frozen stable contracts and evidence schema
+        run: |
+          make test-contracts
+          python3 -m unittest tests/contracts/test_verify_release_evidence.py
+          python3 tests/contracts/verify_release_evidence.py --allow-pending
 
       - name: Run installer trust-boundary tests
         run: make test-install

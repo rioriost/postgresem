@@ -26,8 +26,8 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as stream:
     contract = json.load(stream)
 
-assert contract["release_candidate"] == "0.9.0"
-assert contract["status"] == "release_candidate"
+assert contract["release"] == "1.0.0"
+assert contract["contract_status"] == "stable"
 assert contract["contracts"]["lsq"] == ["1"]
 assert contract["contracts"]["lsm"] == ["1"]
 assert contract["contracts"]["database_migrations"]["current"] == (
