@@ -227,6 +227,8 @@ postgresem report operations --window-hours 1 |
   grep -q '"query_audit_complete": true'
 verify_revision "$n_minus_one_database" "$current_revision"
 run_guarded_query "$n_minus_one_database"
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -f /tests/performance/catalog_1000.sql
 verify_scale_authoring "$n_minus_one_database"
 
 drop_database "$legacy_authority_database"

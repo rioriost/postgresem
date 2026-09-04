@@ -19,17 +19,6 @@ def conninfo_value(value):
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-run(
-    [
-        "psql",
-        "--no-psqlrc",
-        "-v",
-        "ON_ERROR_STOP=1",
-        "-f",
-        "/tests/performance/catalog_1000.sql",
-    ]
-)
-
 environment = os.environ.copy()
 credential = conninfo_value(environment["PGPASSWORD"])
 environment["RECOVERY_CATALOG_URL"] = (
