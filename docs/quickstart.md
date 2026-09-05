@@ -100,7 +100,7 @@ Expected migration rows are `0001_semantic_schema`,
 `0006_fanout_aggregation_anchor`, `0007_fanout_anchor_invariants`,
 `0008_mutation_authority_idempotency`, and
 `0009_mutation_reconcile_precedence`, and
-`0010_m10_operational_report`. Hashes, container addresses, and
+`0011_mutation_reconcile_writer_role`. Hashes, container addresses, and
 timestamps are intentionally not fixed.
 
 ## 4. Attach to MCP and run the pilot

@@ -20,7 +20,11 @@ The stable v1 contract inventory is the compatibility boundary for 1.x.
   Snapshot v2 authoring, compiler semantics `0.2.0`, mutation compiler
   semantics `0.1.0`, catalog snapshot v2, catalog diff v1, MCP protocols/tool
   schema/resources, query/mutation audit meanings, and migrations
-  `0001`–`0010`.
+  `0001`–`0011`.
+- **Immediate security correction:** migration 0011 removes the role-unbound
+  internal reconciliation overload, restoring ADR 0015's writer-role boundary.
+  See [ADR 0019](adr/0019-role-bound-reconciliation-and-jwk-only-dependencies.md)
+  and the upgrade requirements in [compatibility](compatibility.md).
 - **Deprecated but supported:** `postgresem report beta`. Use
   `postgresem report operations`. It will not be removed before `2.0.0` or
   before 12 months have elapsed from the formal `1.0.0` release, whichever is

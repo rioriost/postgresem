@@ -17,7 +17,7 @@ use crate::{
 
 const ERROR_TAXONOMY_VERSION: &str = "1";
 const FIRST_MIGRATION: &str = "0001_semantic_schema";
-const CURRENT_MIGRATION: &str = "0010_m10_operational_report";
+const CURRENT_MIGRATION: &str = "0011_mutation_reconcile_writer_role";
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct ContractManifest {

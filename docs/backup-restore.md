@@ -42,9 +42,10 @@ for the source data and audit metadata.
 It:
 
 1. exercises legacy mutation migrations and holds the N-1 schema at
-   `0009_mutation_reconcile_precedence`;
+   `0010_m10_operational_report`;
 2. runs the current binary and a guarded query against N-1;
-3. applies `0010_m10_operational_report`;
+3. applies `0011_mutation_reconcile_writer_role` and exercises matching-role,
+   remapped-role, and legacy-precedence reconciliation;
 4. verifies the published semantic hash and M10 operational report;
 5. proves deterministic scaffolding from 1,000 catalog relations;
 6. creates a full custom-format database dump;

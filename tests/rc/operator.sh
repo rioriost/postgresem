@@ -31,7 +31,7 @@ assert contract["contract_status"] == "stable"
 assert contract["contracts"]["lsq"] == ["1"]
 assert contract["contracts"]["lsm"] == ["1"]
 assert contract["contracts"]["database_migrations"]["current"] == (
-    "0010_m10_operational_report"
+    "0011_mutation_reconcile_writer_role"
 )
 PY
 

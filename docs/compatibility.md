@@ -36,7 +36,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | compiler semantics | `0.2.0` | recorded in published revisions/audit; deterministic output applies only to identical inputs and compiler semantics |
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
-| database migrations | `0001`–`0010` | forward-only; M9-to-M10 N-1 upgrade, Snapshot v1 upgrade, scale authoring, and same-name restore are tested; no down migrations |
+| database migrations | `0001`–`0011` | forward-only; migration 0011 restores writer-role-bound reconciliation; no down migrations |
 | stable contract inventory | `schema_version: "1"` | `postgresem contract show`; checked stable manifest and contract-bearing artifact hashes |
 | source package | `1.0.0` | M12 stable contracts and fail-closed external-evidence release gate |
 | latest published package | `0.7.0` | signed M9 release with authenticated HTTP integration |
@@ -52,6 +52,15 @@ Migration 0009 gives current `principal-v1` state deterministic precedence if
 both current and matching legacy authority rows exist for one retry key.
 Migration 0010 adds the fixed, audit-role-only M10 operational report without
 changing published semantic revisions or query/mutation authorization.
+Migration 0011 requires the configured writer role when reconciling either
+current or legacy state and removes the unguarded four-argument lookup.
+Current state retains precedence: a role mismatch cannot fall back to legacy
+state. This is a stricter security/correctness rejection under
+[ADR 0019](adr/0019-role-bound-reconciliation-and-jwk-only-dependencies.md),
+not a new public request field. Apply migrations before updating the gateway;
+old binaries cannot reconcile against the new schema, and new binaries cannot
+reconcile against a pre-0011 schema. Query and mutation execution interfaces
+are unchanged.
 Authority and JWKS rotation requires an atomic file replacement plus process
 restart; hot reload is not part of the 0.7 contract.
 

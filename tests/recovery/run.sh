@@ -212,8 +212,8 @@ run_guarded_query "$n_minus_one_database"
 postgresem report beta --window-hours 1 |
   grep -q '"audit_complete": true'
 
-unset POSTGRESEM_MIGRATION_MAX_VERSION
-sh /migrations/run.sh
+POSTGRESEM_MIGRATION_MAX_VERSION=0010_m10_operational_report \
+  sh /migrations/run.sh
 if [ "$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
@@ -225,6 +225,27 @@ postgresem report operations --window-hours 1 |
   grep -q '"current": "0010_m10_operational_report"'
 postgresem report operations --window-hours 1 |
   grep -q '"query_audit_complete": true'
+verify_revision "$n_minus_one_database" "$current_revision"
+run_guarded_query "$n_minus_one_database"
+configure_mutation_urls "$n_minus_one_database"
+if POSTGRESEM_IDEMPOTENCY_KEY=recovery-pre-0011 \
+  postgresem mutation reconcile --project commerce >/dev/null 2>&1
+then
+  echo "current reconciliation accepted the pre-0011 database API" >&2
+  exit 1
+fi
+sh /migrations/run.sh
+if [ "$(
+  psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
+    -c 'SELECT count(*) FROM semantic.schema_migration'
+)" != "11" ]; then
+  echo "N-1 upgrade did not apply migration 0011" >&2
+  exit 1
+fi
+psql --no-psqlrc -v ON_ERROR_STOP=1 \
+  -f /tests/integration/mutation_reconciliation.sql
+postgresem report operations --window-hours 1 |
+  grep -q '"current": "0011_mutation_reconcile_writer_role"'
 verify_revision "$n_minus_one_database" "$current_revision"
 run_guarded_query "$n_minus_one_database"
 psql --no-psqlrc -v ON_ERROR_STOP=1 \
@@ -329,7 +350,7 @@ migration_count=$(
   psql --no-psqlrc --tuples-only --no-align -v ON_ERROR_STOP=1 \
     -c 'SELECT count(*) FROM semantic.schema_migration'
 )
-if [ "$migration_count" != "10" ]; then
+if [ "$migration_count" != "11" ]; then
   echo "pre-0008 upgrade did not apply the complete migration set" >&2
   exit 1
 fi
@@ -338,7 +359,7 @@ postgresem report beta --window-hours 1 |
 postgresem report beta --window-hours 1 |
   grep -q '"active_principals": null'
 postgresem report operations --window-hours 1 |
-  grep -q '"current": "0010_m10_operational_report"'
+  grep -q '"current": "0011_mutation_reconcile_writer_role"'
 verify_revision "$legacy_authority_database" "$current_revision"
 configure_mutation_urls "$legacy_authority_database"
 export POSTGRESEM_IDEMPOTENCY_KEY=recovery-legacy-idempotency
@@ -365,7 +386,7 @@ unset POSTGRESEM_MIGRATION_MAX_VERSION
 sh /migrations/run.sh
 verify_revision "$legacy_v1_database" "$legacy_v1_revision"
 postgresem report operations --window-hours 1 |
-  grep -q '"current": "0010_m10_operational_report"'
+  grep -q '"current": "0011_mutation_reconcile_writer_role"'
 
 export PGDATABASE=$n_minus_one_database
 configure_gateway_urls "$n_minus_one_database"
@@ -448,7 +469,7 @@ run_guarded_query "$source_database"
 postgresem report beta --window-hours 1 |
   grep -q '"validation_compile_p95_under_50_ms"'
 postgresem report operations --window-hours 1 |
-  grep -q '"current": "0010_m10_operational_report"'
+  grep -q '"current": "0011_mutation_reconcile_writer_role"'
 case ${POSTGRESEM_REQUIRE_PREVIOUS_BIN:-0} in
   0 | 1) ;;
   *)
@@ -473,7 +494,14 @@ if [ -n "${POSTGRESEM_PREVIOUS_BIN:-}" ]; then
   run_guarded_query_with "$POSTGRESEM_PREVIOUS_BIN" "$source_database"
   run_governed_mutation_with "$POSTGRESEM_PREVIOUS_BIN" "$source_database"
   "$POSTGRESEM_PREVIOUS_BIN" report operations --window-hours 1 |
-    grep -q '"current": "0010_m10_operational_report"'
+    grep -q '"current": "0011_mutation_reconcile_writer_role"'
+  if POSTGRESEM_IDEMPOTENCY_KEY=integration-order-insert \
+    "$POSTGRESEM_PREVIOUS_BIN" mutation reconcile --project commerce \
+      >/dev/null 2>&1
+  then
+    echo "previous binary retained the unscoped reconciliation API" >&2
+    exit 1
+  fi
   rollback_result="; previous-binary rollback passed"
 else
   rollback_result="; previous-binary rollback not requested"

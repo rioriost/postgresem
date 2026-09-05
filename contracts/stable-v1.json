@@ -26,7 +26,7 @@
       "error_taxonomy": "1",
       "database_migrations": {
         "first": "0001_semantic_schema",
-        "current": "0010_m10_operational_report"
+        "current": "0011_mutation_reconcile_writer_role"
       }
     },
     "protocols": {
@@ -163,7 +163,7 @@
     },
     {
       "path": "crates/postgresem/src/contract.rs",
-      "sha256": "sha256:3a36719f9782eb7caddeebe5beb471884cd7c5e32bf4dfd38c8cd8f349035947"
+      "sha256": "sha256:01ae15c5fe57d461146d6ac4293b47ccae74ddc8f5764981327030418af80f36"
     },
     {
       "path": "crates/postgresem/src/database.rs",
@@ -199,7 +199,7 @@
     },
     {
       "path": "crates/postgresem/src/mutation_executor.rs",
-      "sha256": "sha256:ebb392dab9e5429c9f6a61000a09784f6d1a533aac6e656a70ea7405f3ef2ff5"
+      "sha256": "sha256:7eed4e77de1bdad144fd929cef6b5e522d7555d73302d5e00a270399baeb5fd7"
     },
     {
       "path": "crates/postgresem/src/osi.rs",
@@ -258,6 +258,10 @@
       "sha256": "sha256:62a84b23fb148976d8f249ab440f92928514d1babd0c208c1659913b3290c595"
     },
     {
+      "path": "migrations/0011_mutation_reconcile_writer_role.sql",
+      "sha256": "sha256:ed6cd89662a61e2c02ab188ae9f78ad652e115be3eb4d9c0a6acb61cb5b84a31"
+    },
+    {
       "path": "migrations/run.sh",
       "sha256": "sha256:23bdf0b9e8e4de746b556251f1cca55600bd755f9b0adfddda3bdf8e2248c6d5"
     },
@@ -303,11 +307,11 @@
     },
     {
       "path": "tests/rc/operator.sh",
-      "sha256": "sha256:3108cca4c089b5b7a0cc66e20100300f999576bfc4687ff78ad12d675475082c"
+      "sha256": "sha256:3367513351f29224f75aeb6b0044ebc3ab82db23812fe8d4158a184e9aee5840"
     },
     {
       "path": "tests/recovery/run.sh",
-      "sha256": "sha256:35169d7962dbb7634fec3545dad2b52bd36c33be88aefe6540131714f46b5b37"
+      "sha256": "sha256:0a4707db64b4e03bc71e6b1a3cb2c8d5d35ec2cab6b2b2d51b63850e38c12355"
     }
   ]
 }

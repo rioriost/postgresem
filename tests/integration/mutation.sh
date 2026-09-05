@@ -7,6 +7,8 @@ export POSTGRESEM_MUTATION_DB_ROLE=postgresem_order_writer
 export POSTGRESEM_MAX_MUTATION_RESULT_BYTES=1048576
 TEST_ROOT=${TEST_ROOT:-/tests}
 
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f "${TEST_ROOT}/mutation_reconciliation.sql"
+
 psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
 TRUNCATE semantic.mutation_audit, semantic.mutation_idempotency;
 DELETE FROM commerce.orders WHERE external_id LIKE 'integration-%';
@@ -171,6 +173,12 @@ export POSTGRESEM_MUTATION_AUTHORITY_ID=tenant-a
 tenant_a_reconciled=$(postgresem mutation reconcile --project commerce)
 printf '%s\n' "$tenant_a_reconciled" |
   grep -q "\"mutation_id\": \"$tenant_a_mutation_id\""
+remapped_reconciled=$(
+  POSTGRESEM_MUTATION_DB_ROLE=postgresem_tenant_b_writer \
+    postgresem mutation reconcile --project commerce
+)
+printf '%s\n' "$remapped_reconciled" |
+  python3 -c 'import json,sys; assert json.load(sys.stdin)["state"] is None'
 if [ "$(
   psql --no-psqlrc --tuples-only --no-align -c \
     "SELECT count(*) FROM semantic.mutation_idempotency WHERE idempotency_key_hash = '$(printf %s integration-tenant-a-insert | sha256sum | awk '{print "sha256:" $1}')'"

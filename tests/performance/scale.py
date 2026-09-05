@@ -183,7 +183,7 @@ operations = json.loads(
 )
 if operations["catalog"]["user_relations"] < 1000:
     raise AssertionError("operational report omitted scale catalog relations")
-if operations["migrations"]["current"] != "0010_m10_operational_report":
+if operations["migrations"]["current"] != "0011_mutation_reconcile_writer_role":
     raise AssertionError("operational report did not expose the current migration")
 if not operations["objectives"]["query_audit_complete"]:
     raise AssertionError("operational report found incomplete query audit rows")

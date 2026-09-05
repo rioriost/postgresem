@@ -476,12 +476,13 @@ pub fn reconcile(
     let legacy_authority_hash = legacy_mutation_authority_hash(context, config.database_role())?;
     let row = audit
         .query_one(
-            "SELECT semantic.lookup_mutation_idempotency($1, $2, $3, $4) AS state",
+            "SELECT semantic.lookup_mutation_idempotency($1, $2, $3, $4, $5) AS state",
             &[
                 &project,
                 &authority_hash,
                 &legacy_authority_hash,
                 &sha256(idempotency_key),
+                &config.database_role(),
             ],
         )
         .map_err(MutationExecuteError::Reconciliation)?;

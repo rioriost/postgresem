@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Security
+
+- Remove the unused `time 0.3.36` dependency and jsonwebtoken PEM/ASN.1
+  feature, eliminating RUSTSEC-2026-0009 from the dependency graph while
+  preserving JWK authentication and the declared Rust MSRV.
+- Add forward migration `0011_mutation_reconcile_writer_role` to require
+  the same configured writer role during reconciliation, including legacy
+  lookup. A current-state role mismatch never falls back to legacy state.
+  Remove the role-unbound lookup overload; apply migrations before deploying
+  the new binary. Old/new reconciliation across this schema boundary fails
+  closed. Refresh the stable contract under ADR 0019; retain historical
+  review identities and the unchanged pending external-evidence gate.
+
 ### Prepared for 1.0.0
 
 - Consolidate application examples into Meaning Lab: real PostgreSQL/semantic

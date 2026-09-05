@@ -383,8 +383,8 @@ automation should use `report operations`.
 
 ## Upgrade order
 
-Forward migrations `0001` through `0010`, idempotent reruns, N-1 execution, and
-N-1-to-current migration are tested.
+Forward migrations now run from `0001` through `0011`. Recovery coverage
+includes idempotent reruns, guarded N-1 queries, and N-1-to-current migration.
 
 For a disposable/local preview upgrade:
 
@@ -403,10 +403,14 @@ applies unapplied forward migrations, proves published hashes are unchanged,
 builds the current binary, and runs a guarded canary plus `report operations`.
 It is a local reference, not a production backup, rollout, or rollback product.
 
-The current binary is tested for guarded queries against the latest N-1 schema,
-then for the `0009` to `0010` upgrade. Apply all migrations before starting a
-gateway. Do not assume older combinations or downgrade support. There are no
-down migrations.
+Recovery coverage includes guarded queries on `0009` and `0010`, followed by
+the `0010` to `0011` upgrade and writer-role reconciliation rejection cases.
+Apply all migrations before starting a gateway. Migration 0011 removes the
+old role-unbound reconciliation overload: old binaries cannot reconcile on
+the upgraded schema, and new binaries fail closed on a pre-0011 schema.
+Do not restore that overload during rollback. Query and mutation execution
+interfaces remain unchanged. Do not assume older combinations or downgrade
+support. There are no down migrations.
 
 CI also rebuilds the immutable M10 `0.8.0` binary, restores the fixture backup
 under the original database name, and executes a guarded query plus operations
