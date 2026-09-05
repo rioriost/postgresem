@@ -17,10 +17,33 @@ that must come from independent environments.
 | external evidence collection workflow | implemented | [M5 external evidence process](m5-external-evidence.md) and structured field/security review issue forms |
 | MCP Streamable HTTP | deferred | authentication and request identity are prerequisites |
 | loopback commerce Web demo | implemented | [Web demo](../examples/web_demo/README.md); existing stdio MCP path |
-| independent security review | **outstanding** | external evidence required; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
+| independent security review | **completion reported; evidence registration pending** | maintainer reported an external review with no vulnerabilities found on 2026-09-05; see the status note below |
 | two non-fixture databases operated for four weeks | **outstanding** | one evidence record per database is required; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
 | P0/P1 security or correctness defects during field period | **not measurable yet** | accepted 28-day field records are not yet available; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
 | machine-readable 1.0 evidence gate | implemented, pending evidence | `contracts/release-evidence-v1.json`; `v1.0.0` release validation fails closed until accepted URLs and immutable identities replace pending values |
+
+## External security review status (2026-09-05)
+
+The maintainer reports that an external security review, conducted outside the
+implementation session, is complete and found no vulnerabilities. This records
+the maintainer's report, not a new review performed by repository automation.
+
+The review reference, reviewer independence/scope, reviewed commit,
+stable-manifest and image digests, and review/retest dates have not yet been
+provided for the release evidence record. Review execution is therefore
+reported complete; registration of the evidence required by
+[the external evidence process](m5-external-evidence.md) remains pending.
+Do not infer the reviewed commit or dates from the current HEAD or this status
+note. `contracts/release-evidence-v1.json` remains pending until the required
+records can be populated accurately.
+
+The maintainer also confirms that potential future supply-chain
+vulnerabilities are an ongoing monitoring responsibility, not a current release
+blocker by themselves. Existing dependency checks, action pinning, signature
+verification, and release gates remain in place; newly discovered findings
+must still be triaged under the security policy.
+
+This update does not establish completion of either 28-day non-fixture pilot.
 
 ## Beta SLO candidates
 

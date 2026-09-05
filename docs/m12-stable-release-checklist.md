@@ -17,9 +17,15 @@ external evidence is pending.
 | final reference comparison and differentiation | documented | [final differentiation](final-differentiation.md) |
 | vulnerability response | documented | [`SECURITY.md`](../SECURITY.md) |
 | current maintainer and release ownership | documented | [`GOVERNANCE.md`](../GOVERNANCE.md) |
-| independent external security review | **outstanding** | [issue #4](https://github.com/rioriost/postgresem/issues/4) |
+| independent external security review | **completion reported; evidence registration pending** | [2026-09-05 maintainer report](beta-checklist.md#external-security-review-status-2026-09-05): no vulnerabilities found |
+| ongoing supply-chain monitoring | continuing; not a current blocker by itself | maintainer determination on 2026-09-05; existing dependency and release integrity controls remain required |
 | two accepted 28-day non-fixture pilots | **outstanding** | [issue #4](https://github.com/rioriost/postgresem/issues/4) |
 | unresolved field P0/P1 defects | **not measurable** | accepted pilot records are not yet available |
+
+The security review is reported complete, rather than awaiting execution.
+Its scope and immutable evidence identifiers still need to be registered;
+the pilot requirements are unchanged. See the
+[review status note](beta-checklist.md#external-security-review-status-2026-09-05).
 
 When maintainers accept the three external records, they must replace the
 pending fields in `contracts/release-evidence-v1.json` with immutable HTTPS

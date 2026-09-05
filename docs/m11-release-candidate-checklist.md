@@ -15,7 +15,7 @@ not self-certify production operation.
 | governance and release cadence | documented | [`GOVERNANCE.md`](../GOVERNANCE.md) |
 | deprecation policy | documented | [deprecation policy](deprecation-policy.md) |
 | P0/P1 repository defects | none known | full RC gate and security review |
-| independent external security review | **outstanding** | tracked in [issue #4](https://github.com/rioriost/postgresem/issues/4) |
+| independent external security review | **completion reported; evidence registration pending** | [2026-09-05 maintainer report](beta-checklist.md#external-security-review-status-2026-09-05): no vulnerabilities found |
 | two accepted 28-day non-fixture database pilots | **outstanding** | tracked in [issue #4](https://github.com/rioriost/postgresem/issues/4) |
 | unresolved field P0/P1 defects | **not measurable** | external field periods are not complete |
 

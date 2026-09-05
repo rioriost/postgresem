@@ -89,8 +89,12 @@ guarded executionは計測上のbottleneckではなかったため、persisted a
 deferしています。M11ではこれらのcontractをfreezeし、release-candidate operationと
 rollback gateを追加しました。M12では同じ境界をstableへ昇格し、1.x互換性/support
 期間、fail-closedな正式release evidence gate、最終差別化statementを追加しました。
-独立external security reviewと2件の28日間non-fixture
-pilotは[issue #4](https://github.com/rioriost/postgresem/issues/4)で未完了です。
+2026-09-05にmaintainerから、外部security reviewを完了し、脆弱性は検出されなかった
+との報告を受けています。review対象とimmutable evidenceの登録、および2件の28日間
+non-fixture pilot recordは[issue #4](https://github.com/rioriost/postgresem/issues/4)
+で引き続き管理します。
+[review状況](docs/beta-checklist.md#external-security-review-status-2026-09-05)を
+参照してください。
 feature数のparityは目的とせず、`1.0`まで
 PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
 

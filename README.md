@@ -95,10 +95,13 @@ keeps persisted acceleration deferred because guarded execution was not the
 measured bottleneck. M11 froze these contracts and added release-candidate
 operation and rollback gates. M12 promotes the unchanged boundary to stable,
 defines 1.x compatibility/support periods, adds a fail-closed formal-release
-evidence gate, and publishes the final differentiation statement. Independent
-external security review and two
-28-day non-fixture pilots remain outstanding in
-[issue #4](https://github.com/rioriost/postgresem/issues/4). Feature-count parity
+evidence gate, and publishes the final differentiation statement. On
+2026-09-05 the maintainer reported an external security review with no
+vulnerabilities found. Registration of its scope and immutable evidence, and
+the two 28-day non-fixture pilot records, remain pending in
+[issue #4](https://github.com/rioriost/postgresem/issues/4); see the
+[review status](docs/beta-checklist.md#external-security-review-status-2026-09-05).
+Feature-count parity
 is not the objective: PostgreSQL remains the only execution engine and semantic
 source of truth through `1.0`.
 
