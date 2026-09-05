@@ -31,6 +31,42 @@ REVIEW_KEYS = {
     "retest_completed_at",
     "unresolved_p0_p1",
 }
+EXCEPTION_DOCUMENT_KEYS = {
+    "schema_version", "release", "status", "source_security_review",
+    "field_pilots", "maintainer_exception",
+}
+EXCEPTION_REVIEW_COMMIT = "c8a2ca7a6a635de975d8e8b2324b652ac037075c"
+EXCEPTION_REVIEW_DIGEST = "sha256:c3d58c9fd3670836da7f86c73c478dcee4a087601cb083a927e3f7617e4f18a2"
+EXCEPTION_REVIEW_PATH = "docs/security-reviews/2026-09-05-381fe57.md"
+EXCEPTION_REVIEW_URL = (
+    "https://github.com/rioriost/postgresem/blob/"
+    "2797160ee431ee12722d339e23def6d8c8e7fbd5/" + EXCEPTION_REVIEW_PATH
+)
+EXCEPTION_ADR_PATH = "docs/adr/0020-v1-release-maintainer-exception.md"
+WAIVED_REQUIREMENTS = [
+    "independent_external_reviewer",
+    "reviewed_container_image",
+    "two_28_day_non_fixture_pilots",
+]
+EVIDENCE_VALIDATOR_PATH = "tests/contracts/verify_release_evidence.py"
+EXCEPTION_ALLOWED_CHANGES = {
+    "CHANGELOG.md",
+    "contracts/release-evidence-v1.json",
+    "contracts/stable-v1.json",
+    EVIDENCE_VALIDATOR_PATH,
+    "tests/contracts/test_verify_release_evidence.py",
+    EXCEPTION_REVIEW_PATH,
+    EXCEPTION_ADR_PATH,
+    "docs/adr/0018-stable-contract-and-release-evidence.md",
+    "docs/adr/0019-role-bound-reconciliation-and-jwk-only-dependencies.md",
+    "docs/beta-checklist.md",
+    "docs/m5-external-evidence.md",
+    "docs/m11-release-candidate-checklist.md",
+    "docs/m12-stable-release-checklist.md",
+    "docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md",
+    "docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md",
+    "docs/release-verification.md",
+}
 
 
 def require_exact_keys(value, expected, field):
@@ -92,7 +128,58 @@ def digest(path):
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def pinned_repository_document(url, expected_path):
+    require_https_url(url, "immutable decision URL")
+    prefix = "https://github.com/rioriost/postgresem/blob/"
+    if not url.startswith(prefix):
+        raise AssertionError("evidence must be pinned in the project repository")
+    commit, separator, path = url[len(prefix):].partition("/")
+    if not COMMIT_RE.fullmatch(commit) or not separator or path != expected_path:
+        raise AssertionError("evidence must use a full commit and the approved document")
+    return commit
+
+
+def validate_exception(document):
+    require_exact_keys(document, EXCEPTION_DOCUMENT_KEYS, "release exception evidence")
+    if document["schema_version"] != "1" or document["release"] != "1.0.0":
+        raise AssertionError("maintainer exception is limited to 1.0.0")
+    if document["status"] != "accepted":
+        raise AssertionError("1.0.0 maintainer exception is not accepted")
+    if document["field_pilots"] != []:
+        raise AssertionError("waived field pilots must remain empty, not claimed complete")
+    review = document["source_security_review"]
+    require_exact_keys(review, REVIEW_KEYS | {"kind"}, "source_security_review")
+    if review["kind"] != "automated-source-review":
+        raise AssertionError("exception must identify the automated source review")
+    if (review["reviewed_commit"] != EXCEPTION_REVIEW_COMMIT
+            or review["reviewed_contract_digest"] != EXCEPTION_REVIEW_DIGEST
+            or review["evidence_url"] != EXCEPTION_REVIEW_URL):
+        raise AssertionError("exception must bind the approved remediation evidence")
+    if review["reviewed_image_digest"] is not None:
+        raise AssertionError("source-only review must not claim an image review")
+    if review["retest_completed_at"] != "2026-09-05":
+        raise AssertionError("exception must retain the recorded source retest date")
+    parse_utc_date(review["retest_completed_at"], "source retest date")
+    if type(review["unresolved_p0_p1"]) is not int or review["unresolved_p0_p1"] != 0:
+        raise AssertionError("source review has unresolved P0/P1 findings")
+    decision = document["maintainer_exception"]
+    require_exact_keys(decision, {
+        "scope", "maintainer", "accepted_at", "decision_url", "waived_requirements",
+    }, "maintainer_exception")
+    if decision["scope"] != "v1.0.0-only" or decision["maintainer"] != "rioriost":
+        raise AssertionError("exception must identify the approving maintainer and exact scope")
+    if decision["accepted_at"] != "2026-09-05":
+        raise AssertionError("exception must retain the maintainer approval date")
+    parse_utc_date(decision["accepted_at"], "maintainer approval date")
+    if decision["waived_requirements"] != WAIVED_REQUIREMENTS:
+        raise AssertionError("only the three explicitly approved requirements may be waived")
+    pinned_repository_document(decision["decision_url"], EXCEPTION_ADR_PATH)
+
+
 def validate(document):
+    if isinstance(document, dict) and "maintainer_exception" in document:
+        validate_exception(document)
+        return
     require_exact_keys(document, DOCUMENT_KEYS, "release evidence")
     if document.get("schema_version") != "1":
         raise AssertionError("unsupported release evidence schema version")
@@ -206,7 +293,13 @@ def validate(document):
 
 
 def validate_checklist(document, checklist):
-    urls = [document["independent_security_review"]["evidence_url"]]
+    if "maintainer_exception" in document:
+        urls = [
+            document["source_security_review"]["evidence_url"],
+            document["maintainer_exception"]["decision_url"],
+        ]
+    else:
+        urls = [document["independent_security_review"]["evidence_url"]]
     urls.extend(pilot["evidence_url"] for pilot in document["field_pilots"])
     recorded_urls = set()
     for value in re.findall(r"https://[^\s)>]+", checklist):
@@ -222,11 +315,80 @@ def validate_checklist(document, checklist):
             )
 
 
+def git_bytes(*arguments):
+    result = subprocess.run(
+        ["git", *arguments], cwd=ROOT, check=False,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        raise AssertionError("immutable release evidence is unavailable in Git history")
+    return result.stdout
+
+
+def require_ancestor(ancestor, released_commit):
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, released_commit],
+        cwd=ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        raise AssertionError("evidence commit is not an ancestor of the released commit")
+
+
+def validate_exception_identity(document, released_tag, released_commit):
+    validate_exception(document)
+    if released_tag != "v1.0.0":
+        raise AssertionError("maintainer exception must not authorize a later release")
+    review = document["source_security_review"]
+    reviewed_commit = review["reviewed_commit"]
+    require_ancestor(reviewed_commit, released_commit)
+    for url, path in (
+        (review["evidence_url"], EXCEPTION_REVIEW_PATH),
+        (document["maintainer_exception"]["decision_url"], EXCEPTION_ADR_PATH),
+    ):
+        document_commit = pinned_repository_document(url, path)
+        require_ancestor(document_commit, released_commit)
+        if git_bytes("show", f"{document_commit}:{path}") != git_bytes("show", f"{released_commit}:{path}"):
+            raise AssertionError("release evidence document differs from its immutable reference")
+
+    manifest_path = STABLE_MANIFEST.relative_to(ROOT).as_posix()
+    baseline = git_bytes("show", f"{reviewed_commit}:{manifest_path}")
+    if "sha256:" + hashlib.sha256(baseline).hexdigest() != review["reviewed_contract_digest"]:
+        raise AssertionError("reviewed baseline contract digest differs from the evidence")
+    released = git_bytes("show", f"{released_commit}:{manifest_path}")
+    if STABLE_MANIFEST.read_bytes() != released:
+        raise AssertionError("working stable contract differs from the release commit")
+    baseline_document, released_document = json.loads(baseline), json.loads(released)
+    # Only the release-evidence validator's artifact hash may change. The
+    # reviewed public contract and every other frozen artifact remain exact.
+    for manifest in (baseline_document, released_document):
+        artifacts = manifest["artifacts"]
+        if sum(item["path"] == EVIDENCE_VALIDATOR_PATH for item in artifacts) != 1:
+            raise AssertionError("stable inventory must contain exactly one evidence validator")
+        manifest["artifacts"] = [
+            item for item in artifacts if item["path"] != EVIDENCE_VALIDATOR_PATH
+        ]
+    if baseline_document != released_document:
+        raise AssertionError("reviewed runtime contract or frozen artifacts changed")
+    changed = git_bytes(
+        "diff", "--name-only", "--no-renames", "-z",
+        reviewed_commit, released_commit, "--",
+    )
+    paths = {path.decode("utf-8") for path in changed.split(b"\0") if path}
+    unexpected = paths - EXCEPTION_ALLOWED_CHANGES
+    if unexpected:
+        raise AssertionError(
+            "unreviewed changes outside release governance: " + ", ".join(sorted(unexpected))
+        )
+
+
 def validate_release_identity(document, released_tag, released_commit):
     if not STABLE_TAG_RE.fullmatch(released_tag):
         raise AssertionError("released tag must be a stable v1 SemVer tag")
     if not COMMIT_RE.fullmatch(released_commit):
         raise AssertionError("released commit must be a full SHA")
+    if "maintainer_exception" in document:
+        validate_exception_identity(document, released_tag, released_commit)
+        return
     reviewed_commit = document["independent_security_review"]["reviewed_commit"]
     ancestry = subprocess.run(
         ["git", "merge-base", "--is-ancestor", reviewed_commit, released_commit],
@@ -260,7 +422,14 @@ def main():
     )
     arguments = parser.parse_args()
     document = json.loads(arguments.evidence.read_text(encoding="utf-8"))
-    if arguments.allow_pending and document.get("status") == "pending":
+    if bool(arguments.released_tag) != bool(arguments.released_commit):
+        raise AssertionError(
+            "--released-tag and --released-commit must be provided together"
+        )
+    if arguments.allow_pending and arguments.released_tag is not None:
+        raise AssertionError("--allow-pending cannot authorize a release")
+    if (arguments.allow_pending and document.get("status") == "pending"
+            and "maintainer_exception" not in document):
         require_exact_keys(document, DOCUMENT_KEYS, "release evidence")
         if document.get("schema_version") != "1" or document.get("release") != "1.0.0":
             raise AssertionError("pending evidence has invalid schema or release")
@@ -273,10 +442,6 @@ def main():
             raise AssertionError("field_pilots must be a list")
         return
     validate(document)
-    if bool(arguments.released_tag) != bool(arguments.released_commit):
-        raise AssertionError(
-            "--released-tag and --released-commit must be provided together"
-        )
     if arguments.released_tag is not None:
         validate_release_identity(
             document,

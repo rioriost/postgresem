@@ -48,3 +48,9 @@ overload after migration; rollback must not reintroduce that overload.
 
 The new stable-manifest digest needs its own review/evidence binding before
 release acceptance. The pending external-evidence gate remains unchanged.
+
+Subsequent acceptance note (2026-09-05):
+[ADR 0020](0020-v1-release-maintainer-exception.md) records maintainer acceptance
+of the corrected source and manifest for `v1.0.0` only, with explicit
+independent-review, image-review, and pilot waivers. It does not rewrite this
+security decision or claim an independent external review.

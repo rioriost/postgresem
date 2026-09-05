@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-05
+
 ### Security
 
 - Remove the unused `time 0.3.36` dependency and jsonwebtoken PEM/ASN.1
@@ -13,26 +15,40 @@
   Remove the role-unbound lookup overload; apply migrations before deploying
   the new binary. Old/new reconciliation across this schema boundary fails
   closed. Refresh the stable contract under ADR 0019; retain historical
-  review identities and the unchanged pending external-evidence gate.
+  review identities.
 
-### Prepared for 1.0.0
+### Added
 
 - Consolidate application examples into Meaning Lab: real PostgreSQL/semantic
   comparisons with an independent ledger oracle, governed ingestion and retry
   reconciliation, tenant RLS, and an explicitly opt-in bounded OpenAI planner.
   Add real HTTP/MCP/DB qualification to the Docker Compose CI job without
   changing public gateway contracts or database migrations.
+- Add English/Japanese switching to Meaning Lab, with English as the default
+  and no additional requests or writes when switching language.
 - Promote the unchanged M11 candidate boundary to the stable v1 contract while
   preserving `contracts/rc-v1.json` as immutable historical evidence.
 - Add explicit 1.x compatibility, deprecation, support, governance, and final
   differentiation documents.
 - Add a fail-closed `v1.0.0` release gate requiring an accepted independent
-  security review and exactly two distinct 28-day non-fixture pilot records.
+  security review and exactly two distinct 28-day non-fixture pilot records
+  under the ordinary policy, or the exact maintainer exception below.
 - Prevent repeated creation of the 1,000-table recovery fixture, avoiding a
   PostgreSQL 17 CI crash caused by temporary peak storage exhaustion.
 
-Formal `v1.0.0` publication remains blocked until the external evidence in
-`contracts/release-evidence-v1.json` is accepted.
+### Release evidence
+
+- Record the maintainer-approved, **v1.0.0-only** exception in
+  [ADR 0020](docs/adr/0020-v1-release-maintainer-exception.md). Accept the
+  automated source review and documented remediation at `c8a2ca7`; waive the
+  independent third-party review, reviewed-image, and two 28-day pilot
+  prerequisites. These activities were not completed, and field outcomes
+  were not measured.
+- Bind the accepted source report and decision to immutable commits; freeze
+  reviewed runtime/source, dependencies, migrations, packaging, CI, and public
+  contracts. Only enumerated release-governance changes are permitted after
+  the reviewed baseline. Native qualification, signed checksums/images, SBOM,
+  provenance, and PostgreSQL authorization remain required.
 
 ## [0.9.0] - 2026-09-03
 

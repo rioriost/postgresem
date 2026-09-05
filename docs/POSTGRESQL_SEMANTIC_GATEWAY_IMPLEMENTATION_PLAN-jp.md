@@ -821,6 +821,12 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 基づいてM6実装開始を承認した。未完了のM5 independent field/security evidenceは追跡を
 継続し、遡って完了扱いにしない。未解決P0/P1 findingは引き続き`0.4` releaseをblockする。
 
+2026-09-05にowner `rioriost`は、`v1.0.0`だけを対象とする
+[ADR 0020の例外](adr/0020-v1-release-maintainer-exception.md)を承認した。
+automated source reviewと修正後evidenceを受理し、独立external review、reviewed image、
+2件の28日間non-fixture pilotの前提条件を免除する。M5を遡って完了扱いにせず、
+technical release gateも変更しない。
+
 ### M0: Project foundation / RFC
 
 - repository基盤、license、governance、ADR template、threat model
@@ -873,6 +879,11 @@ DB実行時間はデータ量とindexに依存するため、Gateway SLOと分�
 - adoption/価値指標の計測
 
 **Exit gate**: 2つ以上の非fixture DBで4週間運用し、P0/P1 security/correctness defectがない。
+
+この歴史的目標は未完了のまま保持する。`v1.0.0`だけは
+[ADR 0020](adr/0020-v1-release-maintainer-exception.md)によりpilotを免除するが、
+field運用の実施やfield defectゼロを主張しない。後続stable releaseでは通常の
+evidence processを既定とする。
 
 ### M6: 0.4 — Governed ingestionとportable Linux
 
@@ -1001,8 +1012,10 @@ freshness、database authorizationを損なわない。
 **Repository実装status:** `0.9.0` source treeで完了。ADR 0017、frozen contract
 manifest、previous-binary rollback rehearsal、operator workflow、
 support/governance/deprecation policy、独立technical security reviewでrepository
-管理下のscopeを実装した。独立external security reviewと2件の28日間non-fixture
-pilot evidenceが得られるまで、M11 exit gateはissue #4によりexternal blockのままとする。
+管理下のscopeを実装した。issue #4で追跡するM11 external-evidence目標は歴史的に
+未完了のままである。[ADR 0020](adr/0020-v1-release-maintainer-exception.md)は、
+独立reviewやpilotの完了ではなく、明示的なmaintainer例外として`v1.0.0`へのpromotionを
+認める。すべてのtechnical qualification gateは引き続き必須とする。
 
 - candidate LSQ、LSM、Semantic Schema、MCP、CLI、error、migration、audit contractをfreezeする。
 - independent security review、production pilot evidence、upgrade/rollback rehearsal、
@@ -1016,17 +1029,35 @@ recovery rehearsalが通り、release-candidate利用者がquery/ingestion workf
 
 **Repository実装status:** 準備済み`1.0.0` source treeで完了。ADR 0018、stable
 contract manifest、compatibility/support policy、最終差別化statement、
-fail-closedなexternal-evidence gateでrepository管理下のscopeを実装した。独立external
-security reviewと受理済み28日間non-fixture pilot record 2件が存在するまで、正式な
-`v1.0.0`公開はissue #4によりblockされたままとする。
+fail-closedなrelease-evidence gateでrepository管理下のscopeを実装した。
+2026-09-05にowner `rioriost`は
+[ADR 0020](adr/0020-v1-release-maintainer-exception.md)を明示的に承認し、
+修正済みsource commit `c8a2ca7a6a635de975d8e8b2324b652ac037075c`とreview済み
+stable-manifest digest
+`sha256:c3d58c9fd3670836da7f86c73c478dcee4a087601cb083a927e3f7617e4f18a2`
+に限り、automated source reportと修正後evidenceを受理した。独立external review、
+reviewed container image、2件の28日間non-fixture pilotの前提条件は、正確に
+`v1.0.0` tagだけに免除する。独立external review、image review、pilotはいずれも
+未実施であり、field P0/P1は未計測の受容済み制約である。公開にはimmutableなreview/
+decision binding、technical qualification、release automationが引き続き必要で、
+公開済みとは主張しない。
 
 - stable contractとcompatibility/support期間を公開する。
 - maintainer、release cadence、vulnerability response、sustainability ownershipを確立する。
 - 最終reference比較と差別化statementを公開する。
+- 通常のstrict release-evidence経路を維持し、`v1.0.0`だけにADR 0020の独立した
+  狭いexception shapeを許可する。review対象sourceのmanifestと不変のpublic contractを
+  結び付け、正確なrelease-only path allowlist以外の変更を拒否する。review対象のsource、
+  dependency、migration、packaging、CI変更は認めない。新しいgate/inventory hashを
+  独立review済みと扱わず、後続stable releaseに例外を継承しない。
 
 **Exit gate**: correctness、mutation safety、security、migratability、operability、Linux
 portability、interoperability、differentiation、governance、maintainer sustainabilityの
-全gateを満たす。repository automationで未完了の独立evidenceを代替してはならない。
+全gateを満たし、例外はADR 0020が明示する`v1.0.0`のevidence免除だけとする。
+repository automationで独立reviewやfield evidenceを主張してはならない。
+PostgreSQL GRANT/RLS、no-raw-SQL、audit/mutation control、CI、native Linux qualification、
+installer trust、signing、SBOM、provenanceは変更しない。
+[M12 release checklist](m12-stable-release-checklist.md)を参照する。
 
 ## 20. MVPから正式プロジェクトへの段階
 
@@ -1043,6 +1074,10 @@ portability、interoperability、differentiation、governance、maintainer susta
 | 0.8 | PostgreSQL-native scale/operations | 必須外部cache/source of truth | 計測済みscale/recovery target |
 | 0.9 | freeze済みrelease-candidate contract | 新experimental surface | production/security/platform evidence完了 |
 | 1.0 | stable contract、support、governance | PostgreSQL外execution | 継続maintainerと互換性保証 |
+
+表の歴史的なpromotion目標は保持する。未完了の独立reviewとfield evidenceの前提条件は、
+[ADR 0020](adr/0020-v1-release-maintainer-exception.md)により`v1.0.0`だけに免除され、
+完了が認定されたわけではない。
 
 正式化はコード量ではなく、以下の証拠で判断する。
 

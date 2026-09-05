@@ -850,6 +850,12 @@ value. Outstanding M5 independent field/security evidence remains tracked and
 is not retroactively marked complete; unresolved P0/P1 findings still block a
 `0.4` release.
 
+On 2026-09-05, owner `rioriost` approved the
+[ADR 0020 exception](adr/0020-v1-release-maintainer-exception.md) for `v1.0.0`
+only. It accepts the automated source review/remediation and waives independent
+external review, reviewed-image, and two 28-day non-fixture pilot prerequisites
+without retroactively completing M5 or changing technical release gates.
+
 ### M0: Project Foundation / RFC
 
 - Repository infrastructure, license, governance, ADR template, threat model
@@ -902,6 +908,11 @@ is not retroactively marked complete; unresolved P0/P1 findings still block a
 - Adoption/value metrics measurement
 
 **Exit gate**: 4 weeks of operation on 2+ non-fixture databases with no P0/P1 security/correctness defects.
+
+This historical goal remains uncompleted. For `v1.0.0` only,
+[ADR 0020](adr/0020-v1-release-maintainer-exception.md) waives the pilots rather
+than claiming field use or zero field defects; the ordinary evidence process
+remains the default for later stable releases.
 
 ### M6: 0.4 — Governed Ingestion and Portable Linux
 
@@ -1049,8 +1060,10 @@ authorization.
 ADR 0017, the frozen contract manifest, previous-binary rollback rehearsal,
 operator workflow, support/governance/deprecation policies, and independent
 technical security review implement the repository-controlled scope. The M11
-exit gate remains externally blocked by issue #4 until an independent external
-security review and two accepted 28-day non-fixture pilot records exist.
+external-evidence goals tracked in issue #4 remain historically incomplete.
+[ADR 0020](adr/0020-v1-release-maintainer-exception.md) allows promotion to
+`v1.0.0` under an explicit maintainer exception rather than independent-review
+or pilot completion; all technical qualification gates remain required.
 
 - Freeze candidate LSQ, LSM, Semantic Schema, MCP, CLI, error, migration, and
   audit contracts.
@@ -1067,20 +1080,38 @@ users can operate query and ingestion workflows.
 
 **Repository implementation status:** complete in the prepared `1.0.0` source
 tree. ADR 0018, the stable contract manifest, compatibility/support policy,
-final differentiation statement, and fail-closed external-evidence gate cover
-the repository-controlled scope. Formal `v1.0.0` publication remains blocked
-by issue #4 until the independent external security review and two accepted
-28-day non-fixture pilot records exist.
+final differentiation statement, and fail-closed release-evidence gate cover
+the repository-controlled scope. On 2026-09-05, owner `rioriost` explicitly
+approved [ADR 0020](adr/0020-v1-release-maintainer-exception.md): the automated
+source report and post-fix evidence are accepted for corrected source commit
+`c8a2ca7a6a635de975d8e8b2324b652ac037075c` and reviewed stable-manifest digest
+`sha256:c3d58c9fd3670836da7f86c73c478dcee4a087601cb083a927e3f7617e4f18a2`.
+Independent external review, reviewed-container-image, and two 28-day
+non-fixture pilot prerequisites are waived for the exact tag `v1.0.0` only.
+No independent external review, image review, or pilots were completed;
+field P0/P1 outcomes are not measured and are an accepted limitation.
+Publication still requires immutable review/decision binding, technical
+qualification, and release automation; this does not claim publication.
 
 - Publish stable contracts and documented compatibility/support periods.
 - Establish maintainers, release cadence, vulnerability response, and
   sustainability ownership.
 - Publish the final reference-comparison and differentiation statement.
+- Preserve the ordinary strict release-evidence path and accept only the
+  separate, narrowly scoped ADR 0020 shape for `v1.0.0`. Bind the reviewed
+  source manifest and unchanged public contract; allow only the exact
+  release-only path allowlist, not reviewed source/dependency/migration/
+  packaging/CI changes. New gate/inventory hashes are not independently
+  reviewed. Later stable releases do not inherit the exception.
 
 **Exit gate**: Correctness, mutation safety, security, migratability,
 operability, Linux portability, interoperability, differentiation, governance,
-and maintainer sustainability gates are all met. Repository automation must
-not substitute for the outstanding independent evidence.
+and maintainer sustainability gates are all met, subject only to ADR 0020's
+explicit `v1.0.0` evidence waivers. Repository automation must not claim
+independent review or field evidence. PostgreSQL GRANT/RLS, no-raw-SQL,
+audit/mutation controls, CI, native Linux qualification, installer trust,
+signing, SBOM, and provenance remain unchanged. See the
+[M12 release checklist](m12-stable-release-checklist.md).
 
 ## 20. Stages from MVP to Official Project
 
@@ -1097,6 +1128,10 @@ not substitute for the outstanding independent evidence.
 | 0.8 | PostgreSQL-native scale and operations | Mandatory external cache/source of truth | Measured scale and recovery targets |
 | 0.9 | Frozen release-candidate contracts | New experimental surfaces | Production/security/platform evidence complete |
 | 1.0 | Stable contract, support, governance | Non-PostgreSQL execution | Ongoing maintainers and compatibility guarantees |
+
+The table retains historical promotion goals. The uncompleted independent
+review and field-evidence prerequisites are waived only for `v1.0.0` by
+[ADR 0020](adr/0020-v1-release-maintainer-exception.md), not certified complete.
 
 Formal promotion is judged not by code volume but by the following evidence:
 

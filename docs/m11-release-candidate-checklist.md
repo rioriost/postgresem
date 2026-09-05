@@ -15,10 +15,15 @@ not self-certify production operation.
 | governance and release cadence | documented | [`GOVERNANCE.md`](../GOVERNANCE.md) |
 | deprecation policy | documented | [deprecation policy](deprecation-policy.md) |
 | P0/P1 repository defects | none known | full RC gate and security review |
-| independent external security review | **completion reported; evidence registration pending** | [2026-09-05 maintainer report](beta-checklist.md#external-security-review-status-2026-09-05): no vulnerabilities found |
-| two accepted 28-day non-fixture database pilots | **outstanding** | tracked in [issue #4](https://github.com/rioriost/postgresem/issues/4) |
-| unresolved field P0/P1 defects | **not measurable** | external field periods are not complete |
+| automated source security review and remediation | **accepted under v1.0.0 maintainer exception** | [2026-09-05 acceptance and immutable source evidence](beta-checklist.md#external-security-review-status-2026-09-05); [ADR 0020](adr/0020-v1-release-maintainer-exception.md) |
+| independent external security review and reviewed container image | **waived for v1.0.0; not completed** | automated source review is not independent external review; no image review was performed |
+| two accepted 28-day non-fixture database pilots | **waived for v1.0.0; not completed** | [ADR 0020](adr/0020-v1-release-maintainer-exception.md); historical goal tracked in [issue #4](https://github.com/rioriost/postgresem/issues/4) |
+| unresolved field P0/P1 defects | **not measured / accepted limitation** | no qualifying field periods; not evidence of zero defects |
 
 The source can be repository-RC-ready while the M11 exit gate remains
-incomplete. M11 completion requires the final three external-evidence rows to
-be resolved with immutable, privacy-safe evidence.
+historically incomplete. Ordinary M11 completion requires immutable,
+privacy-safe independent review and field evidence. ADR 0020 allows promotion
+to `v1.0.0` under an explicit maintainer exception, not retrospective completion
+of those external gates. All unchanged technical qualification and release
+automation requirements still apply; later stable releases do not inherit the
+exception.

@@ -3,6 +3,13 @@
 - Status: Accepted
 - Date: 2026-09-04
 
+> Supersession note (2026-09-05): [ADR 0020](0020-v1-release-maintainer-exception.md)
+> narrowly replaces the external-evidence prerequisites for `v1.0.0` with
+> explicit maintainer acceptance of the automated source review and waivers
+> for independent/image review and the two pilots. These are not completed
+> external gates. All other requirements and the ordinary gates for later
+> stable releases remain unchanged.
+
 ## Context
 
 M11 froze the `0.9.0` release-candidate boundary but deliberately kept the

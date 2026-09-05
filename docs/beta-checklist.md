@@ -17,25 +17,36 @@ that must come from independent environments.
 | external evidence collection workflow | implemented | [M5 external evidence process](m5-external-evidence.md) and structured field/security review issue forms |
 | MCP Streamable HTTP | deferred | authentication and request identity are prerequisites |
 | loopback semantic comparison demo | implemented | [Meaning Lab](../examples/semantic_demo/README.md); real PostgreSQL reads and governed writes through stdio MCP |
-| independent security review | **completion reported; evidence registration pending** | maintainer reported an external review with no vulnerabilities found on 2026-09-05; see the status note below |
-| two non-fixture databases operated for four weeks | **outstanding** | one evidence record per database is required; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
-| P0/P1 security or correctness defects during field period | **not measurable yet** | accepted 28-day field records are not yet available; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
-| machine-readable 1.0 evidence gate | implemented, pending evidence | `contracts/release-evidence-v1.json`; `v1.0.0` release validation fails closed until accepted URLs and immutable identities replace pending values |
+| automated source security review and remediation | **accepted under v1.0.0 maintainer exception** | [immutable review and post-fix evidence](https://github.com/rioriost/postgresem/blob/2797160ee431ee12722d339e23def6d8c8e7fbd5/docs/security-reviews/2026-09-05-381fe57.md); [ADR 0020](adr/0020-v1-release-maintainer-exception.md) |
+| independent security review and reviewed container image | **waived for v1.0.0; not completed** | maintainer-approved source review is not independent external review; no image review was performed |
+| two non-fixture databases operated for four weeks | **waived for v1.0.0; not completed** | [ADR 0020](adr/0020-v1-release-maintainer-exception.md); historical evidence goal tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
+| P0/P1 security or correctness defects during field period | **not measured / accepted limitation** | no qualifying field periods or accepted pilot records exist; this is not a zero-defect claim |
+| machine-readable 1.0 evidence gate | required; v1.0.0 exception approved | `contracts/release-evidence-v1.json`; accepted evidence must pass strict identity/decision binding and unchanged technical qualification before publication |
 
 ## External security review status (2026-09-05)
 
-The maintainer reports that an external security review, conducted outside the
-implementation session, is complete and found no vulnerabilities. This records
-the maintainer's report, not a new review performed by repository automation.
+This corrects the earlier description of a completed external review: the
+remotely supplied report is an **automated source review**, not an independent
+external review. Its remediation and retest evidence is accepted by project
+owner `rioriost` under [ADR 0020](adr/0020-v1-release-maintainer-exception.md),
+expressly approved in the release implementation conversation on 2026-09-05
+for the exact tag `v1.0.0` only.
 
-The review reference, reviewer independence/scope, reviewed commit,
-stable-manifest and image digests, and review/retest dates have not yet been
-provided for the release evidence record. Review execution is therefore
-reported complete; registration of the evidence required by
-[the external evidence process](m5-external-evidence.md) remains pending.
-Do not infer the reviewed commit or dates from the current HEAD or this status
-note. `contracts/release-evidence-v1.json` remains pending until the required
-records can be populated accurately.
+Acceptance binds corrected source commit
+`c8a2ca7a6a635de975d8e8b2324b652ac037075c` and reviewed stable-manifest digest
+`sha256:c3d58c9fd3670836da7f86c73c478dcee4a087601cb083a927e3f7617e4f18a2`.
+The [immutable report](https://github.com/rioriost/postgresem/blob/2797160ee431ee12722d339e23def6d8c8e7fbd5/docs/security-reviews/2026-09-05-381fe57.md)
+preserves its original `381fe57` review and historical hashes. The corrected
+source retest date is 2026-09-05 with zero unresolved P0/P1 source findings;
+this says nothing about unmeasured field defects. New release-gate/inventory
+hashes are not independently reviewed.
+
+No image review was performed and no qualifying pilots were completed.
+The reviewed image is therefore `null`, field pilots are `[]`, and the
+exception explicitly waives those prerequisites and reviewer independence
+rather than fabricating evidence. The release record also requires a genuine
+immutable commit-pinned URL for ADR 0020 once its policy commit exists; a
+relative documentation link does not satisfy that machine gate.
 
 The maintainer also confirms that potential future supply-chain
 vulnerabilities are an ongoing monitoring responsibility, not a current release
@@ -43,7 +54,11 @@ blocker by themselves. Existing dependency checks, action pinning, signature
 verification, and release gates remain in place; newly discovered findings
 must still be triaged under the security policy.
 
-This update does not establish completion of either 28-day non-fixture pilot.
+The [ordinary external evidence process](m5-external-evidence.md) remains the
+default for later stable releases; they cannot inherit this exception.
+Historical M5 evidence remains incomplete. `v1.0.0` publication still requires
+technical qualification and release automation; this acceptance does not
+claim an already published release.
 
 ## Beta SLO candidates
 

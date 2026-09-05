@@ -299,7 +299,7 @@
     },
     {
       "path": "tests/contracts/verify_release_evidence.py",
-      "sha256": "sha256:5502268e688044be55f00856571bdbffc8734ca807673669f3081a2dc413e07d"
+      "sha256": "sha256:8eaa0f3c93d511cba79deb0d030bd32c10aa216f7978aaf5ada73329b894d465"
     },
     {
       "path": "tests/integration/mcp_http.py",
