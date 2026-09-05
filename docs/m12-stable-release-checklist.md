@@ -19,7 +19,7 @@ external evidence is pending.
 | vulnerability response | documented | [`SECURITY.md`](../SECURITY.md) |
 | current maintainer and release ownership | documented | [`GOVERNANCE.md`](../GOVERNANCE.md) |
 | automated source security review | recorded; not external approval | [2026-09-05 review of `381fe57`](security-reviews/2026-09-05-381fe57.md): commit/contract digest, scope, results, limitations, and dependency advisory disposition |
-| post-review security corrections | implemented; corrected commit/evidence binding pending | [remediation evidence](security-reviews/2026-09-05-381fe57.md#post-review-remediation), [ADR 0019](adr/0019-role-bound-reconciliation-and-jwk-only-dependencies.md); stable contract intentionally refreshed |
+| post-review security corrections | implemented; external acceptance pending | [remediation evidence](security-reviews/2026-09-05-381fe57.md#post-review-remediation) binds `c8a2ca7a6a635de975d8e8b2324b652ac037075c` and the refreshed stable-contract digest; [ADR 0019](adr/0019-role-bound-reconciliation-and-jwk-only-dependencies.md) |
 | independent external security review | **completion reported; evidence registration pending** | [2026-09-05 maintainer report](beta-checklist.md#external-security-review-status-2026-09-05): no vulnerabilities found |
 | ongoing supply-chain monitoring | continuing; not a current blocker by itself | maintainer determination on 2026-09-05; existing dependency and release integrity controls remain required |
 | two accepted 28-day non-fixture pilots | **outstanding** | [issue #4](https://github.com/rioriost/postgresem/issues/4) |
