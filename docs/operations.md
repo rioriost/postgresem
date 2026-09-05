@@ -84,7 +84,7 @@ container exec postgresem-db \
   psql --no-psqlrc -U postgres -d postgresem_dev -Atc \
   'SELECT version FROM semantic.schema_migration ORDER BY version'
 
-python3 examples/commerce/mcp_smoke.py -- make mcp
+python3 examples/semantic_demo/smoke.py -- make mcp
 ```
 
 Stop services with `make dev-down`. The named volume remains. There is no

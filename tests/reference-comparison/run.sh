@@ -25,7 +25,7 @@ cargo run --quiet -p postgresem -- \
 
 cargo run --quiet -p postgresem -- \
   query compile \
-  examples/commerce/orders-revenue.json \
+  examples/semantic_demo/requests/orders-revenue.json \
   --snapshot "$tmp_dir/osi-snapshot.json" > "$tmp_dir/compiled-query.json"
 
 jq -e '

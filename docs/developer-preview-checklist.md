@@ -9,8 +9,8 @@ production readiness.
 |---|---|---|
 | Apple Container diagnostics and local startup | implemented | `make doctor`, `make dev-up` |
 | read-only commerce pilot quickstart | documented | [quickstart](quickstart.md) |
-| representative sample project | implemented | [commerce example](../examples/commerce/README.md) |
-| stdio smoke covers initialize, five tools, and all resources | implemented | `examples/commerce/mcp_smoke.py` |
+| representative sample project | implemented | [Meaning Lab](../examples/semantic_demo/README.md) |
+| stdio smoke covers initialize, tool discovery, query/mutation calls, and all resources | implemented | `examples/semantic_demo/smoke.py`; replay/reconciliation in the Web workflow |
 | operations documentation | documented | [operations](operations.md) |
 | stable preview error taxonomy | documented from source | [error reference](error-reference.md) |
 | preview compatibility policy | documented | [compatibility](compatibility.md), [ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall.md) |
@@ -107,7 +107,7 @@ Run from a clean checkout with local-only `.env` values:
 ```sh
 make doctor
 make dev-up
-python3 examples/commerce/mcp_smoke.py -- make mcp
+python3 examples/semantic_demo/smoke.py -- make mcp
 make test-performance
 make dev-down
 ```

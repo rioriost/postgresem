@@ -50,8 +50,9 @@ YAMLファイルなどへ重複して記述されがちです。それぞれが�
 
 マルチテナントアプリケーションでは、認証済みHTTPの主体を運用者が設定した
 PostgreSQLロールへ対応付け、参照できる行をRLSで制御します。
-[Commerceサンプル](examples/commerce/README.md)と
-[ローカルWebデモ](examples/web_demo/README.md)で連携例を確認できます。
+統合サンプル[Meaning Lab](examples/semantic_demo/README.md)では、実DBに対する
+スキーマだけを使ったSQLとセマンティッククエリを比較し、データ投入、冪等な
+再実行、結果照合、PostgreSQLのテナント分離まで体験できます。
 
 対象範囲は意図的に限定しています。任意SQLや汎用的なupdate/delete、PostgreSQL以外
 での実行、自動的な事前集計やマテリアライズドビューへのルーティングは提供しません。
@@ -126,9 +127,9 @@ Apple Containerでは`make docker-mcp`を`make mcp`へ置き換えます。
 **MCPによるサンプルデータの取得と投入**
 
 ```sh
-python3 examples/commerce/mcp_smoke.py \
-  --lsq examples/commerce/revenue-by-month.json \
-  --lsm examples/commerce/order-insert.json \
+python3 examples/semantic_demo/smoke.py \
+  --lsq examples/semantic_demo/requests/revenue-by-month.json \
+  --lsm examples/semantic_demo/requests/order-insert.json \
   -- make docker-mcp
 ```
 
@@ -153,15 +154,25 @@ MCPクライアントは、このオブジェクトを`query_semantic_model`の`
 行データ、リビジョンと監査の識別子、結果の打ち切り状態が含まれます。
 numeric型の値は、精度を保つためJSON文字列で返します。
 
-**Webデモを試す**
+**クエリの構文だけでなく、業務上の意味を比較する**
 
 ```sh
-python3 examples/web_demo/server.py -- make docker-mcp
+make web-demo                    # macOSではApple Container、LinuxではDocker
+# make web-demo DEMO_RUNTIME=docker
+# make web-demo DEMO_RUNTIME=podman  # Quadletの導入後
 ```
 
-<http://127.0.0.1:8765>を開いてください。ブラウザーはMCP経由で定義済みの
-セマンティッククエリを実行し、PostgreSQLへ直接接続しません。`Ctrl-C`でデモを
-終了した後、Installationの表にあるコマンドでコンテナ環境を停止します。
+<http://127.0.0.1:8765>を開き、売上の認識条件、明細JOINによる二重計上、
+有効契約だけのMRRを、実データから独立して計算した正解と比較してください。
+確定注文の投入では、DBへの永続化、冪等再実行、内容を変えた再試行の拒否、
+結果照合、監査識別子まで確認できます。
+
+APIキーは不要です。標準のSQL側は明示的に用意した誤集計例であり、
+実エージェントの誤答を装ったものではありません。任意のOpenAIプランナーは、
+正しいSQLを含む承認済み候補から選択するため、両方が正解する場合もあります。
+架空データの環境に限り、[デモガイド](examples/semantic_demo/README.md#optional-live-openai-planner)
+に従って`.env`から有効化できます。`Ctrl-C`はWebサーバーだけを停止します。
+コンテナはInstallationの表の手順で停止し、データは保持します。
 
 **エージェントやアプリケーションを接続する**
 

@@ -25,12 +25,18 @@ docker compose \
   -f compose.yaml \
   -f compose.linux.yaml \
   exec -T gateway postgresem --version
-python3 examples/commerce/mcp_smoke.py -- make docker-mcp
+python3 examples/semantic_demo/smoke.py -- make docker-mcp
 ```
 
 `compose.linux.yaml` replaces the Apple Container root/gosu startup workaround.
 The Linux gateway container and attached MCP process both run as UID/GID
 `10001`.
+
+For the unified real-data comparison and governed-write UI, run
+`make web-demo DEMO_RUNTIME=docker` and open <http://127.0.0.1:8765>.
+For an installed Quadlet stack, use `make web-demo DEMO_RUNTIME=podman`.
+The [Meaning Lab guide](../examples/semantic_demo/README.md) explains the
+fictional dataset, comparison limits, optional OpenAI planner, and write effects.
 
 Stop the stack while preserving PostgreSQL data:
 

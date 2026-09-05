@@ -6,6 +6,13 @@ The evaluated upstream refs, reproducible aggregate result, and detailed
 capability matrix are recorded in the
 [M10 reference comparison](reference-comparison/2026-09-03.md).
 
+The runnable [Meaning Lab](../examples/semantic_demo/README.md) makes the
+single-database value observable: status-aware revenue, root-grain aggregation,
+active MRR, and governed writes with replay/reconciliation on real PostgreSQL.
+Its authored SQL mistakes are teaching cases, not measured LLM failures.
+The optional bounded planner can select correct SQL; this demo does not claim
+that PostgreSQL or an informed SQL author cannot produce the same answers.
+
 ## Stable differentiation
 
 | Boundary | postgresem 1.0 position |

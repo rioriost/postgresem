@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the postgresem MCP stdio developer-preview surface."""
+"""Exercise the unified semantic demo's real MCP stdio connection."""
 
 from __future__ import annotations
 
@@ -27,6 +27,15 @@ EXPECTED_TOOLS = [
 
 class SmokeFailure(RuntimeError):
     pass
+
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON property")
+        result[key] = value
+    return result
 
 
 class McpClient:
@@ -87,8 +96,11 @@ class McpClient:
         assert self.process.stdin is not None
         if self.process.poll() is not None:
             raise SmokeFailure(f"MCP command exited early with {self.process.returncode}")
-        self.process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
-        self.process.stdin.flush()
+        try:
+            self.process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
+            self.process.stdin.flush()
+        except OSError as error:
+            raise SmokeFailure("could not write to the MCP connection") from error
 
     def _read(self) -> dict[str, Any]:
         assert self.process.stdout is not None
@@ -179,7 +191,7 @@ def main() -> int:
     parser.add_argument(
         "--lsq",
         type=Path,
-        default=root / "examples/commerce/orders-revenue.json",
+        default=root / "examples/semantic_demo/requests/orders-revenue.json",
         help="LSQ JSON used for validate, explain, and query",
     )
     parser.add_argument(
@@ -188,7 +200,7 @@ def main() -> int:
     parser.add_argument(
         "--lsm",
         type=Path,
-        default=root / "examples/commerce/order-insert.json",
+        default=root / "examples/semantic_demo/requests/order-insert.json",
         help="LSM JSON used for mutation validation and execution",
     )
     parser.add_argument(
@@ -231,7 +243,7 @@ def main() -> int:
             {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "commerce-smoke", "version": "1"},
+                "clientInfo": {"name": "meaning-lab-smoke", "version": "1"},
             },
         )
         protocol = initialized.get("protocolVersion")
@@ -326,6 +338,14 @@ def main() -> int:
             "mutate_semantic_model: "
             f"rows={mutated.get('affected_rows')} replayed={mutated.get('replayed')}"
         )
+        reconciled = call_tool(client, "reconcile_semantic_mutation", {
+            "schema_version": "1", "idempotency_key": lsm["idempotency_key"],
+        })
+        state = reconciled.get("state", {})
+        if (state.get("status") != "committed"
+                or state.get("mutation_id") != mutated.get("mutation_id")):
+            raise SmokeFailure("mutation reconciliation did not confirm the committed outcome")
+        print("reconcile_semantic_mutation: status=committed")
 
         resources = client.request("resources/list", {}).get("resources")
         if not isinstance(resources, list) or not resources:
@@ -352,7 +372,7 @@ def main() -> int:
 
         client.close()
         client = None
-        print("PASS: MCP stdio commerce smoke completed")
+        print("PASS: MCP stdio Meaning Lab smoke completed")
         return 0
     except (SmokeFailure, BrokenPipeError) as error:
         print(f"FAIL: {error}", file=sys.stderr)

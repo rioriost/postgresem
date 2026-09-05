@@ -124,6 +124,9 @@ jobs:
             -f compose.linux.yaml \
             exec -T gateway postgresem --version
 
+      - name: Exercise Meaning Lab against real PostgreSQL
+        run: make test-semantic-demo DEMO_RUNTIME=docker
+
       - name: Validate Quadlet with Podman 4.9
         run: |
           docker run --rm \

@@ -54,8 +54,9 @@ rejects unsupported or ambiguous input.
 
 For multi-tenant applications, authenticated HTTP identities map to
 operator-configured PostgreSQL roles, and RLS determines accessible rows.
-The [commerce example](examples/commerce/README.md) and
-[local Web demo](examples/web_demo/README.md) show application integration.
+The unified [Meaning Lab](examples/semantic_demo/README.md) compares actual
+schema-only SQL and semantic results, then demonstrates governed ingestion,
+idempotent replay, reconciliation, and PostgreSQL tenant isolation.
 
 The scope is intentionally narrow: no arbitrary SQL or general update/delete,
 no non-PostgreSQL execution, and no automatic pre-aggregation or
@@ -134,9 +135,9 @@ Compose; on Apple Container, replace `make docker-mcp` with `make mcp`.
 **Query and insert sample data through MCP**
 
 ```sh
-python3 examples/commerce/mcp_smoke.py \
-  --lsq examples/commerce/revenue-by-month.json \
-  --lsm examples/commerce/order-insert.json \
+python3 examples/semantic_demo/smoke.py \
+  --lsq examples/semantic_demo/requests/revenue-by-month.json \
+  --lsm examples/semantic_demo/requests/order-insert.json \
   -- make docker-mcp
 ```
 
@@ -162,15 +163,26 @@ tool argument `schema_version: "1"`. Queries return column metadata, rows,
 revision and audit identifiers, and truncation status. PostgreSQL `numeric` values are
 represented as JSON strings to preserve precision.
 
-**Try the Web demo**
+**Compare meaning, not just query syntax**
 
 ```sh
-python3 examples/web_demo/server.py -- make docker-mcp
+make web-demo                    # auto: Apple Container on macOS, Docker on Linux
+# make web-demo DEMO_RUNTIME=docker
+# make web-demo DEMO_RUNTIME=podman  # after Quadlet setup
 ```
 
-Open <http://127.0.0.1:8765>. The browser uses predefined semantic queries
-through MCP; it does not connect directly to PostgreSQL. Stop the demo with
-`Ctrl-C`, then stop the stack using the command in the installation table.
+Open <http://127.0.0.1:8765>. Compare recognized revenue, duplicate-item
+fan-out, and active MRR against an independent calculation from the live ledger.
+Then record one paid order and observe persisted data, idempotent replay,
+conflicting-retry rejection, reconciliation, and audit identifiers.
+
+No API key is required. The default baseline is an explicitly authored planning
+mistake, not a measured agent failure. Optional OpenAI planning selects among
+reviewed candidates, including correct SQL; both paths can succeed. Enable it
+only for the fictional fixture using the `.env` settings in the
+[demo guide](examples/semantic_demo/README.md#optional-live-openai-planner).
+Stop the Web server with `Ctrl-C`; stop containers separately using the
+installation table. Data is retained.
 
 **Connect an agent or application**
 

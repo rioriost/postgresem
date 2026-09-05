@@ -79,7 +79,7 @@
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "sha256:a487a8c5d0a32949609edc328285699d32c305c6ac9dd97de54150efc9b8baeb"
+      "sha256": "sha256:efd565150048b77313ac91105621124bf88e218843eba9f49a7977dbbd54f6bd"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -99,7 +99,7 @@
     },
     {
       "path": "Makefile",
-      "sha256": "sha256:e27acc4527216a596e222d63397f7ee2dca41f7cffd75ab87e478e5ada54755b"
+      "sha256": "sha256:3e5bf5f7861931f6b567a1767f8ae11b937de9fbe8014666e8c1ab0c7fc3d4c6"
     },
     {
       "path": "compose.ci.yaml",
@@ -203,7 +203,7 @@
     },
     {
       "path": "crates/postgresem/src/osi.rs",
-      "sha256": "sha256:3c8a834d9e2dadce70df979cfce84d53cea44145d19a46f38254749a21a6473b"
+      "sha256": "sha256:a0b39658802fe237ac6f59cdfe70ba26e40fe602b9817d0029bc7ce443a7a287"
     },
     {
       "path": "crates/postgresem/src/published_model.rs",

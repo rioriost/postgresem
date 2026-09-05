@@ -12,6 +12,7 @@ external evidence is pending.
 | signed multi-platform release automation | implemented | `.github/workflows/release.yml` |
 | stable 1.x external-evidence release gate | implemented, pending evidence | `contracts/release-evidence-v1.json`, `tests/contracts/verify_release_evidence.py` |
 | query and ingestion operations | implemented | [operator workflow](rc-operator-workflow.md), `make test-rc-workflow` |
+| unified application demonstration | implemented | [Meaning Lab](../examples/semantic_demo/README.md), real PostgreSQL comparison/ingestion/RLS via `make test-semantic-demo` |
 | PostgreSQL 16–18 migration/recovery | implemented | CI recovery matrix |
 | Linux amd64/arm64 execution | implemented | native runtime and release gates |
 | final reference comparison and differentiation | documented | [final differentiation](final-differentiation.md) |

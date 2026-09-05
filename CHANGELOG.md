@@ -4,6 +4,11 @@
 
 ### Prepared for 1.0.0
 
+- Consolidate application examples into Meaning Lab: real PostgreSQL/semantic
+  comparisons with an independent ledger oracle, governed ingestion and retry
+  reconciliation, tenant RLS, and an explicitly opt-in bounded OpenAI planner.
+  Add real HTTP/MCP/DB qualification to the Docker Compose CI job without
+  changing public gateway contracts or database migrations.
 - Promote the unchanged M11 candidate boundary to the stable v1 contract while
   preserving `contracts/rc-v1.json` as immutable historical evidence.
 - Add explicit 1.x compatibility, deprecation, support, governance, and final

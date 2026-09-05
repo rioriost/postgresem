@@ -1,4 +1,4 @@
-.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-contracts test-release-evidence test-install test-web-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery test-rc-workflow preview-check beta-check rc-check stable-check
+.PHONY: doctor dev-up dev-down mcp docker-up docker-down docker-mcp web-demo backup verify-backup upgrade-local report-beta report-operations fmt check test test-contracts test-release-evidence test-install test-web-demo test-semantic-demo test-reference-comparison test-db test-execution test-mcp test-mutation test-performance test-recovery test-rc-workflow preview-check beta-check rc-check stable-check
 
 doctor:
 	cargo run --quiet -p postgresem -- doctor
@@ -27,9 +27,10 @@ docker-mcp:
 docker-down:
 	docker compose --env-file .env -f compose.yaml -f compose.linux.yaml down
 
+DEMO_RUNTIME ?= auto
+
 web-demo:
-	@test -f .env || (echo "copy .env.example to .env and set local passwords" >&2; exit 1)
-	python3 examples/web_demo/server.py -- make mcp
+	python3 examples/semantic_demo/server.py --runtime $(DEMO_RUNTIME)
 
 backup:
 	scripts/backup.sh $(BACKUP_ROOT)
@@ -81,7 +82,10 @@ test-install:
 	tests/install/success.sh
 
 test-web-demo:
-	python3 examples/web_demo/test_server.py
+	python3 -m unittest discover -s examples/semantic_demo -p 'test_*.py'
+
+test-semantic-demo:
+	python3 examples/semantic_demo/e2e.py --runtime $(DEMO_RUNTIME)
 
 test-reference-comparison:
 	tests/reference-comparison/run.sh

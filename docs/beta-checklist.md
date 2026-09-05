@@ -16,7 +16,7 @@ that must come from independent environments.
 | internal security pre-review | completed | workflow supply-chain finding remediated by immutable action pinning and retested; [CI run 33465942053](https://github.com/rioriost/postgresem/actions/runs/33465942053) passed; does not satisfy independent review |
 | external evidence collection workflow | implemented | [M5 external evidence process](m5-external-evidence.md) and structured field/security review issue forms |
 | MCP Streamable HTTP | deferred | authentication and request identity are prerequisites |
-| loopback commerce Web demo | implemented | [Web demo](../examples/web_demo/README.md); existing stdio MCP path |
+| loopback semantic comparison demo | implemented | [Meaning Lab](../examples/semantic_demo/README.md); real PostgreSQL reads and governed writes through stdio MCP |
 | independent security review | **completion reported; evidence registration pending** | maintainer reported an external review with no vulnerabilities found on 2026-09-05; see the status note below |
 | two non-fixture databases operated for four weeks | **outstanding** | one evidence record per database is required; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
 | P0/P1 security or correctness defects during field period | **not measurable yet** | accepted 28-day field records are not yet available; tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |

@@ -111,21 +111,21 @@ command, exercises every tool, lists and reads every resource, and closes stdin
 so the server exits:
 
 ```sh
-python3 examples/commerce/mcp_smoke.py -- make mcp
+python3 examples/semantic_demo/smoke.py -- make mcp
 ```
 
 Expected summary shapes include:
 
 ```text
 initialize: protocol=2024-11-05 server=postgresem/<version>
-tools/list: 5 tools
+tools/list: 8 tools
 list_semantic_models: models=[orders, subscriptions, tenant_orders]
 describe_semantic_model: model=orders fields=<count> metrics=<count>
 validate_semantic_query: valid=True hash=sha256:<64 hex>
 explain_semantic_query: models=[orders] effective_limit=10
 query_semantic_model: columns=[revenue:numeric] rows=<count> truncated=False
 resources/list: 5 resources
-PASS: MCP stdio commerce smoke completed
+PASS: MCP stdio Meaning Lab smoke completed
 ```
 
 The exact semantic revision, normalized LSQ hash, query ID, timings, and row
@@ -134,9 +134,14 @@ values can change. Numeric results are represented as JSON strings.
 The client reads `orders-revenue.json` by default. Try another supplied LSQ:
 
 ```sh
-python3 examples/commerce/mcp_smoke.py \
-  --lsq examples/commerce/revenue-by-month.json -- make mcp
+python3 examples/semantic_demo/smoke.py \
+  --lsq examples/semantic_demo/requests/revenue-by-month.json -- make mcp
 ```
+
+For the real-data comparison UI, run `make web-demo` and open
+<http://127.0.0.1:8765>. The unified
+[Meaning Lab](../examples/semantic_demo/README.md) includes semantic mistakes,
+governed ingestion, replay, reconciliation, and native RLS.
 
 ### Requests sent by the client
 
@@ -144,7 +149,7 @@ The wire format is one compact JSON object per line. These abbreviated examples
 show the required request shapes:
 
 ```json
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"commerce-smoke","version":"1"}}}
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"meaning-lab-smoke","version":"1"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
 {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_semantic_models","arguments":{"schema_version":"1"}}}

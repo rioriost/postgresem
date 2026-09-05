@@ -1093,7 +1093,7 @@ semantic_model:
         )
         .expect("fixture imports");
         let query = normalize_lsq(
-            &std::fs::read(repo_path("examples/commerce/orders-revenue.json"))
+            &std::fs::read(repo_path("examples/semantic_demo/requests/orders-revenue.json"))
                 .expect("query fixture exists"),
         )
         .expect("valid LSQ");
