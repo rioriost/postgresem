@@ -1,14 +1,26 @@
 {
   "schema_version": "1",
   "release": "1.0.0",
-  "status": "pending",
-  "independent_security_review": {
-    "evidence_url": null,
-    "reviewed_commit": null,
-    "reviewed_contract_digest": null,
+  "status": "accepted",
+  "source_security_review": {
+    "kind": "automated-source-review",
+    "evidence_url": "https://github.com/rioriost/postgresem/blob/2797160ee431ee12722d339e23def6d8c8e7fbd5/docs/security-reviews/2026-09-05-381fe57.md",
+    "reviewed_commit": "c8a2ca7a6a635de975d8e8b2324b652ac037075c",
+    "reviewed_contract_digest": "sha256:c3d58c9fd3670836da7f86c73c478dcee4a087601cb083a927e3f7617e4f18a2",
     "reviewed_image_digest": null,
-    "retest_completed_at": null,
-    "unresolved_p0_p1": null
+    "retest_completed_at": "2026-09-05",
+    "unresolved_p0_p1": 0
   },
-  "field_pilots": []
+  "field_pilots": [],
+  "maintainer_exception": {
+    "scope": "v1.0.0-only",
+    "maintainer": "rioriost",
+    "accepted_at": "2026-09-05",
+    "decision_url": "https://github.com/rioriost/postgresem/blob/cff423ebf185b44a900049c98d7bb0b3a9063b26/docs/adr/0020-v1-release-maintainer-exception.md",
+    "waived_requirements": [
+      "independent_external_reviewer",
+      "reviewed_container_image",
+      "two_28_day_non_fixture_pilots"
+    ]
+  }
 }

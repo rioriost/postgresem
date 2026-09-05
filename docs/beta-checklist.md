@@ -21,7 +21,7 @@ that must come from independent environments.
 | independent security review and reviewed container image | **waived for v1.0.0; not completed** | maintainer-approved source review is not independent external review; no image review was performed |
 | two non-fixture databases operated for four weeks | **waived for v1.0.0; not completed** | [ADR 0020](adr/0020-v1-release-maintainer-exception.md); historical evidence goal tracked in [#4](https://github.com/rioriost/postgresem/issues/4) |
 | P0/P1 security or correctness defects during field period | **not measured / accepted limitation** | no qualifying field periods or accepted pilot records exist; this is not a zero-defect claim |
-| machine-readable 1.0 evidence gate | required; v1.0.0 exception approved | `contracts/release-evidence-v1.json`; accepted evidence must pass strict identity/decision binding and unchanged technical qualification before publication |
+| machine-readable 1.0 evidence gate | accepted under v1.0.0-only policy | `contracts/release-evidence-v1.json`; [immutable maintainer decision](https://github.com/rioriost/postgresem/blob/cff423ebf185b44a900049c98d7bb0b3a9063b26/docs/adr/0020-v1-release-maintainer-exception.md); strict identity binding and unchanged technical qualification remain required |
 
 ## External security review status (2026-09-05)
 
@@ -44,9 +44,10 @@ hashes are not independently reviewed.
 No image review was performed and no qualifying pilots were completed.
 The reviewed image is therefore `null`, field pilots are `[]`, and the
 exception explicitly waives those prerequisites and reviewer independence
-rather than fabricating evidence. The release record also requires a genuine
-immutable commit-pinned URL for ADR 0020 once its policy commit exists; a
-relative documentation link does not satisfy that machine gate.
+rather than fabricating evidence. The release record binds the
+[immutable ADR 0020 decision](https://github.com/rioriost/postgresem/blob/cff423ebf185b44a900049c98d7bb0b3a9063b26/docs/adr/0020-v1-release-maintainer-exception.md)
+at policy commit `cff423ebf185b44a900049c98d7bb0b3a9063b26`; a relative
+documentation link does not satisfy that machine gate.
 
 The maintainer also confirms that potential future supply-chain
 vulnerabilities are an ongoing monitoring responsibility, not a current release

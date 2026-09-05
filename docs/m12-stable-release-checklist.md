@@ -12,7 +12,7 @@ plus all unchanged technical qualification and release automation.
 | historical RC immutability | implemented | `tests/contracts/verify.py` pins `contracts/rc-v1.json` |
 | stable compatibility/deprecation periods | documented | [`compatibility.md`](compatibility.md), [`deprecation-policy.md`](deprecation-policy.md), [`SUPPORT.md`](../SUPPORT.md) |
 | signed multi-platform release automation | implemented | `.github/workflows/release.yml` |
-| stable 1.x release-evidence gate | required; v1.0.0 exception approved | `contracts/release-evidence-v1.json`, `tests/contracts/verify_release_evidence.py`; ordinary strict gates remain the default for later stable tags |
+| stable 1.x release-evidence gate | accepted under v1.0.0-only policy | `contracts/release-evidence-v1.json`, `tests/contracts/verify_release_evidence.py`; [immutable decision](https://github.com/rioriost/postgresem/blob/cff423ebf185b44a900049c98d7bb0b3a9063b26/docs/adr/0020-v1-release-maintainer-exception.md); ordinary strict gates remain the default for later stable tags |
 | query and ingestion operations | implemented | [operator workflow](rc-operator-workflow.md), `make test-rc-workflow` |
 | unified application demonstration | implemented | [Meaning Lab](../examples/semantic_demo/README.md), real PostgreSQL comparison/ingestion/RLS via `make test-semantic-demo` |
 | PostgreSQL 16–18 migration/recovery | implemented | CI recovery matrix |
