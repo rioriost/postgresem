@@ -3,295 +3,252 @@
 [English](README.md)
 
 `postgresem`は、AIエージェントとアプリケーションのためのPostgreSQLネイティブな
-セマンティックゲートウェイです。厳格かつバージョン化されたLogical Semantic Query
-（LSQ）とLogical Semantic Mutation（LSM）を受け取り、immutableな公開済みSemantic
-Revisionに対して解決し、分離されたquery/mutation PostgreSQL境界を通じて決定的な
-パラメータ化operationを実行します。
+セマンティックゲートウェイです。型付きのLogical Semantic Query（LSQ）と
+Logical Semantic Mutation（LSM）を受け取り、変更不能な公開済みセマンティック定義に
+基づいて解決し、PostgreSQLの認可の下でパラメータ化された操作を実行します。
 
-現在のsourceには**repository準備済み1.0.0 stable contract**が含まれ、最新の公開
-releaseは**0.7.0**です。正式な`v1.0.0` releaseは、独立external security reviewと
-受理済み28日間non-fixture pilot 2件が記録されるまでblockされます。stable互換性は
-production SLA、HA、RPO/RTO、規制対応を保証するものではありません。
+このガイドは**postgresem 1.0.0**を対象としています。PostgreSQLを唯一の実行エンジン
+とし、データとその統制された意味の両方を管理する正本として使用します。
 
-## postgresemはどのような問題を解決するのか？
+## What problem does postgresem solve?
 
-PostgreSQLデータベースは、schema、table、column、型、key、foreign key、制約、
-comment、権限、Row-Level Security policyなど、データについて多くの情報をすでに
-保持しています。一方で、その構造が業務上何を意味するかまでは、通常は完全に表現
-されていません。アプリケーションやAIエージェントには、どのtableが注文を表すのか、
-どのtimestampが売上計上時点なのか、どのjoinが安全なのか、承認されたmetric定義は
-どれか、特定の利用者がどのfieldを発見・queryできるか、といった情報も必要です。
+PostgreSQLは、テーブル、カラム、型、キー、制約、コメント、権限、行レベルセキュリティ
+など、データの構造を把握しています。しかし構造だけでは、売上計上に使う日時、
+承認された指標の定義、集計単位を崩さずに結合できるテーブルまでは説明できません。
 
-統制されたsemantic layerがない場合、これらの情報はapplication code、BI tool、
-prompt、documentation、YAML fileなどに重複して記述されがちです。それぞれの複製は
-databaseや相互の定義から独立してdriftします。物理schema metadataしか参照できない
-AIエージェントは、構文的には正しくても、誤ったgrainを使う、join fan-outを起こす、
-一貫しないmetric定義を適用する、意図されたaccess pathを外れる、といったSQLを生成
-する可能性があります。
+こうした意味は、アプリケーションコード、BIツール、プロンプト、ドキュメント、
+YAMLファイルなどへ重複して記述されがちです。それぞれが独立して変化すると、
+定義の不一致が生まれます。物理スキーマだけを参照するエージェントは、構文上は
+正しいSQLでも、注文を二重計上したり、業務上誤った定義を使ったり、想定した
+アプリケーションの公開範囲を超えてデータを取得したりする可能性があります。
 
-`postgresem`は、不足しているsemantic contractをデータとともにPostgreSQL内へ保持
-します。`pg_catalog`、`COMMENT`、PK/UNIQUE/FK、`CHECK`、GRANT、RLSといった
-database-nativeなevidenceを、人が明示的にreviewしたmodel、field、relationship、
-metric、term、policy bindingと組み合わせます。これらの定義はimmutableなrevision
-として公開されます。エージェントはraw SQLを送信する代わりに、承認済みsemantic
-nameをLSQでqueryします。決定的compilerは、上限付きのパラメータ化`SELECT`を生成
-するか、曖昧または未対応のrequestを拒否します。
+`postgresem`は、レビュー済みのモデル、フィールド、リレーション、指標、ポリシー
+関連付けをデータとともにPostgreSQLへ保存します。`pg_catalog`、コメント、キー、
+制約などのメタデータはモデル化の根拠になりますが、業務上の意味についての人による
+レビューを置き換えるものではありません。定義は変更不能なリビジョンとして公開され、
+ハッシュで検証されます。
 
-このcontractをPostgreSQL内へ置くことで、次の実用的な利点が得られます。
+アプリケーションはSQLではなく承認済みの意味名を使います。コンパイラーは、
+決定的で上限付きのパラメータ化操作を生成するか、未対応または曖昧な入力を拒否します。
 
-- **統制された単一の正本:** 物理metadata、業務上の意味、権限、revision履歴を、
-  独立したmetadata serviceとの間で同期することなく、同じdatabase運用境界で管理
-  できます。
-- **database securityが最終的な正本:** PostgreSQLのGRANTとRLSが実行時のaccessを
-  引き続き強制します。semantic layerは公開・query可能な範囲を狭められますが、
-  databaseが拒否するaccessを許可することはできません。
-- **意味をdata modelとともに変更:** semantic migration、公開、backup、restore、
-  drift checkを、それらが説明するschemaの変更と連携できます。
-- **より安全なAI access:** エージェントは承認されたconceptを発見し、型付きLSQを
-  組み立てます。無制限のSQL実行interfaceを受け取ることも、table名やcolumn名だけ
-  から業務上の意味を推測することもありません。
-- **構築時に確定するlineageとaudit:** 各resultを、その生成に使用したsemantic
-  revision、metric、relationship、source column、policy context、compiler version、
-  SQL hashへ結び付けられます。
-- **PostgreSQL中心のsystemで追加infraを削減:** core contractに外部catalog、vector
-  database、policy engineは不要です。PostgreSQLが、データと統制された意味の両方に
-  対するdurableなsystem of recordであり続けます。
+| 利点 | 得られる効果 |
+|---|---|
+| 意味定義の正本を一つに集約 | アプリケーションやエージェントが、それぞれ別の業務定義を維持する代わりに、PostgreSQL内の公開済み定義を共有します。 |
+| データベースによるアクセス制御 | PostgreSQLのGRANTとRLSを最終的な権限として維持します。セマンティック層がデータベースの拒否を覆すことはありません。 |
+| 一貫した運用 | スキーマ変更、意味定義の公開、差分検出、バックアップ、復元をPostgreSQLの運用境界内で扱えます。 |
+| 追跡可能性 | 実行を意味定義のリビジョン、コンパイラーバージョン、ポリシーコンテキスト、監査記録に関連付けます。 |
+| 追加インフラの削減 | コア機能に外部カタログサービス、ベクトルデータベース、ポリシーエンジン、結果キャッシュは不要です。 |
 
-この方式は意図的にPostgreSQL専用です。多くのdatabase dialectを横断する広い抽象化
-よりも、PostgreSQLの型、catalog metadata、role、RLS、transaction、backup手順との
-深い統合を優先します。
+## Usage Scenario
 
-## 1.0 release状況
+| シナリオ | postgresemの使い方 |
+|---|---|
+| 業務データを扱うAIアシスタント | MCPクライアントが承認済みモデルを発見し、SQLを生成せずに売上やサブスクリプションなどの指標を問い合わせます。 |
+| アプリケーションのレポート機能 | ダッシュボードが、共通の指標定義、承認済みの結合、明示的な集計ルールを使ってLSQを送信します。 |
+| 統制されたデータ投入 | 独立した書き込みロールを通じて型付きLSMのinsertや承認済みupsertを実行し、冪等な再実行と結果照合を行います。 |
+| メタデータと変更の管理 | 運用者がPostgreSQLカタログを取得し、モデル候補を生成して、公開前に意味定義や認可の変更を比較します。 |
 
-現在のsourceはrepository管理下のM12 scopeを`1.0.0`として実装しています。
-M6の独立した型付き
-mutation contractは、上限付きinsertと明示的にmodel化された冪等upsertに限定したまま
-です。M7ではcatalog-boundなApache Ossie `0.1.1` candidate importと
-authorization-awareなcatalog driftを追加しました。既存の`READ ONLY` query executor
-を弱めず、raw SQL、任意DML、物理identifier、request-selected database roleは公開
-しません。PostgreSQLのGRANT、RLS `WITH CHECK`、constraint、triggerを最終正本として
-維持します。
+マルチテナントアプリケーションでは、認証済みHTTPの主体を運用者が設定した
+PostgreSQLロールへ対応付け、参照できる行をRLSで制御します。
+[Commerceサンプル](examples/commerce/README.md)と
+[ローカルWebデモ](examples/web_demo/README.md)で連携例を確認できます。
 
-`0.4`では、cross buildしたarchiveやmulti-architecture image manifestを実行evidence
-とはせず、packaged binaryとruntime imageをLinux amd64/arm64上でnative実行するgateを
-追加しました。Mac StudioとApple Containerはmaintainerのlocal reference環境として
-残しますが、唯一のsupport targetではありません。
+対象範囲は意図的に限定しています。任意SQLや汎用的なupdate/delete、PostgreSQL以外
+での実行、自動的な事前集計やマテリアライズドビューへのルーティングは提供しません。
+未対応の複数ファクト、多対多、多段リレーションを使う集計は、推測せず拒否します。
+対応する意味論は[互換性ポリシー](docs/compatibility.md)、自身のデータベースへの
+導入は[モデル作成・運用ガイド](docs/operations.md)を参照してください。
 
-M7では、固定したWren AI、Cube、Malloy、MetricFlowのOSS runtimeを同一PostgreSQL 18
-datasetに対して実行しました。全referenceが同じ期待aggregateを返すことを確認しつつ、
-異なるtrust boundaryを明示しています。M8ではこのevidenceを基に、明示的なmetric
-aggregation anchorと、要求されたaggregateを適用する前に宣言済みroot entity grainで
-duplicate child rowを除去する二段階PostgreSQL planを追加しました。M9ではidentityと
-authorizationをPostgreSQLから移動させず、stateless MCP `2026-07-28` HTTP resource
-serverを追加しました。M10では計測されたcatalog N+1 bottleneckを解消し、
-catalog-boundなlarge-model scaffoldとoperations/upgrade surfaceを追加しました。
-guarded executionは計測上のbottleneckではなかったため、persisted accelerationは
-deferしています。M11ではこれらのcontractをfreezeし、release-candidate operationと
-rollback gateを追加しました。M12では同じ境界をstableへ昇格し、1.x互換性/support
-期間、fail-closedな正式release evidence gate、最終差別化statementを追加しました。
-2026-09-05にmaintainerから、外部security reviewを完了し、脆弱性は検出されなかった
-との報告を受けています。review対象とimmutable evidenceの登録、および2件の28日間
-non-fixture pilot recordは[issue #4](https://github.com/rioriost/postgresem/issues/4)
-で引き続き管理します。
-[review状況](docs/beta-checklist.md#external-security-review-status-2026-09-05)を
+## Installation
+
+対応するPostgreSQLは**16、17、18**です。ネイティブバイナリは**LinuxとmacOSの
+amd64／arm64**向けに提供します。コンテナはLinux amd64／arm64で動作し、
+Apple silicon搭載macOSではApple Containerを利用できます。
+
+**導入用ファイルとサンプルの取得**
+
+```sh
+git clone --branch v1.0.0 --depth 1 https://github.com/rioriost/postgresem.git
+cd postgresem
+```
+
+以降のリポジトリ内コマンドは、このディレクトリから実行してください。
+
+**ネイティブCLI**
+
+[Cosign](https://docs.sigstore.dev/cosign/system_config/installation/)を導入し、
+`curl`、`tar`、および`shasum`または`sha256sum`が利用できる状態で実行します。
+
+```sh
+scripts/install.sh 1.0.0
+export PATH="$HOME/.local/bin:$PATH"
+postgresem --version
+postgresem contract show
+```
+
+インストーラーはホストに対応するファイルを選び、リリース署名とアーカイブの
+チェックサムを検証して、sudoを使わず`~/.local/bin`へバイナリを配置します。
+PostgreSQLの作成、マイグレーションの適用、認証情報の設定は行いません。
+既存データベースへの導入は[運用ガイド](docs/operations.md)を参照してください。
+
+**ローカルコンテナ環境**
+
+サンプル環境は、取得したソースからゲートウェイをビルドし、PostgreSQL 18を起動して
+マイグレーションを適用し、架空のCommerceモデルを公開します。本番環境の構成
+テンプレートではなく、ローカルデモ用です。この方法ではネイティブCLIは不要です。
+
+Git、Make、および下表のいずれかのコンテナランタイムを使用します。
+サンプルの実行にはPython 3.9以降も必要です。
+
+```sh
+cp .env.example .env
+chmod 600 .env
+```
+
+起動前に`.env`を編集し、すべての仮パスワードを用途ごとに異なるランダムな
+ローカル専用の値へ置き換え、対応する接続URLも更新してください。
+本番の認証情報は使用せず、`.env`はコミットしないでください。
+
+| 環境 | 起動 | データベースのデータを削除せず停止 |
+|---|---|---|
+| Docker EngineとCompose v2を使うLinux | `make docker-up` | `make docker-down` |
+| Apple Container 1.0.0と`container-compose` 1.1.0を使うApple silicon搭載macOS | `make dev-up` | `make dev-down` |
+| rootless Podman 4.9以降とsystemdを使うLinux | [Quadletの導入手順](docs/linux-containers.md#rootless-podman-quadlet)を参照 | 導入したユーザーサービスを停止 |
+
+詳細は[Linuxコンテナの設定](docs/linux-containers.md)または
+[Apple Containerクイックスタート](docs/quickstart.md)を参照してください。
+
+## Quick Usage
+
+上記の手順でローカル環境を起動してください。以下はDocker Compose向けです。
+Apple Containerでは`make docker-mcp`を`make mcp`へ置き換えます。
+
+**MCPによるサンプルデータの取得と投入**
+
+```sh
+python3 examples/commerce/mcp_smoke.py \
+  --lsq examples/commerce/revenue-by-month.json \
+  --lsm examples/commerce/order-insert.json \
+  -- make docker-mcp
+```
+
+クライアントはMCPを初期化し、モデルを発見して、クエリを検証・実行した後、
+統制された書き込み経路で架空の注文を投入します。
+**このコマンドはサンプルデータベースへ書き込みます。**
+同じLSMの冪等キーで再実行した場合は、別の注文を追加せず、確定済みの結果を返します。
+
+注文の売上合計を取得するLSQは、次のように記述します。
+
+```json
+{
+  "schema_version": "1",
+  "model": "orders",
+  "metrics": [{"metric": "revenue"}],
+  "limit": 10
+}
+```
+
+MCPクライアントは、このオブジェクトを`query_semantic_model`の`lsq`引数として、
+ツール引数`schema_version: "1"`とともに送信します。クエリ結果にはカラムのメタデータ、
+行データ、リビジョンと監査の識別子、結果の打ち切り状態が含まれます。
+numeric型の値は、精度を保つためJSON文字列で返します。
+
+**Webデモを試す**
+
+```sh
+python3 examples/web_demo/server.py -- make docker-mcp
+```
+
+<http://127.0.0.1:8765>を開いてください。ブラウザーはMCP経由で定義済みの
+セマンティッククエリを実行し、PostgreSQLへ直接接続しません。`Ctrl-C`でデモを
+終了した後、Installationの表にあるコマンドでコンテナ環境を停止します。
+
+**エージェントやアプリケーションを接続する**
+
+ローカルMCPクライアントには、作業ディレクトリを取得したリポジトリに設定し、
+`make docker-mcp`、Apple Containerの場合は`make mcp`を起動するよう指定します。
+これらは対話型シェルではなく、stdio上で改行区切りのJSON-RPCを処理します。
+
+| 操作 | MCPツール |
+|---|---|
+| モデルの発見 | `list_semantic_models`、`describe_semantic_model` |
+| クエリ | `validate_semantic_query`、`explain_semantic_query`、`query_semantic_model` |
+| 統制された書き込み（有効化時） | `validate_semantic_mutation`、`mutate_semantic_model`、`reconcile_semantic_mutation` |
+
+リモートクライアントには、[認証済みHTTPの導入ガイド](docs/mcp-http.md)に従って
+`postgresem mcp serve-http`を使用します。stdioはMCP `2024-11-05`、
+認証済みのステートレスStreamable HTTPは`2026-07-28`に対応します。
+拒否されたリクエストの扱いは[エラーリファレンス](docs/error-reference.md)を
 参照してください。
-feature数のparityは目的とせず、`1.0`まで
-PostgreSQLを唯一のexecution engineかつsemantic source of truthとして維持します。
 
-M6〜M12のgateは
-[implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
-を参照してください。
+## Security boundary
 
-## はじめに
+**PostgreSQLを権限の最終的な正本とします。** クエリは読み取り専用トランザクションで
+実行し、所有者でもsuperuserでも`BYPASSRLS`でもない検証済みロールを使用します。
+トランザクション単位のタイムアウトを設定し、データ操作前に永続化された監査開始
+記録を必須とします。結果には行数とバイト数の上限があります。
 
-- [30分で試すApple Container quickstart](docs/quickstart.md)
-- [Linux Docker ComposeとPodman Quadlet](docs/linux-containers.md)
-- [Commerce sampleとstdio smoke client](examples/commerce/README.md)
-- [認証済みMCP HTTP deploymentとSDK guidance](docs/mcp-http.md)
-- [ローカルCommerce Web demo](examples/web_demo/README.md)
-- [運用ガイド](docs/operations.md)
-- [M11 release-candidate checklist](docs/m11-release-candidate-checklist.md)
-- [M12 stable release checklist](docs/m12-stable-release-checklist.md)
-- [最終1.0差別化statement](docs/final-differentiation.md)
-- [Release-candidate operator workflow](docs/rc-operator-workflow.md)
-- [Support policy](SUPPORT.md)
-- [Governance](GOVERNANCE.md)
-- [Deprecation policy](docs/deprecation-policy.md)
-- [エラーリファレンス](docs/error-reference.md)
-- [互換性policyとsupport matrix](docs/compatibility.md)
-- [M10 reference比較](docs/reference-comparison/2026-09-03.md)
-- [Performance baselineと再現手順](docs/performance.md)
-- [Developer preview exit checklist](docs/developer-preview-checklist.md)
-- [M5 beta checklist](docs/beta-checklist.md)
-- [M5 external evidence収集手順](docs/m5-external-evidence.md)
-- [Backupとrestore](docs/backup-restore.md)
-- [SLOとadoption reporting](docs/slo-and-adoption.md)
-- [Incident runbook](docs/incident-runbook.md)
-- [Beta security review checklist](docs/security-review-checklist.md)
-- [M4 design feedback form](https://github.com/rioriost/postgresem/issues/new?template=m4_design_feedback.yml)
-- [設定済みCI](.github/workflows/ci.yml)と
-  [release automation](.github/workflows/release.yml)
-- [Architecture Decision Record](docs/adr/)
-- [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN-jp.md)
+書き込みには独立した認証情報、ロール、コンパイラー、実行器、冪等性管理、
+監査ライフサイクルを使用します。書き込み可能なのは公開済みのinsert/upsert定義
+だけです。業務データの変更、確定済みの再実行結果、監査の確定処理は同一の
+トランザクションで行います。PostgreSQLのカラム単位GRANT、RLSの
+`USING`／`WITH CHECK`、制約、トリガーは引き続き強制されます。
 
-## 0.9で実装されているもの
+クエリや書き込みのリクエストからSQL、物理識別子、接続認証情報、
+データベースロールは指定できません。
+stdioの実行権限は起動時に固定し、HTTPでは検証済みの主体を使って事前設定済みの
+対応付けからのみ選択します。MCPレスポンスに生成SQLや物理リネージは含めません。
+診断ログには入力値、認証情報、結果行、非公開名、主体情報を含めず、非公開の
+セマンティックオブジェクトと未知のオブジェクトには同じ公開エラーを返します。
 
-- LSQ v1 validationと決定的compile
-- PostgreSQLをbacking storeとするSemantic Snapshot/Schema v2。Snapshot v1の読み込みと
-  canonical hash互換性を維持
-- 明示的なmetric additivityとroot entity-key aggregation anchor
-- 承認済みdirect one-to-many dimension/filterに対する決定的な二段階aggregation。
-  duplicate childとmulti-branch fan-outを保護
-- canonical hashを持つimmutableな公開済みrevision
-- row数とbyte数に上限を設けた保護された読み取り専用実行
-- LSM v1 validationと、上限付きinsert/承認済みupsertの決定的compile
-- queryとは分離したwriter credential、mapped writer role、mutation transaction、
-  冪等replay、reconciliation
-- PostgreSQLのGRANTとRLSを強制する固定role mapping
-- 必須query/mutation audit lifecycle record
-- 改行区切りJSON-RPC stdio上のMCP `2024-11-05`
-- RFC 9728 metadataとlocal asymmetric JWT検証を備えた、loopback
-  Streamable HTTP上の認証済みstateless MCP `2026-07-28`
-- verified subjectからquery/writer roleへの完全一致mapping、authority単位のlimit、
-  private discovery、request SSE、切断からPostgreSQLへのcancellation
-- mutation有効時に8つのsemantic限定toolと4形式のresource URI
-- breaking-change gateを持つ決定的Semantic Model互換性diff
-- fingerprint付きPostgreSQL catalog drift。GRANT、RLS、role authorization、
-  完全なrole graph evidence、security-definer view owner authority、
-  正規化object ACL、function/window/aggregate実行evidence、
-  relation ownership、constraint、型の変更をbreaking evidenceとして扱う
-- PostgreSQL catalog evidenceと照合する、review可能かつquery-onlyなcandidateへの
-  Apache Ossie `0.1.1`一方向import
-- 同一PostgreSQL 18 taskに対するWren AI、Cube、Malloy、MetricFlowの固定runtime比較と
-  machine-readable evidence
-- 1,000 modelのcompiler、決定的な1,000 relation catalog scan、
-  guarded execution result hashを含むM10 scale baseline
-- 1,000 relationを1秒未満に保つregression gate付きset-based catalog scan
-- 最大1,000のreview-only modelを生成する決定的catalog-bound scaffold
-- fixedかつprivacy-preservingなM10 operational dashboard
-- verified backupをgateとするlocal Apple Container upgrade automation
-- 決定的なfrozen stable v1 contract inventory
-- isolated same-name restore後のprevious-release binary実行
-- guarded query、governed ingestion、replay、auditを結合したworkflow gate
-- PostgreSQL 18を使用するローカルApple Container Compose開発stack
-- Linux Docker Composeとrootless Podman Quadlet deployment path
+PostgreSQL接続には明示的な`sslmode`が必要です。リモート接続には
+`sslmode=require`を使用し、プラットフォームの信頼ストアによる証明書とホスト名の
+検証を行います。`sslmode=disable`はローカルまたは別途保護された接続に限定してください。
 
-MCP toolは`list_semantic_models`、`describe_semantic_model`、
-`validate_semantic_query`、`query_semantic_model`、
-`explain_semantic_query`に加え、mutation設定時の
-`validate_semantic_mutation`、`mutate_semantic_model`、
-`reconcile_semantic_mutation`です。raw SQLまたはcompiler outputを返すMCP toolはなく、
-MCP responseは生成SQLや物理lineageを公開しません。
+HTTPリスナーはループバックだけにバインドし、同居するHTTPSリバースプロキシを
+必要とします。ローカルのauthority／JWKS設定でJWTを検証し、トークン発行、
+転送ヘッダーによる主体情報の信頼、鍵の動的な検出は行いません。リモート書き込みには、
+運用者による明示的な有効化、検証済みスコープ、対応付けられた書き込みロールが
+必要です。設定を変更した場合はプロセスを再起動します。
 
-## Security境界
+LinuxのComposeとQuadletではUID/GID `10001`でゲートウェイを実行します。
+Apple Containerではhostsファイルへの対応のためCompose設定上はrootを指定しますが、
+起動時に権限を下げ、MCPを明示的に`postgresem`ユーザーで実行します。
 
-runtimeおよびaudit credential、project、mapped database role、principal、execution
-profileはprocess起動時のenvironmentで固定され、requestから上書きできません。実行には
-durableな`started` audit rowが必要です。その後、`SET LOCAL ROLE`とtransaction-local
-timeoutを設定した`READ ONLY` transactionを使用します。executorは、必要なrole
-membershipを持たないrole、superuser、`BYPASSRLS` role、queryが使用するsource
-relationのowner roleを拒否します。
+サプライチェーンは継続的に監視します。依存関係のチェック、ワークフローActionの
+固定、署名検証を、アプリケーションのセキュリティ対策と併用します。
+本番のバックアップ保持、HA、復旧目標、IDプロバイダーの運用、プロキシの設定は
+運用者の責任です。[SECURITY.md](SECURITY.md)、[SUPPORT.md](SUPPORT.md)、
+[バックアップと復元](docs/backup-restore.md)も参照してください。
 
-mutationは独立したlogin、mapped writer role、compiler、executor、idempotency store、
-audit lifecycleを使用します。business DML、committed idempotency result、terminalな
-committed audit stateは同一transactionで確定します。PostgreSQLのcolumn GRANT、RLS
-`USING`/`WITH CHECK`、constraint、triggerが最終authorityです。
+## Packaging status
 
-HTTP adapterはOAuth resource serverとしてのみ動作します。local read-only fileから
-strict authority document、JWKS、principal HMAC keyを読み、検証済みJWT subjectを
-事前設定済みroleへ完全一致でmappingし、同居HTTPS reverse proxyの背後でloopbackだけ
-にbindします。token発行、remote key fetch、forwarded identity headerの信頼、
-request-selected roleは行いません。remote mutationはoperator gate、verified scope、
-mapped writer role、既存PostgreSQL mutation境界がすべて有効な場合だけ公開されます。
+1.0.0のリリース成果物は、次の構成です。
 
-Apple Containerでは、`/etc/hosts` fallbackのためにGatewayのCompose設定userをrootに
-する必要があります。startup commandはidle processを直ちに`postgresem`へ降格し、
-`make mcp`もMCPを明示的に`postgresem`としてexecします。container設定自体はnonroot
-ではありませんが、application processは非特権です。
+| 成果物 | 形式・対象 |
+|---|---|
+| ネイティブアーカイブ | `postgresem-1.0.0-{linux,darwin}-{amd64,arm64}.tar.gz` |
+| OCIイメージ | `ghcr.io/rioriost/postgresem:1.0.0`、`linux/amd64`／`linux/arm64`向け |
+| アーカイブの完全性情報 | `SHA256SUMS`、`SHA256SUMS.sig`、`SHA256SUMS.pem` |
+| イメージのメタデータ | SBOMとビルド来歴 |
+| 導入用ソース | `Dockerfile`、`Containerfile`、Composeファイル、rootless Podman用Quadletユニット |
 
-MCP diagnosticはstructured JSONとしてstderrへ出力され、request value、connection
-data、SQL、result row、private name、principal dataを含みません。hiddenなsemantic
-objectと未知のsemantic objectには、同じ公開用「not available」errorを返します。
+ネイティブアーカイブにはバイナリ、スキーマ、契約マニフェスト、一部のポリシー
+文書を同梱します。導入用ファイル、マイグレーション、サンプルはソースリポジトリに
+含まれます。インストーラーが配置するのはバイナリのみです。
 
-## Stableの制限事項
+リリース処理では、公開前にLinuxの両アーキテクチャでバイナリとイメージを実行します。
+チェックサムと変更不能なイメージdigestには、GitHub OIDCを使ったSigstoreの
+キーレス署名を付けます。検証では、想定するリリースワークフローとタグの識別情報、
+およびissuerの両方を制約してください。チェックサムだけでは配布元を認証できません。
+再現可能な導入にはイメージdigestを固定します。ローカルビルドしたイメージは、
+署名済みリリース成果物ではありません。
 
-- PostgreSQL connectionには明示的な`sslmode`が必要です。remote connectionでは
-  `sslmode=require`を使用してください。`sslmode=disable`は、ローカルまたは別途
-  保護されたconnectionとして明示的に選択した場合だけ受け入れます。
-- 認証済みHTTP listenerはTLSを終端せず、非loopback addressへbindできません。同居
-  HTTPS reverse proxyでpublic Hostを保持し、SSE bufferingを無効化し、切断を伝播する
-  必要があります。
-- HTTP authority/JWKS reload、runtime OIDC discovery、distributed rate-limit state、
-  resumable session、GET event stream、connection poolingは未実装です。
-- N-1および同名restore pathはfixtureでtestされていますが、本番backup、RPO/RTO、
-  disaster recovery、down migrationはoperatorの責任です。
-- M10 operational reportはmaterialized view stateを観測しますが、materialized
-  view/pre-aggregationの作成、refresh、query routingは行いません。
-- `v0.7.0`のchecksumとimmutable container image digestは、GitHub release
-  workflowによりkeyless署名されています。
-- PostgreSQL 18が検証済みのローカル開発targetです。PostgreSQL 16、17、18はDocker
-  CIのmigration、integration、recovery matrixを通過しています。正確な境界は
-  [compatibility matrix](docs/compatibility.md)を参照してください。
-- native Linux amd64/arm64 CI gateはruntime imageをPostgreSQL 18に対して実行します。
-  tagged releaseではpackaged binaryとarchitecture別imageも公開前にgateします。
-- governed writeは公開済みinsert/upsert projectionに限定されます。update、delete、
-  merge、copy、call、DDL、raw SQL、caller-selected conflict target/returning fieldは
-  未対応です。
-- fan-out-safe aggregationは、単一root model、direct one-to-many relationship、
-  共通のroot entity-key anchor、root-localなmetric input/filterに限定されます。
-  group間のfact allocation、multi-fact、bridge、reverse、multi-hop planningは未対応です。
-- Ossie importは意図的に一方向で、direct ANSI field、single-column key-backed
-  relationship、承認済みsingle-field aggregateだけを扱います。未対応またはlossyな
-  semanticsはfail closedします。
+ダウンロードは[GitHub Releases](https://github.com/rioriost/postgresem/releases)、
+バージョンの保証範囲は[互換性ポリシー](docs/compatibility.md)と
+[廃止ポリシー](docs/deprecation-policy.md)を参照してください。
 
-## Packaging状況
+## License
 
-tagをtriggerとするautomationは、4種類のnative archiveをbuildし、`SHA256SUMS`を生成
-して、image SBOMおよびprovenance付きのmulti-architecture GHCR imageを公開します。
-[`scripts/install.sh`](scripts/install.sh)はCosignを必須とし、署名済み
-`SHA256SUMS`を正確なrelease workflow/tag identityに対して認証してから、対応する
-archiveのchecksumを検証します。
-
-[`v0.7.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.7.0)
-には、amd64およびarm64向けのLinux/macOS archive、Linux binary/imageのnative
-runtime evidence、`SHA256SUMS`、Sigstore signature、certificateが含まれます。
-公開imageは`ghcr.io/rioriost/postgresem:0.7.0`です。checksumとimmutable image
-digestはGitHub OIDCでkeyless署名されています。検証時には、想定するworkflow
-identityとissuerを制約する必要があります。
-[artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix)も参照して
-ください。
-
-## 開発
-
-```sh
-make doctor
-make test
-make check
-```
-
-正式1.0公開前の完全なgateは次のcommandで実行します。
-
-```sh
-make stable-check
-```
-
-受理済みexternal evidenceがない間、`make stable-check`は意図的に失敗します。
-repository管理下のqualification suiteには`make rc-check`を使用します。
-
-M4のcompatibilityおよびperformance surfaceは、次のcommandで直接実行できます。
-
-```sh
-postgresem model diff --from BEFORE.json --to AFTER.json --fail-on-breaking
-postgresem benchmark compiler \
-  --models 100 --warmup 100 --iterations 1000 --threshold-ms 50
-make test-performance
-```
-
-どちらのCLI commandもstructured JSONを出力します。benchmarkはp95がthresholdを
-厳密に下回らない場合にnonzeroで終了します。model diffは
-`--fail-on-breaking`が指定され、breaking diffがある場合にだけnonzeroで終了します。
-対象範囲とreference measurementは
-[performance.md](docs/performance.md)を参照してください。
-
-変更またはreportを提出する前に、[CONTRIBUTING.md](CONTRIBUTING.md)と
-[SECURITY.md](SECURITY.md)を確認してください。
+`postgresem`は[MIT License](LICENSE)で提供します。
+貢献方法は[CONTRIBUTING.md](CONTRIBUTING.md)を参照してください。

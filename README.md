@@ -3,307 +3,262 @@
 [日本語](README-jp.md)
 
 `postgresem` is a PostgreSQL-native semantic gateway for AI agents and
-applications. It accepts strict, versioned Logical Semantic Queries (LSQ) and
-Logical Semantic Mutations (LSM), resolves them against an immutable published
-semantic revision, and executes deterministic parameterized operations through
-separate guarded PostgreSQL query and mutation boundaries.
+applications. It accepts typed Logical Semantic Queries (LSQ) and Logical
+Semantic Mutations (LSM), resolves them against immutable published semantic
+definitions, and executes parameterized operations under PostgreSQL
+authorization.
 
-The current source contains the **repository-prepared 1.0.0 stable contract**;
-the latest published release is **0.7.0**. The formal `v1.0.0` release remains
-blocked until an independent external security review and two accepted 28-day
-non-fixture pilots are recorded. Stable compatibility is not a production
-SLA, HA, RPO/RTO, or regulatory promise.
+This guide describes **postgresem 1.0.0**. PostgreSQL is the only execution
+engine and the authoritative store for both data and its governed meaning.
 
 ## What problem does postgresem solve?
 
-A PostgreSQL database already knows a great deal about its data: schemas,
-tables, columns, types, keys, foreign keys, constraints, comments, privileges,
-and row-level security policies. What it usually does not express completely
-is the business meaning of that structure. An application or AI agent still
-needs to know which table represents an order, which timestamp defines revenue
-recognition, which joins are safe, which metric definition is approved, and
-which fields a particular user is allowed to discover or query.
+PostgreSQL knows the structure of your data: tables, columns, types, keys,
+constraints, comments, privileges, and row-level security policies. Structure
+alone does not explain which timestamp defines revenue recognition, which
+metric definition is approved, or which joins preserve the intended unit of
+aggregation.
 
-Without a governed semantic layer, those answers tend to be duplicated across
-application code, BI tools, prompts, documentation, and YAML files. The copies
-drift independently from the database and from one another. An AI agent that
-sees only physical schema metadata may produce syntactically valid SQL that
-uses the wrong grain, creates join fan-out, applies an inconsistent metric
-definition, or bypasses the intended access path.
+Those meanings often end up duplicated across application code, BI tools,
+prompts, documentation, and YAML files. The copies drift independently. An
+agent working only from physical schema metadata can produce valid SQL that
+double-counts orders, uses the wrong business definition, or exposes more data
+than the intended application interface.
 
-`postgresem` keeps the missing semantic contract in PostgreSQL alongside the
-data. It combines database-native evidence such as `pg_catalog`, `COMMENT`,
-PK/UNIQUE/FK, `CHECK`, GRANT, and RLS with explicitly reviewed models, fields,
-relationships, metrics, terms, and policy bindings. These definitions are
-published as immutable revisions. Agents query the approved semantic names
-through LSQ instead of submitting raw SQL, and the deterministic compiler
-either produces a bounded parameterized `SELECT` or rejects an ambiguous or
-unsupported request.
+`postgresem` stores reviewed semantic models, fields, relationships, metrics,
+and policy bindings in PostgreSQL alongside the data. Database metadata such
+as `pg_catalog`, comments, keys, and constraints provides evidence for modeling;
+it does not replace human review of business meaning. Definitions are
+published as immutable, hash-verified revisions.
 
-Keeping this contract in PostgreSQL provides several practical benefits:
+Applications use approved semantic names instead of supplying SQL. The
+compiler either produces a deterministic, bounded, parameterized operation or
+rejects unsupported or ambiguous input.
 
-- **One governed source of truth:** physical metadata, business semantics,
-  permissions, and revision history live under the same database operational
-  boundary instead of being synchronized across a separate metadata service.
-- **Security remains authoritative in the database:** PostgreSQL GRANT and RLS
-  still enforce access at execution time. The semantic layer can narrow what
-  is visible or queryable, but it cannot grant access the database denies.
-- **Meaning changes with the data model:** semantic migrations, publication,
-  backup, restore, and drift checks can be coordinated with the schema they
-  describe.
-- **Safer AI access:** agents discover approved concepts and construct typed
-  LSQs; they do not receive an unrestricted SQL execution interface or need to
-  infer business meaning from table and column names alone.
-- **Lineage and audit by construction:** each result is tied to the semantic
-  revision, metrics, relationships, source columns, policy context, compiler
-  version, and SQL hash used to produce it.
-- **Less infrastructure for PostgreSQL-centered systems:** the core contract
-  requires no external catalog, vector database, or policy engine. PostgreSQL
-  remains the durable system of record for both data and its governed meaning.
+| Benefit | What changes |
+|---|---|
+| One semantic authority | Applications and agents share published PostgreSQL definitions instead of maintaining separate live copies of business meaning. |
+| Database-enforced access | PostgreSQL GRANT and RLS remain authoritative; semantic visibility cannot grant access the database denies. |
+| Coordinated operations | Schema changes, semantic publication, drift detection, backup, and restore stay within the PostgreSQL operational boundary. |
+| Traceability | Execution is tied to the semantic revision, compiler version, policy context, and audit record. |
+| Less infrastructure | The core requires no external catalog service, vector database, policy engine, or result cache. |
 
-This approach is intentionally PostgreSQL-specific. It favors deep integration
-with PostgreSQL types, catalog metadata, roles, RLS, transactions, and backup
-procedures over a broad abstraction across many database dialects.
+## Usage Scenario
 
-## 1.0 release status
+| Scenario | How postgresem is used |
+|---|---|
+| AI assistant for business data | An MCP client discovers approved models and asks for revenue, subscriptions, or other modeled metrics without generating SQL. |
+| Application reporting | A dashboard submits LSQ using shared metric definitions, including approved joins and explicit aggregation rules. |
+| Governed data ingestion | An application submits typed LSM inserts or approved upserts through a separate writer role, with idempotent replay and reconciliation. |
+| Metadata and change management | Operators scan the PostgreSQL catalog, scaffold model candidates, and compare semantic or authorization changes before publication. |
 
-The current source implements the repository-controlled M12 scope as `1.0.0`.
-M6's separate typed
-mutation contract remains limited to bounded inserts and explicitly modeled
-idempotent upserts. M7 adds catalog-bound Apache Ossie `0.1.1` candidate import
-and authorization-aware catalog drift without weakening the existing
-`READ ONLY` query executor or exposing raw SQL, arbitrary DML, physical
-identifiers, or request-selected database roles. PostgreSQL GRANT, RLS
-`WITH CHECK`, constraints, and triggers remain authoritative.
+For multi-tenant applications, authenticated HTTP identities map to
+operator-configured PostgreSQL roles, and RLS determines accessible rows.
+The [commerce example](examples/commerce/README.md) and
+[local Web demo](examples/web_demo/README.md) show application integration.
 
-`0.4` also adds native Linux amd64 and arm64 runtime gates for both packaged
-binaries and runtime images instead of treating cross-built archives or a
-multi-architecture manifest as execution evidence. The Mac Studio and Apple
-Container remain the maintainer's local reference environment, not the only
-supported target.
+The scope is intentionally narrow: no arbitrary SQL or general update/delete,
+no non-PostgreSQL execution, and no automatic pre-aggregation or
+materialized-view routing. Unsupported multi-fact, many-to-many, and multi-hop
+aggregation is rejected rather than guessed. See the
+[compatibility policy](docs/compatibility.md) for supported semantics and
+[authoring and operations guidance](docs/operations.md) for using your own
+database.
 
-M7 ran pinned Wren AI, Cube, Malloy, and MetricFlow OSS runtimes against one
-PostgreSQL 18 dataset. Every reference produced the same expected aggregate,
-while the comparison kept their materially different trust boundaries
-explicit. M8 uses that evidence to add explicit metric aggregation anchors and
-a two-stage PostgreSQL plan that removes duplicate child rows at the declared
-root entity grain before applying the requested aggregate. M9 adds a stateless
-MCP `2026-07-28` HTTP resource server without moving identity or authorization
-out of PostgreSQL. M10 removes the measured catalog N+1 bottleneck, adds
-catalog-bound large-model scaffolding and operational/upgrade surfaces, and
-keeps persisted acceleration deferred because guarded execution was not the
-measured bottleneck. M11 froze these contracts and added release-candidate
-operation and rollback gates. M12 promotes the unchanged boundary to stable,
-defines 1.x compatibility/support periods, adds a fail-closed formal-release
-evidence gate, and publishes the final differentiation statement. On
-2026-09-05 the maintainer reported an external security review with no
-vulnerabilities found. Registration of its scope and immutable evidence, and
-the two 28-day non-fixture pilot records, remain pending in
-[issue #4](https://github.com/rioriost/postgresem/issues/4); see the
-[review status](docs/beta-checklist.md#external-security-review-status-2026-09-05).
-Feature-count parity
-is not the objective: PostgreSQL remains the only execution engine and semantic
-source of truth through `1.0`.
+## Installation
 
-See the [implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
-for the M6–M12 gates.
+Supported targets are PostgreSQL **16, 17, and 18**, and native binaries for
+**Linux and macOS on amd64 and arm64**. Containers run on Linux amd64/arm64;
+the Apple silicon macOS path uses Apple Container.
 
-## Start here
+**Get the deployment files and examples**
 
-- [30-minute Apple Container quickstart](docs/quickstart.md)
-- [Linux Docker Compose and Podman Quadlet](docs/linux-containers.md)
-- [Commerce sample and stdio smoke client](examples/commerce/README.md)
-- [Authenticated MCP HTTP deployment and SDK guidance](docs/mcp-http.md)
-- [Local commerce Web demo](examples/web_demo/README.md)
-- [Operations guide](docs/operations.md)
-- [M11 release-candidate checklist](docs/m11-release-candidate-checklist.md)
-- [M12 stable release checklist](docs/m12-stable-release-checklist.md)
-- [Final 1.0 differentiation](docs/final-differentiation.md)
-- [Release-candidate operator workflow](docs/rc-operator-workflow.md)
-- [Support policy](SUPPORT.md)
-- [Governance](GOVERNANCE.md)
-- [Deprecation policy](docs/deprecation-policy.md)
-- [Error reference](docs/error-reference.md)
-- [Compatibility policy and support matrix](docs/compatibility.md)
-- [M10 reference comparison](docs/reference-comparison/2026-09-03.md)
-- [Performance baseline and reproduction](docs/performance.md)
-- [Developer-preview exit checklist](docs/developer-preview-checklist.md)
-- [M5 beta checklist](docs/beta-checklist.md)
-- [M5 external evidence process](docs/m5-external-evidence.md)
-- [Backup and restore](docs/backup-restore.md)
-- [SLO and adoption reporting](docs/slo-and-adoption.md)
-- [Incident runbook](docs/incident-runbook.md)
-- [Beta security review checklist](docs/security-review-checklist.md)
-- [M4 design feedback form](https://github.com/rioriost/postgresem/issues/new?template=m4_design_feedback.yml)
-- [Configured CI](.github/workflows/ci.yml) and
-  [release automation](.github/workflows/release.yml)
-- [Architecture decisions](docs/adr/)
-- [Implementation plan](docs/POSTGRESQL_SEMANTIC_GATEWAY_IMPLEMENTATION_PLAN.md)
+```sh
+git clone --branch v1.0.0 --depth 1 https://github.com/rioriost/postgresem.git
+cd postgresem
+```
 
-## What 0.9 implements
+Run the following repository commands from this directory.
 
-- LSQ v1 validation and deterministic compilation
-- Semantic Snapshot/Schema v2 backed by PostgreSQL, with Snapshot v1 loading
-  and canonical-hash compatibility
-- explicit metric additivity and root entity-key aggregation anchors
-- deterministic two-stage aggregation across approved direct one-to-many
-  dimensions and filters, with duplicate-child and multi-branch protection
-- immutable published revisions with canonical hashes
-- guarded read-only execution with row and byte limits
-- LSM v1 validation and deterministic bounded insert/approved-upsert compilation
-- separate writer credentials, mapped writer roles, and guarded mutation
-  transactions with idempotent replay and reconciliation
-- fixed PostgreSQL role mapping with GRANT and RLS enforcement
-- mandatory query and mutation audit lifecycle records
-- MCP `2024-11-05` over line-delimited JSON-RPC stdio
-- authenticated stateless MCP `2026-07-28` over loopback Streamable HTTP,
-  with RFC 9728 metadata and local asymmetric JWT verification
-- exact verified subject-to-query/writer-role mappings, per-authority limits,
-  private discovery, request SSE, and disconnect-to-PostgreSQL cancellation
-- eight mutation-enabled semantic-only tools and four resource URI forms
-- deterministic semantic model compatibility diffs with a breaking-change gate
-- fingerprinted PostgreSQL catalog drift with GRANT, RLS, role authorization,
-  complete role-graph evidence, security-definer view-owner authority,
-  normalized object ACLs, executable function/window/aggregate evidence,
-  relation ownership, constraint, and type changes treated as breaking evidence
-- one-way Apache Ossie `0.1.1` import into a reviewable, query-only candidate
-  that is cross-checked against PostgreSQL catalog evidence
-- pinned Wren AI, Cube, Malloy, and MetricFlow runtime comparisons against one
-  PostgreSQL 18 task, with machine-readable evidence
-- an M10 scale baseline with 1,000-model compilation, deterministic
-  1,000-relation catalog scans, and guarded-execution result hashing
-- set-based PostgreSQL catalog scanning with a 1-second 1,000-relation
-  regression gate
-- deterministic catalog-bound scaffolding for up to 1,000 review-only models
-- a fixed, privacy-preserving M10 operational dashboard
-- verified-backup-gated local Apple Container upgrade automation
-- a deterministic frozen stable v1 contract inventory
-- previous-release binary execution after isolated same-name restore
-- a combined guarded-query, governed-ingestion, replay, and audit workflow gate
-- local Apple Container Compose development stack using PostgreSQL 18
-- Linux Docker Compose and rootless Podman Quadlet deployment paths
+**Native CLI**
 
-The MCP tools are `list_semantic_models`, `describe_semantic_model`,
-`validate_semantic_query`, `query_semantic_model`, and
-`explain_semantic_query`, plus `validate_semantic_mutation`,
-`mutate_semantic_model`, and `reconcile_semantic_mutation` when mutation
-configuration is present. There is no raw SQL or compiler-output MCP tool, and
-MCP responses do not expose generated SQL or physical lineage.
+Install [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/),
+then use the installer with `curl`, `tar`, and either `shasum` or `sha256sum`
+available:
+
+```sh
+scripts/install.sh 1.0.0
+export PATH="$HOME/.local/bin:$PATH"
+postgresem --version
+postgresem contract show
+```
+
+The installer selects the host platform, verifies the release signature and
+archive checksum, and installs the binary into `~/.local/bin` without sudo.
+It does not provision PostgreSQL, apply migrations, or configure credentials.
+For an existing database, follow the [operations guide](docs/operations.md).
+
+**Local container stack**
+
+The sample stack builds the gateway from the checkout, starts PostgreSQL 18,
+applies migrations, and publishes fictional commerce models. It is a local
+demonstration, not a production deployment template. The native CLI is not
+required for this path.
+
+Use Git, Make, and one of the container runtimes below. The examples also
+require Python 3.9 or later.
+
+```sh
+cp .env.example .env
+chmod 600 .env
+```
+
+Before starting, edit `.env`: replace every password placeholder with separate,
+random local-only credentials and update the corresponding connection URLs.
+Do not use production credentials or commit `.env`.
+
+| Environment | Start | Stop without deleting database data |
+|---|---|---|
+| Linux with Docker Engine and Compose v2 | `make docker-up` | `make docker-down` |
+| Apple silicon macOS with Apple Container 1.0.0 and `container-compose` 1.1.0 | `make dev-up` | `make dev-down` |
+| Linux with rootless Podman 4.9+ and systemd | Follow the [Quadlet instructions](docs/linux-containers.md#rootless-podman-quadlet) | Stop the installed user services |
+
+See [Linux container setup](docs/linux-containers.md) or the
+[Apple Container quickstart](docs/quickstart.md) for detailed configuration.
+
+## Quick Usage
+
+Start the local stack as described above. The commands below use Docker
+Compose; on Apple Container, replace `make docker-mcp` with `make mcp`.
+
+**Query and insert sample data through MCP**
+
+```sh
+python3 examples/commerce/mcp_smoke.py \
+  --lsq examples/commerce/revenue-by-month.json \
+  --lsm examples/commerce/order-insert.json \
+  -- make docker-mcp
+```
+
+The client initializes MCP, discovers models, validates and executes the
+query, and inserts a fictional order through the governed mutation path.
+**This command writes to the sample database.** Repeating it with the same
+LSM idempotency key replays the committed outcome instead of inserting another
+order.
+
+An LSQ for total order revenue looks like this:
+
+```json
+{
+  "schema_version": "1",
+  "model": "orders",
+  "metrics": [{"metric": "revenue"}],
+  "limit": 10
+}
+```
+
+An MCP client sends this object as `lsq` to `query_semantic_model`, alongside
+tool argument `schema_version: "1"`. Queries return column metadata, rows,
+revision and audit identifiers, and truncation status. PostgreSQL `numeric` values are
+represented as JSON strings to preserve precision.
+
+**Try the Web demo**
+
+```sh
+python3 examples/web_demo/server.py -- make docker-mcp
+```
+
+Open <http://127.0.0.1:8765>. The browser uses predefined semantic queries
+through MCP; it does not connect directly to PostgreSQL. Stop the demo with
+`Ctrl-C`, then stop the stack using the command in the installation table.
+
+**Connect an agent or application**
+
+For local MCP integration, configure the client to launch `make docker-mcp`
+from the checkout directory, or `make mcp` on Apple Container. These commands
+serve line-delimited JSON-RPC over stdio, not an interactive shell.
+
+| Operation | MCP tools |
+|---|---|
+| Discovery | `list_semantic_models`, `describe_semantic_model` |
+| Query | `validate_semantic_query`, `explain_semantic_query`, `query_semantic_model` |
+| Governed writes, when enabled | `validate_semantic_mutation`, `mutate_semantic_model`, `reconcile_semantic_mutation` |
+
+For remote clients, use `postgresem mcp serve-http` with the
+[authenticated HTTP deployment guide](docs/mcp-http.md). Stdio supports MCP
+`2024-11-05`; authenticated stateless Streamable HTTP supports `2026-07-28`.
+Use the [error reference](docs/error-reference.md) to handle rejected requests.
 
 ## Security boundary
 
-Runtime and audit credentials, project, mapped database role, principal, and
-execution profile are fixed by environment at process startup; requests cannot
-override them. Execution requires a durable `started` audit row, then uses a
-`READ ONLY` transaction with `SET LOCAL ROLE` and transaction-local timeouts.
-The executor rejects missing role membership, superuser or `BYPASSRLS` roles,
-and roles that own a source relation used by the query.
+**PostgreSQL remains the final authority.** Query execution uses a read-only
+transaction, a validated non-owner, non-superuser, non-`BYPASSRLS` role, and
+transaction-local timeouts. A durable audit start is required before source
+execution, and result row and byte limits bound responses.
 
-Mutation uses a distinct login, mapped writer role, compiler, executor,
-idempotency store, and audit lifecycle. Business DML, the committed
-idempotency result, and the terminal committed audit state share one
-transaction. PostgreSQL column GRANT, RLS `USING`/`WITH CHECK`, constraints,
-and triggers remain the final authority.
+Writes use separate credentials, roles, compiler, executor, idempotency state,
+and audit lifecycle. Only published insert/upsert projections are writable.
+Business changes, committed replay state, and committed audit finalization
+share one transaction. PostgreSQL column GRANT, RLS `USING`/`WITH CHECK`,
+constraints, and triggers remain enforced.
 
-The HTTP adapter is only an OAuth resource server. It reads a strict authority
-document, JWKS, and principal HMAC key from local read-only files, maps exact
-verified JWT subjects to preconfigured roles, and binds only to loopback behind
-a colocated HTTPS reverse proxy. It does not issue tokens, fetch remote keys,
-trust forwarded identity headers, or accept request-selected roles. Remote
-mutation is disabled unless the operator gate, verified scope, mapped writer
-role, and existing PostgreSQL mutation boundary are all active.
+Query and mutation requests cannot supply SQL, physical identifiers, connection
+credentials, or database roles. Stdio authority is fixed at startup; HTTP authority is selected
+only from configured mappings using verified identity. MCP responses do not
+expose generated SQL or physical lineage. Diagnostics exclude request values,
+credentials, result rows, private names, and principal data; hidden and unknown
+semantic objects have the same public error.
 
-Apple Container requires the gateway Compose configuration user to be root for
-its `/etc/hosts` fallback. The startup command immediately drops to
-`postgresem` for the idle process, and `make mcp` explicitly execs MCP as
-`postgresem`; the application processes are unprivileged even though the
-container configuration is not nonroot.
+PostgreSQL connections require an explicit `sslmode`. Use `sslmode=require`
+for remote connections; certificate and hostname validation use the platform
+trust store. Reserve `sslmode=disable` for local or independently protected
+connections.
 
-MCP diagnostics go to stderr as structured JSON and omit request values,
-connection data, SQL, result rows, private names, and principal data. Hidden
-and unknown semantic objects receive the same public “not available” errors.
+The HTTP listener binds only to loopback and requires a colocated HTTPS reverse
+proxy. It verifies JWTs using local authority/JWKS configuration; it does not
+issue tokens, trust forwarded identity headers, or discover keys dynamically.
+Remote writes require explicit operator enablement, verified scope, and a
+mapped writer role. Configuration changes require a process restart.
 
-## Stable limitations
+Linux Compose and Quadlet run the gateway as UID/GID `10001`. Apple Container
+requires root in the Compose configuration for its hosts-file workaround, but
+startup drops privileges and MCP is explicitly executed as `postgresem`.
 
-- PostgreSQL connections require an explicit `sslmode`. Use
-  `sslmode=require` for remote connections; `sslmode=disable` is accepted only
-  as an explicit choice for local or independently protected connections.
-- The authenticated HTTP listener does not terminate TLS and cannot bind to a
-  non-loopback address. A colocated HTTPS reverse proxy must preserve the
-  public Host, disable SSE buffering, and propagate disconnects.
-- HTTP authority/JWKS reload, runtime OIDC discovery, distributed rate-limit
-  state, resumable sessions, GET event streams, and connection pooling are not
-  implemented.
-- N-1 and same-name restore paths are fixture-tested, but production backup,
-  RPO/RTO, disaster recovery, and down migrations remain operator-owned.
-- The M10 operational report observes materialized-view state but does not
-  create, refresh, or route queries to materialized views or pre-aggregations.
-- `v0.7.0` checksums and immutable container image digest are keyless
-  signed by the GitHub release workflow.
-- PostgreSQL 18 is the verified local development target; PostgreSQL 16, 17,
-  and 18 pass the Docker CI migration, integration, and recovery matrix. See the
-  [compatibility matrix](docs/compatibility.md) for the exact boundary.
-- Native Linux amd64/arm64 CI runtime gates execute the runtime image against
-  PostgreSQL 18; tagged releases additionally gate packaged binaries and both
-  architecture-specific images before publication.
-- Governed writes are limited to published insert/upsert projections. Update,
-  delete, merge, copy, calls, DDL, raw SQL, caller-selected conflict targets,
-  and caller-selected returning fields remain unsupported.
-- Fan-out-safe aggregation is limited to one root model, direct one-to-many
-  relationships, one shared root entity-key anchor, and root-local metric
-  inputs/filters. It does not allocate facts across groups or support
-  multi-fact, bridge, reverse, or multi-hop planning.
-- Ossie import is intentionally one-way and supports only direct ANSI fields,
-  single-column key-backed relationships, and approved single-field
-  aggregates. Unsupported or lossy semantics fail closed.
+Supply-chain monitoring is continuous: dependency checks, pinned workflow
+actions, and signature verification complement application security. Production
+backup retention, HA, recovery objectives, identity-provider operation, and
+proxy configuration remain operator responsibilities. See
+[SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and
+[backup and restore](docs/backup-restore.md).
 
 ## Packaging status
 
-Tag-triggered automation is configured to build four native archives, generate
-`SHA256SUMS`, and publish a multi-architecture GHCR image with image SBOM and
-provenance. [`scripts/install.sh`](scripts/install.sh) requires Cosign,
-authenticates the signed `SHA256SUMS` against the exact release workflow/tag,
-and then verifies the matching archive checksum before installation.
+The 1.0.0 release layout is:
 
-The
-[`v0.7.0` release](https://github.com/rioriost/postgresem/releases/tag/v0.7.0)
-contains Linux and macOS archives for amd64 and arm64, native Linux binary and
-image runtime evidence, `SHA256SUMS`, and its Sigstore signature and
-certificate. The public image is `ghcr.io/rioriost/postgresem:0.7.0`. The
-checksum and immutable image digest are GitHub OIDC keyless-signed;
-verification must constrain the expected workflow identity and issuer. See the
-[artifact matrix](docs/compatibility.md#artifact-release-and-runtime-matrix).
+| Artifact | Format or target |
+|---|---|
+| Native archives | `postgresem-1.0.0-{linux,darwin}-{amd64,arm64}.tar.gz` |
+| OCI image | `ghcr.io/rioriost/postgresem:1.0.0`, for `linux/amd64` and `linux/arm64` |
+| Archive integrity | `SHA256SUMS`, `SHA256SUMS.sig`, and `SHA256SUMS.pem` |
+| Image metadata | SBOM and build provenance |
+| Deployment sources | `Dockerfile`, `Containerfile`, Compose files, and rootless Podman Quadlet units |
 
-## Development
+Native archives include the binary, schemas, contract manifests, and selected
+policy documentation. Deployment files, migrations, and examples are supplied
+in the source checkout. The installer installs only the binary.
 
-```sh
-make doctor
-make test
-make check
-```
+Release automation executes Linux binaries and images on both architectures
+before publication. Checksums and the immutable image digest are
+Sigstore-keyless-signed using GitHub OIDC. Verification must constrain both the
+expected release-workflow/tag identity and the issuer; a checksum alone does
+not authenticate an artifact. Pin image digests for reproducible deployment.
+Locally built images are not signed release artifacts.
 
-The complete repository gate before formal 1.0 publication is:
+Use [GitHub Releases](https://github.com/rioriost/postgresem/releases) for
+downloads and the [compatibility policy](docs/compatibility.md) and
+[deprecation policy](docs/deprecation-policy.md) for version guarantees.
 
-```sh
-make stable-check
-```
+## License
 
-`make stable-check` intentionally fails while accepted external evidence is
-absent. Use `make rc-check` for the repository-controlled qualification suite.
-
-Run the M4 compatibility and performance surfaces directly:
-
-```sh
-postgresem model diff --from BEFORE.json --to AFTER.json --fail-on-breaking
-postgresem benchmark compiler \
-  --models 100 --warmup 100 --iterations 1000 --threshold-ms 50
-make test-performance
-```
-
-Both CLI commands emit structured JSON. The benchmark exits nonzero when p95
-does not remain strictly below the threshold; model diff exits nonzero on a
-breaking diff only when `--fail-on-breaking` is present. See
-[performance.md](docs/performance.md) for scope and reference measurements.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md) before
-submitting changes or reports.
+`postgresem` is licensed under the [MIT License](LICENSE).
+Contribution guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).

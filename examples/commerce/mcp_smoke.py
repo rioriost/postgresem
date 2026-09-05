@@ -21,6 +21,7 @@ EXPECTED_TOOLS = [
     "explain_semantic_query",
     "validate_semantic_mutation",
     "mutate_semantic_model",
+    "reconcile_semantic_mutation",
 ]
 
 
