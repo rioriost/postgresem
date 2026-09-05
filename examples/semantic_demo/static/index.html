@@ -1,170 +1,164 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <meta name="description" content="同じ PostgreSQL データで、SQL の計画と公開された意味定義を比較するローカル実演。">
+    <meta name="description" content="Compare SQL plans and published business meaning on the same real PostgreSQL data." data-ja-content="同じ PostgreSQL データで、SQL の計画と公開された意味定義を比較するローカル実演。">
     <title>Meaning Lab / PostgreSQL Semantic Gateway 1.0</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <a class="skip-link" href="#main">本文へスキップ</a>
-    <aside class="sidebar" aria-label="ラボのナビゲーション">
-      <a class="brand" href="#main" aria-label="Meaning Lab ホーム">
+    <a class="skip-link" href="#main" data-ja="本文へスキップ">Skip to content</a>
+    <aside class="sidebar" aria-label="Lab navigation" data-ja-label="ラボのナビゲーション">
+      <a class="brand" href="#main" aria-label="Meaning Lab home" data-ja-label="Meaning Lab ホーム">
         <span class="brand-mark" aria-hidden="true">M<span>·</span></span>
         <span>Meaning Lab<small>POSTGRESEM</small></span>
       </a>
-      <p class="sidebar-caption">WORKSPACE / LOCAL DEMO</p>
-      <nav aria-label="検証メニュー">
-        <a href="#compare"><span aria-hidden="true">01</span> 意味を比較する</a>
-        <a href="#ingest"><span aria-hidden="true">02</span> 書き込みを確かめる</a>
-        <a href="#guards"><span aria-hidden="true">03</span> 境界を確かめる</a>
-        <a href="#catalog"><span aria-hidden="true">04</span> 公開モデルと契約</a>
+      <p class="sidebar-caption" data-ja="ワークスペース / ローカルデモ">WORKSPACE / LOCAL DEMO</p>
+      <nav aria-label="Demo workflows" data-ja-label="検証メニュー">
+        <a href="#compare"><span aria-hidden="true">01</span><span data-ja="意味を比較する">Compare meaning</span></a>
+        <a href="#ingest"><span aria-hidden="true">02</span><span data-ja="書き込みを確かめる">Try governed writes</span></a>
+        <a href="#guards"><span aria-hidden="true">03</span><span data-ja="境界を確かめる">Check boundaries</span></a>
+        <a href="#catalog"><span aria-hidden="true">04</span><span data-ja="公開モデルと契約">Models and contract</span></a>
       </nav>
       <div class="sidebar-note">
-        <span class="eyebrow">DATABASE FIRST</span>
-        <p>データは PostgreSQL。<br>意味は公開モデル。<br>権限は GRANT + RLS。</p>
-        <span class="local-tag">LOOPBACK ONLY</span>
+        <span class="eyebrow" data-ja="データベースを正本に">DATABASE FIRST</span>
+        <p><span data-ja="データは PostgreSQL。">Data in PostgreSQL.</span><br><span data-ja="意味は公開モデル。">Meaning in published models.</span><br><span data-ja="権限は GRANT + RLS。">Authority through GRANT + RLS.</span></p>
+        <span class="local-tag" data-ja="ループバック専用">LOOPBACK ONLY</span>
       </div>
     </aside>
 
     <div class="workspace">
       <header class="topbar">
         <p>PostgreSQL Semantic Gateway <strong>1.0</strong></p>
-        <span id="connection-status" class="badge neutral" role="status">接続を確認中</span>
+        <div class="topbar-controls">
+          <label class="language-control" for="language-select">
+            <span data-ja="表示言語">Language</span>
+            <select id="language-select">
+              <option value="en" lang="en" selected>English</option>
+              <option value="ja" lang="ja">日本語</option>
+            </select>
+          </label>
+          <span id="connection-status" class="badge neutral" role="status">Connecting</span>
+        </div>
       </header>
 
       <main id="main" tabindex="-1">
         <section class="hero" aria-labelledby="hero-title">
           <div>
-            <p class="eyebrow">MEANING LAB / EVIDENCE, NOT MAGIC</p>
-            <h1 id="hero-title">同じデータ。<br><span>「何を数えるか」</span>で変わる答え。</h1>
-            <p class="hero-description">
-              スキーマだけを手掛かりにした SQL 計画と、業務定義に基づく semantic MCP。
-              架空の業務データを実際の PostgreSQL で読み、答え・根拠・実行記録を並べます。
-            </p>
+            <p class="eyebrow" data-ja="MEANING LAB / 魔法ではなく根拠">MEANING LAB / EVIDENCE, NOT MAGIC</p>
+            <h1 id="hero-title"><span class="hero-lead" data-ja="同じデータ。">Same data.</span><br><span data-ja="「何を数えるか」">What you count</span><span class="hero-lead" data-ja="で変わる答え。"> changes the answer.</span></h1>
+            <p class="hero-description" data-ja="スキーマだけを手掛かりにした SQL 計画と、業務定義に基づく semantic MCP。架空の業務データを実際の PostgreSQL で読み、答え・根拠・実行記録を並べます。">Compare schema-only SQL plans with semantic MCP using published business definitions. Read fictional business data from real PostgreSQL and inspect the answers, reasoning, and execution records side by side.</p>
           </div>
           <div class="hero-card">
-            <p class="eyebrow">THIS LAB CHECKS</p>
+            <p class="eyebrow" data-ja="このラボで体験すること">THIS LAB CHECKS</p>
             <ol>
-              <li><span>01</span><div><strong>Meaning</strong><small>売上の定義・集計の粒度</small></div></li>
-              <li><span>02</span><div><strong>Mutation</strong><small>実書き込み・冪等性・照合</small></div></li>
-              <li><span>03</span><div><strong>Boundaries</strong><small>型付き拒否・DB の権限境界</small></div></li>
+              <li><span>01</span><div><strong data-ja="意味">Meaning</strong><small data-ja="売上の定義・集計の粒度">Revenue definitions and aggregation grain</small></div></li>
+              <li><span>02</span><div><strong data-ja="書き込み">Mutation</strong><small data-ja="実書き込み・冪等性・照合">Real writes, idempotency, reconciliation</small></div></li>
+              <li><span>03</span><div><strong data-ja="境界">Boundaries</strong><small data-ja="型付き拒否・DB の権限境界">Typed rejection and database authority</small></div></li>
             </ol>
           </div>
         </section>
 
         <div class="notice comparison-disclaimer">
-          <strong>SQL の能力ではなく、計画に与える意味を比較します。</strong>
-          <p>
-            既定モードの SQL は、代表的な計画ミスを事前に記録した固定例です。
-            ライブ LLM の評価・精度ベンチマークではありません。実行結果は毎回 DB から取得し、
-            正しい SQL なら PostgreSQL でも正しく答えられます。
-          </p>
+          <strong data-ja="SQL の能力ではなく、計画に与える意味を比較します。">Compare the meaning available to a plan, not the power of SQL.</strong>
+          <p data-ja="既定モードの SQL は、代表的な計画ミスを事前に記録した固定例です。ライブ LLM の評価・精度ベンチマークではありません。実行結果は毎回 DB から取得し、正しい SQL なら PostgreSQL でも正しく答えられます。">Default SQL plans are authored examples of representative planning mistakes, not live LLM evaluations or accuracy benchmarks. Every result comes from the database. Correct SQL can produce the correct answer in PostgreSQL too.</p>
         </div>
 
         <div id="activity" class="activity" role="status" aria-live="polite" aria-atomic="true">
-          公開モデルとシナリオを読み込んでいます…
+          Loading published models and scenarios...
         </div>
         <div id="error-panel" class="error-panel" role="alert" aria-atomic="true" tabindex="-1" hidden>
-          <strong id="error-title">リクエストに失敗しました</strong>
+          <strong id="error-title">Request failed</strong>
           <p id="error-message"></p>
           <p id="error-note"></p>
         </div>
-        <button id="bootstrap-retry" class="button secondary" type="button" hidden disabled>接続を再確認</button>
-        <noscript><p class="error-panel">このラボには JavaScript が必要です。無効な状態では API を実行しません。</p></noscript>
+        <button id="bootstrap-retry" class="button secondary" type="button" data-ja="接続を再確認" hidden disabled>Retry connection</button>
+        <noscript><p class="error-panel">JavaScript is required for this lab and its language switch. No API calls run without it. / このラボと言語切り替えには JavaScript が必要です。無効な状態では API を実行しません。</p></noscript>
 
         <section id="compare" class="section" aria-labelledby="compare-heading">
           <div class="section-heading">
-            <div><p class="eyebrow">01 / QUERY COMPARISON</p><h2 id="compare-heading">意味を比較する</h2></div>
-            <span class="section-label">READ ONLY</span>
+            <div><p class="eyebrow" data-ja="01 / クエリの比較">01 / QUERY COMPARISON</p><h2 id="compare-heading" data-ja="意味を比較する">Compare meaning</h2></div>
+            <span class="section-label" data-ja="読み取り専用">READ ONLY</span>
           </div>
           <fieldset class="scenario-fieldset">
-            <legend>業務の問いを選択</legend>
-            <div id="scenarios" class="scenario-grid"><p class="muted">シナリオの応答を待っています。</p></div>
+            <legend data-ja="業務の問いを選択">Choose a business question</legend>
+            <div id="scenarios" class="scenario-grid"><p class="muted" data-ja="シナリオの応答を待っています。">Waiting for scenarios.</p></div>
           </fieldset>
 
           <div class="panel configuration">
-            <div id="scenario-context" class="scenario-context"><p class="muted">接続後に業務定義を表示します。</p></div>
+            <div id="scenario-context" class="scenario-context"><p class="muted" data-ja="接続後に業務定義を表示します。">Business definitions will appear after connecting.</p></div>
             <fieldset class="mode-fieldset" aria-describedby="mode-help planner-note">
-              <legend>計画の選び方</legend>
+              <legend data-ja="計画の選び方">Choose how plans are selected</legend>
               <label class="mode-choice">
                 <input id="mode-deterministic" type="radio" name="mode" value="deterministic" checked disabled>
-                <span><strong>固定シナリオ <span class="recommended">DEFAULT</span></strong><small>事前に定義した計画ミスと公開指標を再現</small></span>
+                <span><strong><span data-ja="固定シナリオ">Fixed scenario</span> <span class="recommended" data-ja="既定">DEFAULT</span></strong><small data-ja="事前に定義した計画ミスと公開指標を再現">Replay an authored planning mistake and a published metric</small></span>
               </label>
               <label class="mode-choice">
                 <input id="mode-planner" type="radio" name="mode" value="planner" disabled>
-                <span><strong>OpenAI planner <span class="optional">OPTIONAL</span></strong><small>両経路で承認済み候補から選択。任意の SQL は生成・実行しません。</small></span>
+                <span><strong>OpenAI planner <span class="optional" data-ja="任意">OPTIONAL</span></strong><small data-ja="両経路で承認済み候補から選択。任意の SQL は生成・実行しません。">Both paths select from approved candidates. No arbitrary SQL is generated or executed.</small></span>
               </label>
-              <p id="planner-note" class="small muted">サーバー側の有効化状態を確認中。</p>
+              <p id="planner-note" class="small muted" data-ja="サーバー側の有効化状態を確認中。">Checking server-side configuration.</p>
             </fieldset>
             <div class="run-bar">
-              <p id="mode-help" class="small">
-                ブラウザーが送るのはシナリオ ID とモードのみ。行データ・API キーは送りません。
-                任意 planner はサーバーから固定の問い・スキーマ／公開モデル・候補を OpenAI に送信します。
-                片方だけ／両方が正解する場合も、そのまま表示します。
-              </p>
-              <button id="compare-button" class="button primary" type="button" disabled>同じデータで比較する <span aria-hidden="true">↗</span></button>
+              <p id="mode-help" class="small" data-ja="ブラウザーが送るのはシナリオ ID とモードのみ。行データ・API キーは送りません。任意 planner はサーバーから固定の問い・スキーマ／公開モデル・候補を OpenAI に送信します。片方だけ／両方が正解する場合も、そのまま表示します。">The browser sends only a scenario ID and mode, never rows or API keys. The optional server-side planner sends fixed questions, schema or published metadata, and candidates to OpenAI. Either or both paths may be correct; actual outcomes are shown.</p>
+              <button id="compare-button" class="button primary" type="button" disabled><span data-ja="同じデータで比較する">Compare on the same data</span> <span aria-hidden="true">↗</span></button>
             </div>
           </div>
 
           <div id="compare-empty" class="empty-state">
             <span class="empty-symbol" aria-hidden="true">↔</span>
-            <strong>まだ比較は実行していません</strong>
-            <p>実行すると、2つの返却値・期待値・同一条件の確認・ソース台帳を表示します。</p>
+            <strong data-ja="まだ比較は実行していません">No comparison has run yet</strong>
+            <p data-ja="実行すると、2つの返却値・期待値・同一条件の確認・ソース台帳を表示します。">Run a comparison to see both results, the expected answer, comparison conditions, and the source ledger.</p>
           </div>
-          <div id="compare-result" class="result-region" tabindex="-1" aria-label="比較結果" hidden></div>
+          <div id="compare-result" class="result-region" tabindex="-1" aria-label="Comparison results" data-ja-label="比較結果" hidden></div>
         </section>
 
         <section id="ingest" class="section" aria-labelledby="ingest-heading">
           <div class="section-heading">
-            <div><p class="eyebrow">02 / GOVERNED WRITE</p><h2 id="ingest-heading">一度だけ書く。もう一度、確かめる。</h2></div>
-            <span class="section-label">PERSISTENT WRITE</span>
+            <div><p class="eyebrow" data-ja="02 / 統制された書き込み">02 / GOVERNED WRITE</p><h2 id="ingest-heading" data-ja="一度だけ書く。もう一度、確かめる。">Write once. Replay with confidence.</h2></div>
+            <span class="section-label" data-ja="永続的な書き込み">PERSISTENT WRITE</span>
           </div>
           <div class="panel action-panel">
             <div>
-              <h3>確定注文の投入 → 再実行 → 照合</h3>
-              <p>LSM を検証して、45.00 の確定注文をローカルの架空データ用 DB に実際に保存します。
-                続いて同じ冪等キーで再実行し、内容を変えた再試行の拒否まで確認します。</p>
-              <p class="write-warning">変更は永続化します。このボタンを繰り返し押しても、同じキーの注文は追加されません。
-                初回の期待差分は 45.00、投入済みなら 0.00 です。</p>
+              <h3 data-ja="確定注文の投入 → 再実行 → 照合">Record a paid order → replay → reconcile</h3>
+              <p data-ja="LSM を検証して、45.00 の確定注文をローカルの架空データ用 DB に実際に保存します。続いて同じ冪等キーで再実行し、内容を変えた再試行の拒否まで確認します。">Validate an LSM and persist a real 45.00 paid order in the local fictional database. Replay the same idempotency key, reconcile its outcome, and reject a retry with changed content.</p>
+              <p class="write-warning" data-ja="変更は永続化します。このボタンを繰り返し押しても、同じキーの注文は追加されません。初回の期待差分は 45.00、投入済みなら 0.00 です。">Changes persist. Repeating this action does not add another order with the same key. The expected delta is 45.00 on first insertion and 0.00 after it has been recorded.</p>
             </div>
-            <button id="ingest-button" class="button write" type="button" disabled>確定注文を45.00投入 / 同じキーで再実行</button>
+            <button id="ingest-button" class="button write" type="button" data-ja="確定注文を45.00投入 / 同じキーで再実行" disabled>Record a 45.00 paid order / replay the same key</button>
           </div>
-          <div id="ingest-empty" class="compact-empty">未実行 · 確認ダイアログで同意するまで書き込みません。</div>
-          <div id="ingest-result" class="result-region" tabindex="-1" aria-label="書き込みと冪等性の検証結果" hidden></div>
+          <div id="ingest-empty" class="compact-empty" data-ja="未実行 · 確認ダイアログで同意するまで書き込みません。">Not run · No writes until you accept the confirmation dialog.</div>
+          <div id="ingest-result" class="result-region" tabindex="-1" aria-label="Write and idempotency results" data-ja-label="書き込みと冪等性の検証結果" hidden></div>
         </section>
 
         <section id="guards" class="section" aria-labelledby="guards-heading">
           <div class="section-heading">
-            <div><p class="eyebrow">03 / CONTRACT &amp; ACCESS</p><h2 id="guards-heading">境界を確かめる</h2></div>
-            <span class="section-label">FIXED IDENTITIES</span>
+            <div><p class="eyebrow" data-ja="03 / 契約とアクセス">03 / CONTRACT &amp; ACCESS</p><h2 id="guards-heading" data-ja="境界を確かめる">Check boundaries</h2></div>
+            <span class="section-label" data-ja="固定された主体">FIXED IDENTITIES</span>
           </div>
           <div class="panel action-panel">
             <div>
-              <h3>型付きの拒否と、PostgreSQL の行レベル権限</h3>
-              <p>非公開指標・未知の指標・raw SQL の要求を拒否するか確認します。
-                Tenant A / B はサーバーで固定した接続主体です。ブラウザーからロールは選べません。</p>
-              <p class="notice-inline"><strong>RLS は直接 SQL にも適用されます。</strong>
-                semantic 固有の保護ではなく、両経路が PostgreSQL の GRANT / RLS に従うことを確認します。</p>
+              <h3 data-ja="型付きの拒否と、PostgreSQL の行レベル権限">Typed rejection and PostgreSQL row-level authority</h3>
+              <p data-ja="非公開指標・未知の指標・raw SQL の要求を拒否するか確認します。Tenant A / B はサーバーで固定した接続主体です。ブラウザーからロールは選べません。">Try hidden metrics, unknown metrics, and raw SQL requests. Tenant A and B use fixed server-side identities; the browser cannot select database roles.</p>
+              <p class="notice-inline"><strong data-ja="RLS は直接 SQL にも適用されます。">RLS applies to direct SQL too.</strong> <span data-ja="semantic 固有の保護ではなく、両経路が PostgreSQL の GRANT / RLS に従うことを確認します。">This is not protection unique to semantics: both paths must respect PostgreSQL GRANT and RLS.</span></p>
             </div>
-            <button id="guards-button" class="button secondary" type="button" disabled>拒否とテナント分離を検証 <span aria-hidden="true">↗</span></button>
+            <button id="guards-button" class="button secondary" type="button" disabled><span data-ja="拒否とテナント分離を検証">Check rejection and tenant isolation</span> <span aria-hidden="true">↗</span></button>
           </div>
-          <div id="guards-empty" class="compact-empty">未実行 · 結果には拒否コード・固定ロール・query_id を表示します。</div>
-          <div id="guards-result" class="result-region" tabindex="-1" aria-label="拒否とテナント分離の検証結果" hidden></div>
+          <div id="guards-empty" class="compact-empty" data-ja="未実行 · 結果には拒否コード・固定ロール・query_id を表示します。">Not run · Results include rejection codes, fixed roles, and query IDs.</div>
+          <div id="guards-result" class="result-region" tabindex="-1" aria-label="Rejection and tenant isolation results" data-ja-label="拒否とテナント分離の検証結果" hidden></div>
         </section>
 
         <section id="catalog" class="section" aria-labelledby="catalog-heading">
           <div class="section-heading">
-            <div><p class="eyebrow">04 / PUBLISHED CONTRACT</p><h2 id="catalog-heading">公開モデルと接続契約</h2></div>
-            <span class="section-label">DISCOVERY</span>
+            <div><p class="eyebrow" data-ja="04 / 公開された契約">04 / PUBLISHED CONTRACT</p><h2 id="catalog-heading" data-ja="公開モデルと接続契約">Published models and contract</h2></div>
+            <span class="section-label" data-ja="モデルの発見">DISCOVERY</span>
           </div>
           <div class="panel">
-            <p class="small muted">起動時に MCP から取得したカタログです。各実行のリビジョンは結果の記録を確認してください。</p>
-            <div id="models" class="models"><p class="muted">モデル情報はまだ取得できていません。</p></div>
-            <dl class="facts catalog-facts"><div><dt>Bootstrap semantic revision</dt><dd id="revision">未取得</dd></div></dl>
+            <p class="small muted" data-ja="起動時に MCP から取得したカタログです。各実行のリビジョンは結果の記録を確認してください。">Catalog fetched from MCP at startup. Each execution records its own semantic revision.</p>
+            <div id="models" class="models"><p class="muted" data-ja="モデル情報はまだ取得できていません。">Model information has not been fetched yet.</p></div>
+            <dl class="facts catalog-facts"><div><dt data-ja="起動時のセマンティックリビジョン">Bootstrap semantic revision</dt><dd id="revision" data-ja="未取得">Not fetched</dd></div></dl>
             <div id="contract"></div>
           </div>
         </section>
@@ -172,10 +166,9 @@
 
       <footer>
         <strong>Meaning Lab <span>/ PostgreSQL Semantic Gateway 1.0</span></strong>
-        <p>実際の取得経路: Browser → Python → MCP (stdio) → PostgreSQL</p>
-        <p>比較用 baseline のみ: Browser → Python → 隔離された read-only SQL → 同じ PostgreSQL</p>
-        <p>ローカル loopback 専用・架空の業務台帳。公開 Gateway は LSQ / LSM を受け付け、raw SQL は受け付けません。
-          操作はサーバーで直列実行。画面の数値は取得時点のスナップショットです。</p>
+        <p data-ja="実際の取得経路: Browser → Python → MCP (stdio) → PostgreSQL">Actual retrieval path: Browser → Python → MCP (stdio) → PostgreSQL</p>
+        <p data-ja="比較用 baseline のみ: Browser → Python → 隔離された read-only SQL → 同じ PostgreSQL">Comparison baseline only: Browser → Python → isolated read-only SQL → the same PostgreSQL</p>
+        <p data-ja="ローカル loopback 専用・架空の業務台帳。公開 Gateway は LSQ / LSM を受け付け、raw SQL は受け付けません。操作はサーバーで直列実行。画面の数値は取得時点のスナップショットです。">Local loopback only, with a fictional ledger. The public gateway accepts LSQ / LSM, never raw SQL. Workflows are serialized on the server. Displayed values reflect the time they were fetched.</p>
       </footer>
     </div>
   </body>

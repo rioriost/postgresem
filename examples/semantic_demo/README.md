@@ -34,6 +34,14 @@ make web-demo DEMO_RUNTIME=docker
 make web-demo DEMO_RUNTIME=podman
 ```
 
+The UI starts in **English** on every page load. Use the **Language** selector
+in the top bar to switch to **日本語** or back to **English**. Switching only
+changes presentation: current scenario/mode selections, fetched results, and
+in-flight operations are retained, without another API call or write.
+UI guidance, confirmations, status messages, and accessibility labels switch
+language. SQL, LSQ/LSM, source values, IDs, raw API diagnostics/traces, and
+original OpenAI output remain unchanged; planner prompts are not translated.
+
 For Podman, first follow [the Quadlet setup](../../docs/linux-containers.md#rootless-podman-quadlet).
 Its database and gateway credentials live in the installed systemd environment
 files; repository `.env` is used only for optional OpenAI settings in that path.
@@ -202,3 +210,11 @@ the correct direct-SQL candidates, all available semantic choices, writes and
 repeats the mutation, and checks tenant/rejection behavior. CI runs this
 against the Docker Compose stack without an API key. No runtime fake-result
 fallback exists.
+
+The optional `node examples/semantic_demo/browser_test.cjs` regression runs
+the language switch in Chromium with Playwright installed in the development
+environment. It uses an isolated HTTP server and test-only API responses,
+never PostgreSQL or OpenAI. It covers English defaults, both languages,
+preserved selections/results, in-flight switching, confirmations, errors,
+mobile layout, and the absence of extra requests when switching languages.
+Playwright is not a runtime dependency of the demo.

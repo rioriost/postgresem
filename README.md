@@ -171,7 +171,9 @@ make web-demo                    # auto: Apple Container on macOS, Docker on Lin
 # make web-demo DEMO_RUNTIME=podman  # after Quadlet setup
 ```
 
-Open <http://127.0.0.1:8765>. Compare recognized revenue, duplicate-item
+Open <http://127.0.0.1:8765>. The UI defaults to English; use **Language** to
+switch between English and Japanese without rerunning queries or writes.
+Compare recognized revenue, duplicate-item
 fan-out, and active MRR against an independent calculation from the live ledger.
 Then record one paid order and observe persisted data, idempotent replay,
 conflicting-retry rejection, reconciliation, and audit identifiers.
