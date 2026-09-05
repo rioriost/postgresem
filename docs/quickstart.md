@@ -124,7 +124,7 @@ describe_semantic_model: model=orders fields=<count> metrics=<count>
 validate_semantic_query: valid=True hash=sha256:<64 hex>
 explain_semantic_query: models=[orders] effective_limit=10
 query_semantic_model: columns=[revenue:numeric] rows=<count> truncated=False
-resources/list: 5 resources
+resources/list: 6 resources
 PASS: MCP stdio Meaning Lab smoke completed
 ```
 
