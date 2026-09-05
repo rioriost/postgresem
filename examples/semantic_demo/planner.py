@@ -108,6 +108,8 @@ class Planner:
             completion = envelope["choices"][0]
             if completion["finish_reason"] != "stop":
                 raise PlannerFailure("OpenAI planner did not finish a plan")
+            if completion["message"].get("refusal") is not None:
+                raise PlannerFailure("OpenAI declined to select a plan; nothing was executed")
             plan = json.loads(completion["message"]["content"], object_pairs_hook=unique_object)
         except (urllib.error.URLError, HTTPException, TimeoutError, OSError, ValueError,
                 KeyError, IndexError, TypeError, RecursionError) as error:

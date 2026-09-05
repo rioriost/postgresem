@@ -203,7 +203,7 @@
     },
     {
       "path": "crates/postgresem/src/osi.rs",
-      "sha256": "sha256:a0b39658802fe237ac6f59cdfe70ba26e40fe602b9817d0029bc7ce443a7a287"
+      "sha256": "sha256:eaf665659631f8d7ecc2a740411ba6bc4c1757827e0d9125fc66a48abece3c09"
     },
     {
       "path": "crates/postgresem/src/published_model.rs",

@@ -24,6 +24,9 @@ class DemoServer(ThreadingHTTPServer):
         super().__init__(address, DemoRequestHandler)
         self.application, self.static_dir = application, static_dir
 
+    def handle_error(self, request, client_address):
+        sys.stderr.write("[meaning lab] unexpected HTTP handler failure; request aborted\n")
+
 
 class DemoRequestHandler(BaseHTTPRequestHandler):
     def setup(self):
@@ -79,7 +82,13 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             self._error(413, "DEMO_REQUEST_TOO_LARGE", "request body is missing or too large")
             return
         try:
-            payload = json.loads(self.rfile.read(int(lengths[0])), object_pairs_hook=unique_object)
+            body = self.rfile.read(int(lengths[0]))
+            if len(body) != int(lengths[0]):
+                raise ValueError("incomplete request body")
+            payload = json.loads(body.decode("utf-8"), object_pairs_hook=unique_object)
+        except TimeoutError:
+            self._error(408, "DEMO_REQUEST_TIMEOUT", "request body did not arrive in time")
+            return
         except (UnicodeDecodeError, ValueError, RecursionError):
             self._error(400, "DEMO_INVALID_JSON", "request body must be unambiguous JSON")
             return
