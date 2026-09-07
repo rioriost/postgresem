@@ -19,7 +19,7 @@ base64 = "0.22"
 clap = { version = "4.5", features = ["derive"] }
 fallible-iterator = "0.2"
 hmac = "0.13"
-jsonwebtoken = { version = "9.3", default-features = false }
+jsonwebtoken = { version = "10.3", default-features = false }
 native-tls = { version = "0.2", features = ["vendored"] }
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
 postgres-native-tls = "0.5"
