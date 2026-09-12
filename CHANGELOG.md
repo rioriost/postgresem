@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-12
+
+- Rebuild macOS arm64 and amd64 executables with Xcode 27 RC / macOS 27 SDK,
+  Developer ID signing and Apple notarization. Preserve the executable bytes
+  through native release smoke tests and signed-checksum publication.
+- Align release metadata and operator checks with 1.0.1; runtime source,
+  external dependencies and public behavior remain unchanged.
+- Record the maintainer's v1.0.1-only external-evidence waiver under ADR 0021.
+  Independent/image review and field pilots are waived, not completed.
+
 ## [1.0.0] - 2026-09-05
 
 ### Security

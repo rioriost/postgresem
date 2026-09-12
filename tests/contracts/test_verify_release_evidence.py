@@ -65,29 +65,25 @@ def accepted_evidence():
     }
 
 
-def exception_evidence():
+def exception_evidence(version="1.0.0"):
+    policy = MODULE.exception_policy(version)
+    decision_commit = MODULE.PATCH_DOCUMENT_COMMIT if version == "1.0.1" else "d" * 40
     return {
-        "schema_version": "1",
-        "release": "1.0.0",
-        "status": "accepted",
+        "schema_version": "1", "release": version, "status": "accepted",
         "source_security_review": {
             "kind": "automated-source-review",
-            "evidence_url": MODULE.EXCEPTION_REVIEW_URL,
-            "reviewed_commit": MODULE.EXCEPTION_REVIEW_COMMIT,
-            "reviewed_contract_digest": MODULE.EXCEPTION_REVIEW_DIGEST,
-            "reviewed_image_digest": None,
-            "retest_completed_at": "2026-09-05",
+            "evidence_url": policy["review_url"],
+            "reviewed_commit": policy["commit"],
+            "reviewed_contract_digest": policy["digest"],
+            "reviewed_image_digest": None, "retest_completed_at": policy["date"],
             "unresolved_p0_p1": 0,
         },
         "field_pilots": [],
         "maintainer_exception": {
-            "scope": "v1.0.0-only",
-            "maintainer": "rioriost",
-            "accepted_at": "2026-09-05",
-            "decision_url": (
-                "https://github.com/rioriost/postgresem/blob/"
-                + "d" * 40 + "/" + MODULE.EXCEPTION_ADR_PATH
-            ),
+            "scope": "v" + version + "-only", "maintainer": "rioriost",
+            "accepted_at": policy["date"],
+            "decision_url": "https://github.com/rioriost/postgresem/blob/"
+                + decision_commit + "/" + policy["adr_path"],
             "waived_requirements": MODULE.WAIVED_REQUIREMENTS.copy(),
         },
     }
@@ -212,10 +208,13 @@ class MaintainerExceptionTests(unittest.TestCase):
 
 
 class ExceptionIdentityTests(unittest.TestCase):
+    version = "1.0.0"
+
     def setUp(self):
+        self.policy = MODULE.exception_policy(self.version)
         self.released_commit = "f" * 40
         self.baseline = {
-            "manifest": {"release": "1.0.0", "contracts": {"lsq": ["1"]}},
+            "manifest": {"release": self.version, "contracts": {"lsq": ["1"]}},
             "artifacts": [
                 {"path": MODULE.EVIDENCE_VALIDATOR_PATH, "sha256": "sha256:" + "a" * 64},
                 {"path": "crates/postgresem/src/executor.rs", "sha256": "sha256:" + "b" * 64},
@@ -225,18 +224,18 @@ class ExceptionIdentityTests(unittest.TestCase):
         self.released["artifacts"][0]["sha256"] = "sha256:" + "c" * 64
         baseline_bytes = json.dumps(self.baseline).encode()
         digest = "sha256:" + hashlib.sha256(baseline_bytes).hexdigest()
-        self.enterContext(mock.patch.object(MODULE, "EXCEPTION_REVIEW_DIGEST", digest))
-        self.evidence = exception_evidence()
+        self.enterContext(mock.patch.object(MODULE, "PATCH_REVIEW_DIGEST" if self.version == "1.0.1" else "EXCEPTION_REVIEW_DIGEST", digest))
+        self.evidence = exception_evidence(self.version)
         self.blobs = {
-            f"{MODULE.EXCEPTION_REVIEW_COMMIT}:contracts/stable-v1.json": baseline_bytes,
+            f"{self.policy['commit']}:contracts/stable-v1.json": baseline_bytes,
         }
         for commit, path in (
-            ("2797160ee431ee12722d339e23def6d8c8e7fbd5", MODULE.EXCEPTION_REVIEW_PATH),
-            ("d" * 40, MODULE.EXCEPTION_ADR_PATH),
+            (self.policy["review_url"].split("/blob/")[1].split("/")[0], self.policy["review_path"]),
+            (self.evidence["maintainer_exception"]["decision_url"].split("/blob/")[1].split("/")[0], self.policy["adr_path"]),
         ):
             self.blobs[f"{commit}:{path}"] = b"immutable document"
             self.blobs[f"{self.released_commit}:{path}"] = b"immutable document"
-        self.changed_paths = [MODULE.EVIDENCE_VALIDATOR_PATH, "contracts/stable-v1.json", MODULE.EXCEPTION_ADR_PATH]
+        self.changed_paths = [MODULE.EVIDENCE_VALIDATOR_PATH, "contracts/stable-v1.json", self.policy["adr_path"]]
         self.working_manifest = mock.Mock()
         self.working_manifest.relative_to.return_value = Path("contracts/stable-v1.json")
         self.enterContext(mock.patch.object(MODULE, "STABLE_MANIFEST", self.working_manifest))
@@ -256,19 +255,21 @@ class ExceptionIdentityTests(unittest.TestCase):
             return self.blobs[arguments[1]]
         self.assertEqual(arguments, (
             "diff", "--name-only", "--no-renames", "-z",
-            MODULE.EXCEPTION_REVIEW_COMMIT, self.released_commit, "--",
+            self.policy["commit"], self.released_commit, "--",
         ))
         return b"\0".join(path.encode() for path in self.changed_paths) + b"\0"
 
-    def validate(self, tag="v1.0.0"):
-        MODULE.validate_release_identity(self.evidence, tag, self.released_commit)
+    def validate(self, tag=None):
+        MODULE.validate_release_identity(self.evidence, tag or "v" + self.version, self.released_commit)
 
     def test_allows_only_gate_hash_refresh_and_exact_documented_changes(self):
         self.validate()
         self.assertEqual(self.run.call_count, 3)
 
     def test_exception_cannot_authorize_any_later_stable_tag(self):
-        for tag in ("v1.0.1", "v1.1.0", "v1.0.0-rc.1"):
+        for tag in ("v1.0.0", "v1.0.1", "v1.0.2", "v1.1.0", "v1.0.0-rc.1"):
+            if tag == "v" + self.version:
+                continue
             with self.subTest(tag=tag):
                 with self.assertRaises(AssertionError):
                     self.validate(tag)
@@ -283,7 +284,7 @@ class ExceptionIdentityTests(unittest.TestCase):
                     self.validate()
 
     def test_rejects_changed_review_or_approval_document(self):
-        for path in (MODULE.EXCEPTION_REVIEW_PATH, MODULE.EXCEPTION_ADR_PATH):
+        for path in (self.policy["review_path"], self.policy["adr_path"]):
             with self.subTest(path=path):
                 key = f"{self.released_commit}:{path}"
                 self.blobs[key] = b"changed"
@@ -292,7 +293,7 @@ class ExceptionIdentityTests(unittest.TestCase):
                 self.blobs[key] = b"immutable document"
 
     def test_rejects_changed_reviewed_baseline_bytes(self):
-        key = f"{MODULE.EXCEPTION_REVIEW_COMMIT}:contracts/stable-v1.json"
+        key = f"{self.policy['commit']}:contracts/stable-v1.json"
         self.blobs[key] += b"\n"
         with self.assertRaisesRegex(AssertionError, "baseline contract digest"):
             self.validate()
@@ -330,6 +331,26 @@ class ExceptionIdentityTests(unittest.TestCase):
         self.sync_manifest()
         with self.assertRaisesRegex(AssertionError, "exactly one evidence validator"):
             self.validate()
+
+
+class PatchExceptionIdentityTests(ExceptionIdentityTests):
+    version = "1.0.1"
+
+    def test_rejects_changed_signed_input_or_import_script(self):
+        for path in ("release/macos-1.0.1.json", "scripts/import-notarized-macos.py"):
+            with self.subTest(path=path):
+                self.changed_paths = [path]
+                with self.assertRaisesRegex(AssertionError, "outside release governance"):
+                    self.validate()
+
+    def test_rejects_old_exception_evidence_for_new_tag(self):
+        with self.assertRaises(AssertionError):
+            MODULE.validate_release_identity(exception_evidence(), "v1.0.1", self.released_commit)
+
+    def test_rejects_new_exception_for_future_version(self):
+        self.evidence["release"] = "1.0.2"
+        with self.assertRaises(AssertionError):
+            MODULE.validate(self.evidence)
 
 
 class ReleaseEvidenceTests(unittest.TestCase):

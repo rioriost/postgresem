@@ -69,6 +69,39 @@ EXCEPTION_ALLOWED_CHANGES = {
 }
 
 
+PATCH_REVIEW_COMMIT = "d56b8fffffde89961f71562a42d2255fb913feb6"
+PATCH_REVIEW_DIGEST = "sha256:2f43961ee31df5bb12f89aa974b6d625b8821756dfbc07ac11e6554ee8e53015"
+PATCH_REVIEW_PATH = "docs/security-reviews/2026-09-12-v1-0-1-delta.md"
+PATCH_ADR_PATH = "docs/adr/0021-v1-0-1-maintainer-exception.md"
+PATCH_DOCUMENT_COMMIT = "6d7518ffec3082549ade2435be97c0a22a747c3d"
+PATCH_ALLOWED_CHANGES = {
+    "CHANGELOG.md", "contracts/release-evidence-v1.json", "contracts/stable-v1.json",
+    EVIDENCE_VALIDATOR_PATH, "tests/contracts/test_verify_release_evidence.py",
+    PATCH_REVIEW_PATH, PATCH_ADR_PATH, "docs/beta-checklist.md",
+    "docs/releases/1.0.1-macos27.md",
+}
+
+
+def exception_policy(release):
+    if release == "1.0.0":
+        return {
+            "commit": EXCEPTION_REVIEW_COMMIT, "digest": EXCEPTION_REVIEW_DIGEST,
+            "review_path": EXCEPTION_REVIEW_PATH, "review_url": EXCEPTION_REVIEW_URL,
+            "adr_path": EXCEPTION_ADR_PATH, "date": "2026-09-05",
+            "allowed": EXCEPTION_ALLOWED_CHANGES,
+        }
+    if release == "1.0.1":
+        return {
+            "commit": PATCH_REVIEW_COMMIT, "digest": PATCH_REVIEW_DIGEST,
+            "review_path": PATCH_REVIEW_PATH,
+            "review_url": "https://github.com/rioriost/postgresem/blob/"
+                + PATCH_DOCUMENT_COMMIT + "/" + PATCH_REVIEW_PATH,
+            "adr_path": PATCH_ADR_PATH, "date": "2026-09-12",
+            "allowed": PATCH_ALLOWED_CHANGES,
+        }
+    raise AssertionError("no explicit maintainer exception for this release")
+
+
 def require_exact_keys(value, expected, field):
     if not isinstance(value, dict):
         raise AssertionError(f"{field} must be an object")
@@ -141,23 +174,24 @@ def pinned_repository_document(url, expected_path):
 
 def validate_exception(document):
     require_exact_keys(document, EXCEPTION_DOCUMENT_KEYS, "release exception evidence")
-    if document["schema_version"] != "1" or document["release"] != "1.0.0":
-        raise AssertionError("maintainer exception is limited to 1.0.0")
+    policy = exception_policy(document["release"])
+    if document["schema_version"] != "1":
+        raise AssertionError("unsupported maintainer exception schema")
     if document["status"] != "accepted":
-        raise AssertionError("1.0.0 maintainer exception is not accepted")
+        raise AssertionError("maintainer exception is not accepted")
     if document["field_pilots"] != []:
         raise AssertionError("waived field pilots must remain empty, not claimed complete")
     review = document["source_security_review"]
     require_exact_keys(review, REVIEW_KEYS | {"kind"}, "source_security_review")
     if review["kind"] != "automated-source-review":
         raise AssertionError("exception must identify the automated source review")
-    if (review["reviewed_commit"] != EXCEPTION_REVIEW_COMMIT
-            or review["reviewed_contract_digest"] != EXCEPTION_REVIEW_DIGEST
-            or review["evidence_url"] != EXCEPTION_REVIEW_URL):
+    if (review["reviewed_commit"] != policy["commit"]
+            or review["reviewed_contract_digest"] != policy["digest"]
+            or review["evidence_url"] != policy["review_url"]):
         raise AssertionError("exception must bind the approved remediation evidence")
     if review["reviewed_image_digest"] is not None:
         raise AssertionError("source-only review must not claim an image review")
-    if review["retest_completed_at"] != "2026-09-05":
+    if review["retest_completed_at"] != policy["date"]:
         raise AssertionError("exception must retain the recorded source retest date")
     parse_utc_date(review["retest_completed_at"], "source retest date")
     if type(review["unresolved_p0_p1"]) is not int or review["unresolved_p0_p1"] != 0:
@@ -166,14 +200,19 @@ def validate_exception(document):
     require_exact_keys(decision, {
         "scope", "maintainer", "accepted_at", "decision_url", "waived_requirements",
     }, "maintainer_exception")
-    if decision["scope"] != "v1.0.0-only" or decision["maintainer"] != "rioriost":
+    if decision["scope"] != "v" + document["release"] + "-only" or decision["maintainer"] != "rioriost":
         raise AssertionError("exception must identify the approving maintainer and exact scope")
-    if decision["accepted_at"] != "2026-09-05":
+    if decision["accepted_at"] != policy["date"]:
         raise AssertionError("exception must retain the maintainer approval date")
     parse_utc_date(decision["accepted_at"], "maintainer approval date")
     if decision["waived_requirements"] != WAIVED_REQUIREMENTS:
         raise AssertionError("only the three explicitly approved requirements may be waived")
-    pinned_repository_document(decision["decision_url"], EXCEPTION_ADR_PATH)
+    pinned_repository_document(decision["decision_url"], policy["adr_path"])
+    if document["release"] == "1.0.1" and decision["decision_url"] != (
+        "https://github.com/rioriost/postgresem/blob/" + PATCH_DOCUMENT_COMMIT
+        + "/" + PATCH_ADR_PATH
+    ):
+        raise AssertionError("v1.0.1 must bind the exact recorded maintainer decision")
 
 
 def validate(document):
@@ -336,14 +375,15 @@ def require_ancestor(ancestor, released_commit):
 
 def validate_exception_identity(document, released_tag, released_commit):
     validate_exception(document)
-    if released_tag != "v1.0.0":
+    policy = exception_policy(document["release"])
+    if released_tag != "v" + document["release"]:
         raise AssertionError("maintainer exception must not authorize a later release")
     review = document["source_security_review"]
     reviewed_commit = review["reviewed_commit"]
     require_ancestor(reviewed_commit, released_commit)
     for url, path in (
-        (review["evidence_url"], EXCEPTION_REVIEW_PATH),
-        (document["maintainer_exception"]["decision_url"], EXCEPTION_ADR_PATH),
+        (review["evidence_url"], policy["review_path"]),
+        (document["maintainer_exception"]["decision_url"], policy["adr_path"]),
     ):
         document_commit = pinned_repository_document(url, path)
         require_ancestor(document_commit, released_commit)
@@ -374,7 +414,7 @@ def validate_exception_identity(document, released_tag, released_commit):
         reviewed_commit, released_commit, "--",
     )
     paths = {path.decode("utf-8") for path in changed.split(b"\0") if path}
-    unexpected = paths - EXCEPTION_ALLOWED_CHANGES
+    unexpected = paths - policy["allowed"]
     if unexpected:
         raise AssertionError(
             "unreviewed changes outside release governance: " + ", ".join(sorted(unexpected))

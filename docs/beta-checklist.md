@@ -80,3 +80,18 @@ M5 repository work does not by itself establish production readiness, remote
 HTTP safety, a recovery-time guarantee, a recovery-point guarantee, regulatory
 compliance, successful external adoption, or completion of an independent
 security review.
+
+
+## v1.0.1 maintainer decision (2026-09-12)
+
+The maintainer expressly approved the same three external-evidence waivers
+for v1.0.1 in the release conversation. They remain **waived, not completed**.
+The v1.0.0 record above remains historical; v1.0.1 has its own exact scope,
+reviewed baseline and immutable evidence:
+
+- [Automated delta review](https://github.com/rioriost/postgresem/blob/6d7518ffec3082549ade2435be97c0a22a747c3d/docs/security-reviews/2026-09-12-v1-0-1-delta.md)
+- [Maintainer decision, ADR 0021](https://github.com/rioriost/postgresem/blob/6d7518ffec3082549ade2435be97c0a22a747c3d/docs/adr/0021-v1-0-1-maintainer-exception.md)
+
+The current machine-readable record targets v1.0.1 only. No future tag
+inherits either exception. Native smoke, Linux qualification, installer
+trust, signatures, container SBOM/provenance and image signing remain required.
