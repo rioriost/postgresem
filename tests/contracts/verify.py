@@ -54,6 +54,8 @@ CONTRACT_ARTIFACTS = [
     "migrations/run.sh",
     "scripts/backup.sh",
     "scripts/install.sh",
+    "scripts/import-notarized-macos.py",
+    "release/macos-1.0.1.json",
     "scripts/upgrade-local.sh",
     "scripts/verify-backup.sh",
     "tests/integration/mcp_http.py",

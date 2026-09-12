@@ -83,7 +83,7 @@
     },
     {
       "path": ".github/workflows/release.yml",
-      "sha256": "sha256:68c8cb557a5c98ba326bbcdccddfa1a7bc390e0874e86ab650de4ddb91e9e9cd"
+      "sha256": "sha256:c3dab77740874ec330dab495b571a5cbd9b4fbf41b45ef3fbb65a4d39b745abd"
     },
     {
       "path": "Containerfile",
@@ -266,6 +266,10 @@
       "sha256": "sha256:23bdf0b9e8e4de746b556251f1cca55600bd755f9b0adfddda3bdf8e2248c6d5"
     },
     {
+      "path": "release/macos-1.0.1.json",
+      "sha256": "sha256:1885c8bf1f6c8a7355df1e425fae85635fa37b0b0560fc789ea64b18f9c3c0ee"
+    },
+    {
       "path": "schemas/lsm/v1.schema.json",
       "sha256": "sha256:02af8783c851297fa0c6e8131dcb5a697944d218568389d0534c21454f53f906"
     },
@@ -284,6 +288,10 @@
     {
       "path": "scripts/backup.sh",
       "sha256": "sha256:6ff3e4f8bd63317e4287b62dc7ca32affaabd03f10139325fcc109ec6b0a9997"
+    },
+    {
+      "path": "scripts/import-notarized-macos.py",
+      "sha256": "sha256:ce19303a949946a0a9fa4806aff9e2a7b698485290ea482117d5d8437a66ec35"
     },
     {
       "path": "scripts/install.sh",

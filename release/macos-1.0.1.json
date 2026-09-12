@@ -1,0 +1,21 @@
+{
+  "version": "1.0.1",
+  "input_tag": "macos27-input-v1.0.1",
+  "source_commit": "f5ab30c118abf6f6371b5ac6674d4b06d15c27c4",
+  "team_id": "23889H77KX",
+  "sdk": "27.0",
+  "architectures": {
+    "arm64": {
+      "archive": "postgresem-1.0.1-darwin-arm64.tar.gz",
+      "sha256": "ee3e0f12d0aa7c3ed72fa15c645094650c80e5df85980dab4e6213305cf57fde",
+      "binary_sha256": "4e1105eb4d4c73e102de362527584f01b113f6c357ef4a782f7f4148f1304981",
+      "notary_id": "85744b2f-1eb3-4ac3-8b81-b79575f1dddc"
+    },
+    "amd64": {
+      "archive": "postgresem-1.0.1-darwin-amd64.tar.gz",
+      "sha256": "89f331c6438ac01ab539fcbc3e9d43ecdf935dd694cba8a1aa8ebe053515483b",
+      "binary_sha256": "cdd997ec52751c16326b6ae02b2f80e32fa994788fa3d5d17375e3d348feccbc",
+      "notary_id": "4a36f2e2-ed58-45e9-868d-17ec902a6d5f"
+    }
+  }
+}

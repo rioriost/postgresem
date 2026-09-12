@@ -93,6 +93,7 @@ jobs:
           rustup default 1.85.0
 
       - name: Build release binary
+        if: matrix.asset_os != 'darwin' || github.ref_name != 'v1.0.1'
         shell: bash
         run: |
           set -euo pipefail
@@ -101,6 +102,14 @@ jobs:
             --release \
             --package postgresem \
             --target "${{ matrix.target }}"
+
+      - name: Verify and import notarized macOS 27 binary
+        if: matrix.asset_os == 'darwin' && github.ref_name == 'v1.0.1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/import-notarized-macos.py \
+            --arch "${{ matrix.asset_arch }}" --target "${{ matrix.target }}"
 
       - name: Package release archive
         shell: bash
