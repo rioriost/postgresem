@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "postgresem"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "async-stream",
  "axum",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "postgresem-compiler"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "serde_json",

@@ -1,7 +1,7 @@
 {
   "manifest": {
     "schema_version": "1",
-    "release": "1.0.0",
+    "release": "1.0.1",
     "contract_status": "stable",
     "contracts": {
       "lsq": [
