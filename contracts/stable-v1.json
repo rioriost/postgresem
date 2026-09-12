@@ -307,7 +307,7 @@
     },
     {
       "path": "tests/rc/operator.sh",
-      "sha256": "sha256:3367513351f29224f75aeb6b0044ebc3ab82db23812fe8d4158a184e9aee5840"
+      "sha256": "sha256:3906ad8558862dd7e24c9e9998a6ac008ec9e163475d7ba60fd5ba782842bafb"
     },
     {
       "path": "tests/recovery/run.sh",
