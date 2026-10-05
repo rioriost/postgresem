@@ -21,6 +21,17 @@ Tool-operation failures are successful JSON-RPC responses with:
 `validate_semantic_query` is special: invalid LSQ/semantics returns
 `isError: false` with `structuredContent.valid: false` and an `error` object.
 
+## Administrative Ossie export failures
+
+The unreleased `model export --format osi` path uses CLI errors on stderr and
+a nonzero exit status; it does not add MCP error codes. No YAML document is
+printed if validation fails. Errors distinguish unsupported Snapshot versions,
+invalid revision hashes, unrepresentable metadata, catalog/import validation
+failures, and a model that would change after reimport. Correct the source
+metadata or supply matching catalog evidence rather than removing safety
+checks. Hidden fields, writable models, and other unsupported semantics cannot
+be silently omitted.
+
 ## Retry guidance
 
 - **No**: the same request will fail until input/configuration changes.

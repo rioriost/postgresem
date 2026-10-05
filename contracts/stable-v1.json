@@ -21,6 +21,7 @@
       "catalog_diff": "1",
       "authoring_scaffold": "1",
       "osi_import": "1",
+      "osi_export": "1",
       "benchmark": "1",
       "mcp_tool_schema": "1",
       "error_taxonomy": "1",
@@ -163,7 +164,7 @@
     },
     {
       "path": "crates/postgresem/src/contract.rs",
-      "sha256": "sha256:01ae15c5fe57d461146d6ac4293b47ccae74ddc8f5764981327030418af80f36"
+      "sha256": "sha256:37364c55c5daebfa8b38b2035605a7c23dec52376436ddf429488b62e20f4edc"
     },
     {
       "path": "crates/postgresem/src/database.rs",
@@ -179,7 +180,7 @@
     },
     {
       "path": "crates/postgresem/src/main.rs",
-      "sha256": "sha256:3a04fb34c2f4428acbcdce76a78b3abf14ed65ad46ca3e9db4dd045206f40a2d"
+      "sha256": "sha256:b072e83fe85d3fb8112123d2519d99fcc4d511c3ae4ea44e81c183865bc05aca"
     },
     {
       "path": "crates/postgresem/src/mcp.rs",
@@ -203,7 +204,7 @@
     },
     {
       "path": "crates/postgresem/src/osi.rs",
-      "sha256": "sha256:eaf665659631f8d7ecc2a740411ba6bc4c1757827e0d9125fc66a48abece3c09"
+      "sha256": "sha256:b3f847d2a266beff4e5ba374f34a61db4223f407e6e12cc0f49fb9413fa86085"
     },
     {
       "path": "crates/postgresem/src/published_model.rs",
@@ -215,7 +216,7 @@
     },
     {
       "path": "docs/error-reference.md",
-      "sha256": "sha256:991da4918ee386b9db187a65ebc3aec032f0f327f1ea76cc1e694a6943daf477"
+      "sha256": "sha256:b9fb5468f2d06cb67ee65453cabb95d1f1c1b06da1fdceb47c9d526db9b08e57"
     },
     {
       "path": "migrations/0001_semantic_schema.sql",

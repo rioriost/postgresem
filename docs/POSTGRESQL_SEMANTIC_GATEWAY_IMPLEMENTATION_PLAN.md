@@ -953,6 +953,14 @@ Release workflow run
 published `v0.5.0`, four native archives, native Linux amd64/arm64 runtime
 evidence, signed checksums, and the signed multi-architecture image.
 
+**Post-1.0 follow-up (unreleased):** add administrator-only Ossie 0.1.1 export
+for the existing importable Snapshot v1 subset. Require fingerprinted catalog
+evidence and exact normalized snapshot equality after reimport. Preserve
+native JSON export and the no-raw-SQL runtime boundary; reject unsupported
+metadata rather than exporting an approximation. The 0.2 development
+specification remains deferred under ADR 0013. See
+[operations](operations.md#limited-011-export-unreleased).
+
 - Re-run a documented comparison against current Wren AI, Cube, Malloy, and
   MetricFlow releases using common PostgreSQL datasets and tasks.
 - Publish a capability/gap matrix covering authoring, discovery, query

@@ -921,6 +921,13 @@ release workflow
 は`v0.5.0`、4種類のnative archive、Linux amd64/arm64 native runtime evidence、
 署名済みchecksum、署名済みmulti-architecture imageを公開した。
 
+**1.0以降の追加実装（未リリース）:** 既存のインポーターで扱えるSnapshot v1を対象に、
+管理者向けのOssie 0.1.1エクスポートを追加する。検証済みカタログ情報との照合に加え、
+再インポート後の正規化済みスナップショットが元と一致することを必須とする。
+表現できない定義は省略せず拒否し、既存のJSONエクスポートと、実行時に任意SQLを
+受け付けない契約を維持する。0.2開発版への対応はADR 0013に従い保留する。
+詳細は[運用ガイド](operations.md#limited-011-export-unreleased)を参照。
+
 - 共通PostgreSQL dataset/taskを使い、現行Wren AI、Cube、Malloy、MetricFlow releaseとの
   比較を再実行して文書化する。
 - authoring、discovery、query semantics、mutation、API/SDK、lineage、governance、

@@ -12,7 +12,7 @@ use crate::{
     catalog_diff::CATALOG_DIFF_SCHEMA_VERSION,
     mcp::{MCP_PROTOCOL_VERSION, TOOL_SCHEMA_VERSION},
     mcp_http::MODERN_PROTOCOL_VERSION,
-    osi::IMPORT_SCHEMA_VERSION,
+    osi::{EXPORT_SCHEMA_VERSION, IMPORT_SCHEMA_VERSION},
 };
 
 const ERROR_TAXONOMY_VERSION: &str = "1";
@@ -44,6 +44,7 @@ struct Contracts {
     catalog_diff: &'static str,
     authoring_scaffold: &'static str,
     osi_import: &'static str,
+    osi_export: &'static str,
     benchmark: &'static str,
     mcp_tool_schema: &'static str,
     error_taxonomy: &'static str,
@@ -91,6 +92,7 @@ pub fn manifest() -> ContractManifest {
             catalog_diff: CATALOG_DIFF_SCHEMA_VERSION,
             authoring_scaffold: AUTHORING_SCHEMA_VERSION,
             osi_import: IMPORT_SCHEMA_VERSION,
+            osi_export: EXPORT_SCHEMA_VERSION,
             benchmark: BENCHMARK_SCHEMA_VERSION,
             mcp_tool_schema: TOOL_SCHEMA_VERSION,
             error_taxonomy: ERROR_TAXONOMY_VERSION,

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add opt-in Apache Ossie `0.1.1` YAML export with
+  `model export --format osi --catalog CATALOG.json`. It reads the current
+  published project or, with `--from`, an offline Semantic Snapshot v1.
+  Export verifies the revision hash and catalog evidence and requires an exact
+  normalized round trip through the existing importer, including field
+  known nullability and relationship projections. Nullability omitted by native
+  snapshot JSON is resolved from the verified catalog. Unsupported semantics are rejected,
+  not dropped. Native JSON export and all import/runtime contracts are unchanged.
+  This is an additive CLI feature for the next minor release; it is not included
+  in the published `1.0.1` artifacts.
+
 ## [1.0.1] - 2026-09-12
 
 - Rebuild macOS arm64 and amd64 executables with Xcode 27 RC / macOS 27 SDK,

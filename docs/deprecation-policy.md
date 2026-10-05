@@ -32,6 +32,10 @@ The stable v1 contract inventory is the compatibility boundary for 1.x.
 - **Review-only, not publication:** `model scaffold` and `model import osi`.
   Their candidate/report outputs are frozen, but they do not write Semantic
   Schema rows.
+- **Additive, unreleased CLI:** `model export --format osi --catalog` and its
+  optional offline `--from` input. The `osi_export: "1"` contract covers only
+  catalog-validated Ossie 0.1.1 export with exact Snapshot v1 round-trip
+  preservation. Existing native JSON export and import behavior are unchanged.
 - **Deferred:** automatic materialized-view routing, pre-aggregation,
   connection pooling, distributed rate limits, runtime OIDC/JWKS discovery,
   general update/delete, and down migrations.

@@ -212,9 +212,9 @@ expand/contract rollout guarantee are not implemented. Follow
 [backup and restore](backup-restore.md) and do not assume downgrade
 compatibility.
 
-`model export` is the implemented semantic portability boundary. It exports one
-project's current published snapshot, not a full database backup or uninstall
-bundle. See [ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall.md).
+`model export` defaults to exporting one project's current published snapshot,
+not a full database backup or uninstall bundle. See
+[ADR 0008](adr/0008-preview-compatibility-migration-export-uninstall.md).
 
 M7 adds a one-way Apache Ossie `0.1.1` candidate importer:
 
@@ -236,6 +236,28 @@ cross-dataset metrics, composite primary keys, and composite relationships are
 rejected. Time-dimension roles require PostgreSQL `date` or
 timestamp-without-time-zone evidence; the importer does not invent a timezone
 for timestamp-with-time-zone fields.
+
+The unreleased additive `model export --format osi --catalog CATALOG.json`
+option emits Ossie 0.1.1 YAML for the existing importable subset. It uses the
+published `--project` snapshot unless `--from SNAPSHOT.json` selects an offline
+candidate; in offline mode `--project` is only the output model name. The
+snapshot revision and catalog fingerprints are verified. Reimporting the
+generated document must reproduce the entire normalized Snapshot v1, including
+known nullability and relationship-field projections. Because native snapshot
+JSON omits nullability, offline export binds omitted values to the verified
+catalog; explicitly supplied values must match. Export failures emit no model
+document, and there is no option to ignore a semantic loss.
+
+Snapshot v2, visibility restrictions, writable projections, timezones, filtered
+metrics, additivity, aggregation anchors, and non-many-to-one-left relationships
+cannot be exported. Names for metrics and relationships must be globally unique
+within the Ossie model. Authoring metadata outside `SemanticSnapshot` and
+PostgreSQL authorization are not exchangeable through this format. This is
+executable-subset interoperability, not full Ossie conformance or a database
+backup. Native JSON export, Ossie import report v1, and LSQ/LSM/MCP meanings are
+unchanged. The new `osi_export: "1"` manifest entry versions this limited export
+contract, not the external Ossie specification. See the
+[operator workflow](operations.md#limited-011-export-unreleased).
 
 M7 reference execution is independently reproducible through
 [`tests/reference-comparison/runtime`](../tests/reference-comparison/runtime/)

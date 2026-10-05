@@ -307,7 +307,9 @@ type, grant, constraint, RLS, or policy drift is breaking. Review the JSON
 evidence before building a semantic candidate; the command does not modify or
 publish Semantic Schema rows.
 
-## Apache Ossie candidate import
+## Apache Ossie interchange
+
+### Candidate import
 
 Import the supported Apache Ossie `0.1.1` subset only after capturing catalog
 evidence with the intended introspection role:
@@ -328,6 +330,68 @@ metrics. Unsupported or lossy semantics fail instead of being approximated.
 The result is not a publication operation. Review warnings, run `model diff`,
 and use the controlled revision workflow above. Imported models are query-only;
 writable projections must be authored and reviewed separately.
+
+### Limited 0.1.1 export (unreleased)
+
+Native `model export --project NAME` continues to return a JSON snapshot.
+To request Ossie YAML for a compatible published project, use:
+
+```sh
+postgresem model export \
+  --project commerce \
+  --format osi \
+  --catalog catalog-snapshot.json > commerce.osi.yaml
+```
+
+For an offline candidate, add `--from candidate-snapshot.json`. No database
+connection is made in this mode, and `--project` supplies the Ossie semantic
+model name; it does not prove that the file belongs to a published project.
+`--from` cannot be combined with an explicit `--database-url-env`. Both
+`--from` and `--catalog` are rejected for native snapshot export.
+
+A source-checkout round trip using only committed fixtures is:
+
+```sh
+cargo run --quiet -p postgresem -- model import osi \
+  --from fixtures/interoperability/osi-commerce.yaml \
+  --catalog fixtures/interoperability/osi-commerce-catalog.json \
+  --snapshot-only > candidate-snapshot.json
+
+cargo run --quiet -p postgresem -- model export \
+  --project commerce \
+  --from candidate-snapshot.json \
+  --format osi \
+  --catalog fixtures/interoperability/osi-commerce-catalog.json > commerce.osi.yaml
+```
+
+Export is limited to nonempty Semantic Snapshot v1 models representable by the
+existing 0.1.1 importer. It verifies the snapshot hash, generates deterministic
+YAML, reimports it against the fingerprinted catalog, and requires equality of
+the complete normalized snapshot, including known nullability. Native snapshot
+JSON omits nullability, so offline export resolves omitted values from the
+verified catalog; explicitly supplied values must match. Missing catalog
+columns, type/key drift, or changed relationship projections are errors.
+The output uses `schema.relation` sources; operators must deliberately bind
+these names to the intended database when exchanging models between environments.
+An offline fingerprint is an integrity check, not proof of current privileges.
+
+The exporter rejects Snapshot v2, nonqueryable or writable models, hidden
+fields/metrics, model timezones, metric filters, additivity, aggregation anchors,
+and relationships other than many-to-one left joins. Relationship fields must
+match the importer's complete `<relationship>_<field>` projection. Metric and
+relationship names must be unique across the project because Ossie places them
+at model scope. Unknown versions and the `0.2.0.dev0` format remain unsupported.
+The bundled published commerce model uses Snapshot v2 and cannot be exported
+to Ossie by this initial implementation; use the interoperability fixture above
+to exercise the accepted subset.
+
+This exports the executable snapshot projection, not all authoring metadata:
+descriptions, synonyms, AI context, policy bindings, and audit/publication
+history are outside that projection. It is not a backup or a lossless
+authoring-document round trip. The file contains physical names and expressions;
+keep this an administrator-controlled exchange, with access-controlled storage.
+It is not exposed through MCP, does not publish anything, and does not transfer
+PostgreSQL grants, RLS, or write authority to another tool.
 
 ## Large-catalog model scaffolding
 

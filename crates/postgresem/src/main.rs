@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, env, error::Error, fs, io, path::PathBuf, process::ExitCode};
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use postgresem_compiler::{
     CompilerOptions, MutationCapabilities, MutationCompilerOptions, SemanticSnapshot, compile_lsm,
     compile_lsq, diff_snapshots, normalize_lsm, normalize_lsq,
@@ -197,6 +197,12 @@ enum ModelCommands {
         project: String,
         #[arg(long, default_value = "DATABASE_URL", value_name = "NAME")]
         database_url_env: String,
+        #[arg(long, value_enum, default_value = "snapshot")]
+        format: ModelExportFormat,
+        #[arg(long, required_if_eq("format", "osi"))]
+        catalog: Option<PathBuf>,
+        #[arg(long, conflicts_with = "database_url_env")]
+        from: Option<PathBuf>,
     },
     Import {
         #[command(subcommand)]
@@ -209,6 +215,12 @@ enum ModelCommands {
         #[arg(long)]
         snapshot_only: bool,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ModelExportFormat {
+    Snapshot,
+    Osi,
 }
 
 #[derive(Debug, Subcommand)]
@@ -414,8 +426,17 @@ fn run() -> Result<(), Box<dyn Error>> {
                 ModelCommands::Export {
                     project,
                     database_url_env,
+                    format,
+                    catalog,
+                    from,
                 },
-        } => export_model(&database_url_env, &project),
+        } => export_model(
+            &database_url_env,
+            &project,
+            format,
+            catalog.as_ref(),
+            from.as_ref(),
+        ),
         Commands::Model {
             command:
                 ModelCommands::Import {
@@ -774,9 +795,44 @@ fn mutation_execution_context(
     )?)
 }
 
-fn export_model(database_url_env: &str, project: &str) -> Result<(), Box<dyn Error>> {
-    let snapshot = published_model::load_from_env(database_url_env, project)?;
-    println!("{}", serde_json::to_string_pretty(&snapshot)?);
+fn export_model(
+    database_url_env: &str,
+    project: &str,
+    format: ModelExportFormat,
+    catalog_path: Option<&PathBuf>,
+    from: Option<&PathBuf>,
+) -> Result<(), Box<dyn Error>> {
+    if from.is_some() && format != ModelExportFormat::Osi {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--from is only accepted for --format osi",
+        )
+        .into());
+    }
+    let catalog = match (format, catalog_path) {
+        (ModelExportFormat::Snapshot, None) => None,
+        (ModelExportFormat::Osi, Some(path)) => Some(serde_json::from_slice::<
+            catalog::CatalogSnapshot,
+        >(&fs::read(path)?)?),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--catalog is required for --format osi and is not accepted for snapshot export",
+            )
+            .into());
+        }
+    };
+    let output = if let (Some(path), Some(catalog)) = (from, catalog.as_ref()) {
+        osi::export_json(&fs::read(path)?, catalog, project)?
+    } else {
+        let snapshot = published_model::load_from_env(database_url_env, project)?;
+        if let Some(catalog) = catalog {
+            osi::export(&snapshot, &catalog, project)?
+        } else {
+            format!("{}\n", serde_json::to_string_pretty(&snapshot)?)
+        }
+    };
+    print!("{output}");
     Ok(())
 }
 
@@ -888,7 +944,7 @@ mod tests {
 
     use super::{
         BenchmarkCommands, CatalogCommands, Cli, Commands, ContractCommands, McpCommands,
-        ModelCommands, ModelImportCommands, MutationCommands, QueryCommands,
+        ModelCommands, ModelExportFormat, ModelImportCommands, MutationCommands, QueryCommands,
     };
 
     #[test]
@@ -1039,7 +1095,10 @@ mod tests {
                 command: Commands::Model {
                     command: ModelCommands::Export {
                         project,
-                        database_url_env
+                        database_url_env,
+                        format: ModelExportFormat::Snapshot,
+                        catalog: None,
+                        from: None,
                     }
                 }
             }) if project == "commerce" && database_url_env == "DATABASE_URL"
@@ -1060,7 +1119,10 @@ mod tests {
                 command: Commands::Model {
                     command: ModelCommands::Export {
                         project,
-                        database_url_env
+                        database_url_env,
+                        format: ModelExportFormat::Snapshot,
+                        catalog: None,
+                        from: None,
                     }
                 }
             }) if project == "commerce" && database_url_env == "POSTGRESEM_MODEL_URL"
@@ -1089,6 +1151,78 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn model_export_osi_requires_catalog_evidence_and_an_explicit_format() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem", "model", "export", "--project", "commerce",
+                "--format", "osi", "--catalog", "catalog.json",
+            ]),
+            Ok(Cli {
+                command: Commands::Model {
+                    command: ModelCommands::Export {
+                        project,
+                        format: ModelExportFormat::Osi,
+                        catalog: Some(catalog),
+                        ..
+                    }
+                }
+            }) if project == "commerce" && catalog.to_str() == Some("catalog.json")
+        ));
+        for arguments in [
+            vec!["--format", "osi"],
+            vec!["--format", "ossie-0.2", "--catalog", "catalog.json"],
+            vec!["--format", "osi", "--catalog", "catalog.json", "--publish"],
+            vec![
+                "--format",
+                "osi",
+                "--catalog",
+                "catalog.json",
+                "--from",
+                "snapshot.json",
+                "--database-url-env",
+                "DATABASE_URL",
+            ],
+        ] {
+            let mut command = vec!["postgresem", "model", "export", "--project", "commerce"];
+            command.extend(arguments);
+            assert!(Cli::try_parse_from(command).is_err());
+        }
+        let error = super::export_model(
+            "UNUSED_DATABASE_URL",
+            "commerce",
+            ModelExportFormat::Snapshot,
+            Some(&std::path::PathBuf::from("unused-catalog.json")),
+            None,
+        )
+        .expect_err("catalog cannot be silently ignored by native export");
+        assert!(error.to_string().contains("--catalog"));
+        let error = super::export_model(
+            "UNUSED_DATABASE_URL",
+            "commerce",
+            ModelExportFormat::Snapshot,
+            None,
+            Some(&std::path::PathBuf::from("unused-snapshot.json")),
+        )
+        .expect_err("offline input must not change native export");
+        assert!(error.to_string().contains("--from"));
+        assert!(matches!(
+            Cli::try_parse_from([
+                "postgresem", "model", "export", "--project", "commerce",
+                "--format", "osi", "--catalog", "catalog.json", "--from", "snapshot.json",
+            ]),
+            Ok(Cli {
+                command: Commands::Model {
+                    command: ModelCommands::Export {
+                        format: ModelExportFormat::Osi,
+                        from: Some(from),
+                        ..
+                    }
+                }
+            }) if from.to_str() == Some("snapshot.json")
+        ));
     }
 
     #[test]

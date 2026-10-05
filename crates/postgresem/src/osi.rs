@@ -15,6 +15,7 @@ use crate::{
 
 const OSI_VERSION: &str = "0.1.1";
 pub(crate) const IMPORT_SCHEMA_VERSION: &str = "1";
+pub(crate) const EXPORT_SCHEMA_VERSION: &str = "1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OsiImportReport {
@@ -101,51 +102,71 @@ pub enum OsiImportError {
     SnapshotHash(#[source] postgresem_compiler::SnapshotHashError),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Error)]
+pub enum OsiExportError {
+    #[error("Ossie export source is not a valid strict Semantic Snapshot JSON document")]
+    Parse(#[source] serde_json::Error),
+    #[error("Ossie 0.1.1 export requires Semantic Snapshot v1")]
+    UnsupportedSnapshotVersion,
+    #[error("Ossie export snapshot revision hash does not match its content")]
+    InvalidRevisionHash,
+    #[error("Ossie export cannot represent {reason} at {path}")]
+    UnsupportedSemantics { path: String, reason: &'static str },
+    #[error("Ossie export validation failed: {0}")]
+    Validation(#[source] OsiImportError),
+    #[error("Ossie export would change model {0} when reimported with the supplied catalog")]
+    RoundTripMismatch(String),
+    #[error("failed to calculate Ossie export snapshot hash")]
+    SnapshotHash(#[source] postgresem_compiler::SnapshotHashError),
+    #[error("failed to serialize Ossie export")]
+    Serialize(#[source] serde_yaml_ng::Error),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiDocument {
     semantic_model: Vec<OsiSemanticModel>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_extensions: Vec<OsiExtension>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiSemanticModel {
     name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ai_context: Option<serde_yaml_ng::Value>,
     datasets: Vec<OsiDataset>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     relationships: Vec<OsiRelationship>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     metrics: Vec<OsiMetric>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_extensions: Vec<OsiExtension>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiDataset {
     name: String,
     source: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     primary_key: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     unique_keys: Vec<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ai_context: Option<serde_yaml_ng::Value>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     fields: Vec<OsiField>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_extensions: Vec<OsiExtension>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiRelationship {
     name: String,
@@ -153,56 +174,67 @@ struct OsiRelationship {
     to: String,
     from_columns: Vec<String>,
     to_columns: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ai_context: Option<serde_yaml_ng::Value>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_extensions: Vec<OsiExtension>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiField {
     name: String,
     expression: OsiExpression,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     dimension: Option<OsiDimension>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     label: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ai_context: Option<serde_yaml_ng::Value>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_extensions: Vec<OsiExtension>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiMetric {
     name: String,
     expression: OsiExpression,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ai_context: Option<serde_yaml_ng::Value>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     custom_extensions: Vec<OsiExtension>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiExpression {
     dialects: Vec<OsiDialectExpression>,
 }
 
-#[derive(Debug, Deserialize)]
+impl OsiExpression {
+    fn ansi(expression: String) -> Self {
+        Self {
+            dialects: vec![OsiDialectExpression {
+                dialect: OsiDialect::AnsiSql,
+                expression,
+            }],
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiDialectExpression {
     dialect: OsiDialect,
     expression: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum OsiDialect {
     AnsiSql,
@@ -213,14 +245,14 @@ enum OsiDialect {
     Maql,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiDimension {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     is_time: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct OsiExtension {
     vendor_name: String,
@@ -245,6 +277,211 @@ struct ImportedForeignKey {
     columns: Vec<String>,
     target: Relation,
     referenced_columns: Vec<String>,
+}
+
+pub fn export(
+    snapshot: &SemanticSnapshot,
+    catalog: &CatalogSnapshot,
+    semantic_model: &str,
+) -> Result<String, OsiExportError> {
+    export_with_catalog_nullability(snapshot, catalog, semantic_model, &BTreeSet::new())
+}
+
+pub fn export_json(
+    input: &[u8],
+    catalog: &CatalogSnapshot,
+    semantic_model: &str,
+) -> Result<String, OsiExportError> {
+    let snapshot: SemanticSnapshot =
+        serde_json::from_slice(input).map_err(OsiExportError::Parse)?;
+    let document: serde_json::Value =
+        serde_json::from_slice(input).map_err(OsiExportError::Parse)?;
+    let mut omitted_nullability = BTreeSet::new();
+    for (model_index, model) in snapshot.models.iter().enumerate() {
+        for (field_index, field) in model.fields.iter().enumerate() {
+            if document["models"][model_index]["fields"][field_index]
+                .get("nullable")
+                .is_none()
+            {
+                omitted_nullability
+                    .insert((model.semantic_name.clone(), field.semantic_name.clone()));
+            }
+        }
+    }
+    export_with_catalog_nullability(&snapshot, catalog, semantic_model, &omitted_nullability)
+}
+
+fn export_with_catalog_nullability(
+    snapshot: &SemanticSnapshot,
+    catalog: &CatalogSnapshot,
+    semantic_model: &str,
+    omitted_nullability: &BTreeSet<(String, String)>,
+) -> Result<String, OsiExportError> {
+    if snapshot.schema_version != "1" {
+        return Err(OsiExportError::UnsupportedSnapshotVersion);
+    }
+    if snapshot
+        .calculate_revision_hash()
+        .map_err(OsiExportError::SnapshotHash)?
+        != snapshot.revision_hash
+    {
+        return Err(OsiExportError::InvalidRevisionHash);
+    }
+    let mut snapshot = snapshot.normalized();
+    if snapshot.models.is_empty() {
+        return Err(OsiExportError::UnsupportedSemantics {
+            path: "/models".to_owned(),
+            reason: "an empty model collection",
+        });
+    }
+    let mut exported = OsiSemanticModel {
+        name: semantic_model.to_owned(),
+        description: None,
+        ai_context: None,
+        datasets: Vec::new(),
+        relationships: Vec::new(),
+        metrics: Vec::new(),
+        custom_extensions: Vec::new(),
+    };
+    for model in &snapshot.models {
+        let path = format!("/models/{}", model.semantic_name);
+        if !model.queryable || model.writable.is_some() || model.timezone.is_some() {
+            return Err(OsiExportError::UnsupportedSemantics {
+                path,
+                reason: "nonqueryable models, writable projections, or model timezones",
+            });
+        }
+        let mut fields = Vec::new();
+        let mut primary_key = BTreeSet::new();
+        for field in &model.fields {
+            if !field.visible {
+                return Err(OsiExportError::UnsupportedSemantics {
+                    path: format!("{path}/fields/{}", field.semantic_name),
+                    reason: "hidden fields",
+                });
+            }
+            if field.relationship.is_some() {
+                continue;
+            }
+            if field.entity_key {
+                primary_key.insert(field.column.clone());
+            }
+            fields.push(OsiField {
+                name: field.semantic_name.clone(),
+                expression: OsiExpression::ansi(field.column.clone()),
+                dimension: Some(OsiDimension {
+                    is_time: Some(field.time_dimension),
+                }),
+                label: None,
+                description: None,
+                ai_context: None,
+                custom_extensions: Vec::new(),
+            });
+        }
+        exported.datasets.push(OsiDataset {
+            name: model.semantic_name.clone(),
+            source: format!("{}.{}", model.source.schema, model.source.relation),
+            primary_key: primary_key.into_iter().collect(),
+            unique_keys: Vec::new(),
+            description: None,
+            ai_context: None,
+            fields,
+            custom_extensions: Vec::new(),
+        });
+        for relationship in &model.relationships {
+            if relationship.cardinality != Cardinality::ManyToOne
+                || relationship.join_type != JoinType::Left
+            {
+                return Err(OsiExportError::UnsupportedSemantics {
+                    path: format!("{path}/relationships/{}", relationship.semantic_name),
+                    reason: "relationships other than many-to-one left joins",
+                });
+            }
+            exported.relationships.push(OsiRelationship {
+                name: relationship.semantic_name.clone(),
+                from: model.semantic_name.clone(),
+                to: relationship.target_model.clone(),
+                from_columns: vec![relationship.from_column.clone()],
+                to_columns: vec![relationship.to_column.clone()],
+                ai_context: None,
+                custom_extensions: Vec::new(),
+            });
+        }
+        for metric in &model.metrics {
+            if !metric.visible
+                || metric.filter.is_some()
+                || metric.additivity.is_some()
+                || metric.aggregation_anchor.is_some()
+            {
+                return Err(OsiExportError::UnsupportedSemantics {
+                    path: format!("{path}/metrics/{}", metric.semantic_name),
+                    reason: "hidden metrics, filters, additivity, or aggregation anchors",
+                });
+            }
+            let (function, modifier) = match metric.aggregation {
+                Aggregation::Count => ("COUNT", ""),
+                Aggregation::CountDistinct => ("COUNT", "DISTINCT "),
+                Aggregation::Sum => ("SUM", ""),
+                Aggregation::Min => ("MIN", ""),
+                Aggregation::Max => ("MAX", ""),
+                Aggregation::Avg => ("AVG", ""),
+            };
+            exported.metrics.push(OsiMetric {
+                name: metric.semantic_name.clone(),
+                expression: OsiExpression::ansi(format!(
+                    "{function}({modifier}{}.{})",
+                    model.semantic_name, metric.field
+                )),
+                description: None,
+                ai_context: None,
+                custom_extensions: Vec::new(),
+            });
+        }
+    }
+    let document = OsiDocument {
+        semantic_model: vec![exported],
+        custom_extensions: Vec::new(),
+    };
+    let yaml = serde_yaml_ng::to_string(&document).map_err(OsiExportError::Serialize)?;
+    // Reimport also verifies catalog evidence and reconstructs relationship projections.
+    let reimported = import(yaml.as_bytes(), catalog, None).map_err(OsiExportError::Validation)?;
+    // Persisted snapshots omit nullability; resolve only omitted values from verified evidence.
+    for model in &mut snapshot.models {
+        for field in &mut model.fields {
+            if omitted_nullability
+                .contains(&(model.semantic_name.clone(), field.semantic_name.clone()))
+            {
+                field.nullable = reimported
+                    .snapshot
+                    .models
+                    .iter()
+                    .find(|actual| actual.semantic_name == model.semantic_name)
+                    .and_then(|actual| {
+                        actual
+                            .fields
+                            .iter()
+                            .find(|actual| actual.semantic_name == field.semantic_name)
+                    })
+                    .ok_or_else(|| OsiExportError::RoundTripMismatch(model.semantic_name.clone()))?
+                    .nullable;
+            }
+        }
+    }
+    if snapshot != reimported.snapshot {
+        let changed_model = snapshot
+            .models
+            .iter()
+            .find(|expected| {
+                !reimported
+                    .snapshot
+                    .models
+                    .iter()
+                    .any(|actual| actual == *expected)
+            })
+            .map_or("/models", |model| model.semantic_name.as_str());
+        return Err(OsiExportError::RoundTripMismatch(changed_model.to_owned()));
+    }
+    Ok(yaml)
 }
 
 pub fn import(
@@ -898,9 +1135,12 @@ fn validate_identifier(path: &str, value: &str) -> Result<(), OsiImportError> {
 mod tests {
     use std::path::PathBuf;
 
-    use postgresem_compiler::{CompilerOptions, compile_lsq, normalize_lsq};
+    use postgresem_compiler::{
+        Additivity, Aggregation, Cardinality, CompilerOptions, DataType, JoinType, Literal,
+        MetricFilter, Model, SemanticSnapshot, WritableModel, compile_lsq, normalize_lsq,
+    };
 
-    use super::{OsiImportError, import};
+    use super::{OsiExportError, OsiImportError, export, export_json, import};
     use crate::catalog::{
         CatalogColumn, CatalogConstraint, CatalogRelation, CatalogRoleContext, CatalogSnapshot,
         RelationGrantHints, RelationKind, RowLevelSecurity,
@@ -1118,6 +1358,357 @@ semantic_model:
             related.lineage.relationships,
             ["orders_to_customers".to_owned()]
         );
+    }
+
+    #[test]
+    fn osi_export_is_deterministic_and_round_trips_the_complete_snapshot() {
+        let catalog: CatalogSnapshot = serde_json::from_slice(
+            &std::fs::read(repo_path(
+                "fixtures/interoperability/osi-commerce-catalog.json",
+            ))
+            .expect("catalog fixture exists"),
+        )
+        .expect("valid catalog fixture");
+        let mut snapshot = import(
+            &std::fs::read(repo_path("fixtures/interoperability/osi-commerce.yaml"))
+                .expect("Ossie fixture exists"),
+            &catalog,
+            None,
+        )
+        .expect("fixture imports")
+        .snapshot;
+        let output = export(&snapshot, &catalog, "commerce").expect("fixture exports");
+        let document: serde_json::Value = serde_yaml_ng::from_str(&output).expect("valid YAML");
+        assert_eq!(document["semantic_model"][0]["name"], "commerce");
+        assert_eq!(
+            document["semantic_model"][0]["datasets"]
+                .as_array()
+                .expect("dataset array")
+                .len(),
+            2
+        );
+        assert!(document["semantic_model"][0].get("description").is_none());
+        assert!(
+            document["semantic_model"][0]
+                .get("custom_extensions")
+                .is_none()
+        );
+        assert!(!output.contains("null"));
+        let round_trip = import(output.as_bytes(), &catalog, None).expect("export imports");
+        assert_eq!(round_trip.snapshot, snapshot);
+        assert!(round_trip.warnings.is_empty());
+
+        snapshot.models.reverse();
+        for model in &mut snapshot.models {
+            model.fields.reverse();
+            model.metrics.reverse();
+            model.relationships.reverse();
+        }
+        assert_eq!(
+            export(&snapshot, &catalog, "commerce").expect("reordered snapshot exports"),
+            output
+        );
+    }
+
+    #[test]
+    fn osi_export_supports_all_importable_aggregates_and_field_aliases() {
+        let catalog = catalog().expect("valid catalog");
+        let input = VALID_OSI
+            .replace("name: order_id", "name: id")
+            .replace("COUNT(orders.order_id)", "COUNT(orders.id)");
+        let mut snapshot = import(input.as_bytes(), &catalog, None)
+            .expect("aliased fixture imports")
+            .snapshot;
+        let model = &mut snapshot.models[0];
+        let mut alias = model
+            .fields
+            .iter()
+            .find(|field| field.entity_key)
+            .expect("fixture entity key")
+            .clone();
+        alias.semantic_name = "another_id".to_owned();
+        model.fields.push(alias);
+        let template = model.metrics[1].clone();
+        for (name, aggregation, field, data_type) in [
+            (
+                "distinct_count",
+                Aggregation::CountDistinct,
+                "id",
+                DataType::Integer,
+            ),
+            ("minimum", Aggregation::Min, "amount", DataType::Numeric),
+            ("maximum", Aggregation::Max, "amount", DataType::Numeric),
+            ("average", Aggregation::Avg, "amount", DataType::Numeric),
+        ] {
+            let mut metric = template.clone();
+            metric.semantic_name = name.to_owned();
+            metric.aggregation = aggregation;
+            metric.field = field.to_owned();
+            metric.data_type = data_type;
+            model.metrics.push(metric);
+        }
+        rehash(&mut snapshot);
+        let output = export(&snapshot, &catalog, "commerce").expect("all aggregates export");
+        assert!(output.contains("COUNT(DISTINCT orders.id)"));
+        assert_eq!(
+            import(output.as_bytes(), &catalog, None)
+                .expect("all aggregates reimport")
+                .snapshot,
+            snapshot.normalized()
+        );
+    }
+
+    #[test]
+    fn osi_export_json_resolves_omitted_but_not_explicit_nullability() {
+        let catalog = catalog().expect("valid catalog");
+        let snapshot = import(VALID_OSI.as_bytes(), &catalog, None)
+            .expect("valid import")
+            .snapshot;
+        let json = serde_json::to_vec(&snapshot).expect("serializable snapshot");
+        let yaml = export_json(&json, &catalog, "commerce").expect("offline snapshot exports");
+        assert_eq!(
+            import(yaml.as_bytes(), &catalog, None)
+                .expect("offline export reimports")
+                .snapshot,
+            snapshot
+        );
+        let mut document = serde_json::to_value(&snapshot).expect("serializable snapshot");
+        document["models"][0]["fields"][0]["nullable"] = serde_json::json!(true);
+        assert!(matches!(
+            export_json(
+                &serde_json::to_vec(&document).expect("serializable explicit nullability"),
+                &catalog,
+                "commerce"
+            ),
+            Err(OsiExportError::RoundTripMismatch(_))
+        ));
+        document["models"][0]["fields"][0]["nullable"] = serde_json::json!(false);
+        assert_eq!(
+            export_json(
+                &serde_json::to_vec(&document).expect("serializable explicit nullability"),
+                &catalog,
+                "commerce"
+            )
+            .expect("matching explicit nullability exports"),
+            yaml
+        );
+        for invalid in [
+            r#"{"schema_version":"1","schema_version":"1","models":[],"revision_hash":""}"#,
+            r#"{"schema_version":"1","models":[],"revision_hash":"","unknown":true}"#,
+        ] {
+            assert!(matches!(
+                export_json(invalid.as_bytes(), &catalog, "commerce"),
+                Err(OsiExportError::Parse(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn osi_export_rejects_unrepresentable_model_and_metric_metadata() {
+        let catalog = catalog().expect("valid catalog");
+        let original = import(VALID_OSI.as_bytes(), &catalog, None)
+            .expect("valid import")
+            .snapshot;
+        let mutations: [fn(&mut Model); 8] = [
+            |model| model.queryable = false,
+            |model| model.timezone = Some("UTC".to_owned()),
+            |model| {
+                model.writable = Some(WritableModel {
+                    insert: true,
+                    upsert: None,
+                    max_rows: 1,
+                    max_request_bytes: 1024,
+                    fields: vec![],
+                    returning: vec![],
+                });
+            },
+            |model| model.fields[0].visible = false,
+            |model| model.metrics[0].visible = false,
+            |model| {
+                model.metrics[0].filter = Some(MetricFilter {
+                    field: "amount".to_owned(),
+                    value: Literal::Numeric("1".to_owned()),
+                });
+            },
+            |model| model.metrics[0].additivity = Some(Additivity::Additive),
+            |model| model.metrics[0].aggregation_anchor = Some("order_id".to_owned()),
+        ];
+        for mutate in mutations {
+            let mut snapshot = original.clone();
+            mutate(&mut snapshot.models[0]);
+            rehash(&mut snapshot);
+            assert!(matches!(
+                export(&snapshot, &catalog, "commerce"),
+                Err(OsiExportError::UnsupportedSemantics { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn osi_export_rejects_catalog_drift_and_snapshot_tampering() {
+        let catalog = catalog().expect("valid catalog");
+        let original = import(VALID_OSI.as_bytes(), &catalog, None)
+            .expect("valid import")
+            .snapshot;
+        let mut snapshot = original.clone();
+        snapshot.models[0].fields[0].column = "changed".to_owned();
+        assert!(matches!(
+            export(&snapshot, &catalog, "commerce"),
+            Err(OsiExportError::InvalidRevisionHash)
+        ));
+        for version in ["2", "unknown"] {
+            let mut snapshot = original.clone();
+            snapshot.schema_version = version.to_owned();
+            rehash(&mut snapshot);
+            assert!(matches!(
+                export(&snapshot, &catalog, "commerce"),
+                Err(OsiExportError::UnsupportedSnapshotVersion)
+            ));
+        }
+        let mut empty = original.clone();
+        empty.models.clear();
+        rehash(&mut empty);
+        assert!(matches!(
+            export(&empty, &catalog, "commerce"),
+            Err(OsiExportError::UnsupportedSemantics { .. })
+        ));
+        let mut tampered = catalog.clone();
+        tampered.relations[0].columns[1].nullable = true;
+        assert!(matches!(
+            export(&original, &tampered, "commerce"),
+            Err(OsiExportError::Validation(OsiImportError::InvalidCatalog(
+                _
+            )))
+        ));
+        let changed = tampered.finalize().expect("valid changed catalog");
+        assert!(matches!(
+            export(&original, &changed, "commerce"),
+            Err(OsiExportError::RoundTripMismatch(_))
+        ));
+        let mut denied = catalog.clone();
+        denied.relations[0].columns[1].select_grant = false;
+        assert!(matches!(
+            export(
+                &original,
+                &denied.finalize().expect("valid denied catalog"),
+                "commerce"
+            ),
+            Err(OsiExportError::Validation(
+                OsiImportError::ColumnNotAvailable { .. }
+            ))
+        ));
+    }
+
+    #[test]
+    fn osi_export_rejects_unsafe_identifiers_types_and_metric_inputs() {
+        let catalog = catalog().expect("valid catalog");
+        let original = import(VALID_OSI.as_bytes(), &catalog, None)
+            .expect("valid import")
+            .snapshot;
+        let mutations: [fn(&mut Model); 4] = [
+            |model| model.fields[0].column = "amount * 2".to_owned(),
+            |model| model.source.relation = "orders; SELECT secret".to_owned(),
+            |model| model.metrics[0].field = "amount) FROM secret;--".to_owned(),
+            |model| model.metrics[0].field = "amount".to_owned(),
+        ];
+        for mutate in mutations {
+            let mut snapshot = original.clone();
+            mutate(&mut snapshot.models[0]);
+            rehash(&mut snapshot);
+            assert!(matches!(
+                export(&snapshot, &catalog, "commerce"),
+                Err(OsiExportError::Validation(_))
+            ));
+        }
+        let mut wrong_type = original.clone();
+        wrong_type.models[0].metrics[1].data_type = DataType::Integer;
+        rehash(&mut wrong_type);
+        assert!(matches!(
+            export(&wrong_type, &catalog, "commerce"),
+            Err(OsiExportError::RoundTripMismatch(_))
+        ));
+        assert!(matches!(
+            export(&original, &catalog, "invalid model name"),
+            Err(OsiExportError::Validation(
+                OsiImportError::InvalidIdentifier { .. }
+            ))
+        ));
+    }
+
+    #[test]
+    fn osi_export_rejects_changed_relationships_and_partial_projections() {
+        let catalog: CatalogSnapshot = serde_json::from_slice(
+            &std::fs::read(repo_path(
+                "fixtures/interoperability/osi-commerce-catalog.json",
+            ))
+            .expect("catalog fixture exists"),
+        )
+        .expect("valid catalog fixture");
+        let original = import(
+            &std::fs::read(repo_path("fixtures/interoperability/osi-commerce.yaml"))
+                .expect("Ossie fixture exists"),
+            &catalog,
+            None,
+        )
+        .expect("fixture imports")
+        .snapshot;
+        let mutations: [fn(&mut Model); 5] = [
+            |model| model.relationships[0].cardinality = Cardinality::OneToMany,
+            |model| model.relationships[0].join_type = JoinType::Inner,
+            |model| model.relationships[0].target.relation = "another_relation".to_owned(),
+            |model| {
+                let field = model
+                    .fields
+                    .iter_mut()
+                    .find(|field| field.relationship.is_some())
+                    .expect("projected fixture field");
+                field.semantic_name = "renamed_projection".to_owned();
+            },
+            |model| model.fields.retain(|field| field.relationship.is_none()),
+        ];
+        for mutate in mutations {
+            let mut snapshot = original.clone();
+            mutate(
+                snapshot
+                    .models
+                    .iter_mut()
+                    .find(|model| model.semantic_name == "orders")
+                    .expect("orders model"),
+            );
+            rehash(&mut snapshot);
+            assert!(matches!(
+                export(&snapshot, &catalog, "commerce"),
+                Err(OsiExportError::UnsupportedSemantics { .. }
+                    | OsiExportError::RoundTripMismatch(_))
+            ));
+        }
+        let mut duplicate_metric = original.clone();
+        let mut metric = duplicate_metric.models[1].metrics[0].clone();
+        metric.field = "customer_id".to_owned();
+        duplicate_metric.models[0].metrics.push(metric);
+        rehash(&mut duplicate_metric);
+        assert!(matches!(
+            export(&duplicate_metric, &catalog, "commerce"),
+            Err(OsiExportError::Validation(OsiImportError::DuplicateName {
+                kind: "metric",
+                ..
+            }))
+        ));
+    }
+
+    #[test]
+    fn osi_import_still_rejects_the_flat_development_specification() {
+        let input = br#"{"version":"0.2.0.dev0","name":"commerce","datasets":[{"name":"orders","source":"commerce.orders"}]}"#;
+        assert!(matches!(
+            import(input, &catalog().expect("valid catalog"), None),
+            Err(OsiImportError::Parse(_))
+        ));
+    }
+
+    fn rehash(snapshot: &mut SemanticSnapshot) {
+        snapshot.revision_hash = snapshot
+            .calculate_revision_hash()
+            .expect("serializable snapshot");
     }
 
     fn catalog() -> Result<CatalogSnapshot, crate::catalog::CatalogError> {
