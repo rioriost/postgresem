@@ -2062,6 +2062,26 @@ mod tests {
     }
 
     #[test]
+    fn non_numeric_time_claims_are_rejected() {
+        let (_dir, authority) = authority_from(&base_document());
+        let mut token_claims = claims("tenant-a-agent", "postgresem.query");
+        token_claims["exp"] = json!("not-a-timestamp");
+        let token = sign(&token_claims);
+        assert_eq!(
+            authority.authenticate_at(&bearer(&token), NOW),
+            Err(AuthError::InvalidClaims)
+        );
+
+        let mut token_claims = claims("tenant-a-agent", "postgresem.query");
+        token_claims["nbf"] = json!("not-a-timestamp");
+        let token = sign(&token_claims);
+        assert_eq!(
+            authority.authenticate_at(&bearer(&token), NOW),
+            Err(AuthError::InvalidClaims)
+        );
+    }
+
+    #[test]
     fn missing_required_claims_are_rejected() {
         let (_dir, authority) = authority_from(&base_document());
         let mut token_claims = claims("tenant-a-agent", "postgresem.query");

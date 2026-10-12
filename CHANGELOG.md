@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Security
+
+- Upgrade `jsonwebtoken` from 9.3.1 to 10.3.0 and select the `aws_lc_rs`
+  backend with PEM decoding still disabled. This closes the library's
+  `exp`/`nbf` type-confusion advisory without accepting PEM keys or pulling
+  the unfixed `rsa` Marvin advisory. Container, CI, and release builds install
+  CMake and a C++ compiler for that backend. Non-numeric time claims remain
+  rejected, and the JWK authentication contract is unchanged.
+- Upgrade the pinned Wren and MetricFlow reference environments from
+  `urllib3` 2.7.0 to 2.8.0. These locks are outside the gateway runtime.
+
 ### Changed
 
 - Update pinned GitHub Actions used by CI, release, and reference comparison.

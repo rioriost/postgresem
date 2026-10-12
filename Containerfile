@@ -1,4 +1,7 @@
 FROM rust:1.85-bookworm AS builder
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends cmake g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates

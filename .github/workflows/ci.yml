@@ -27,6 +27,8 @@ jobs:
 
       - name: Install Rust 1.85 toolchain
         run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends cmake g++
           rustup toolchain install 1.85.0 \
             --profile minimal \
             --component clippy,rustfmt

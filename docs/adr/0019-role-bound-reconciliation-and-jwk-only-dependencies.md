@@ -54,3 +54,13 @@ Subsequent acceptance note (2026-09-05):
 of the corrected source and manifest for `v1.0.0` only, with explicit
 independent-review, image-review, and pilot waivers. It does not rewrite this
 security decision or claim an independent external review.
+
+Subsequent dependency note (2026-10-12):
+jsonwebtoken 10 removes the implicit ring backend and requires exactly one
+crypto feature. Keep `use_pem` disabled and select `aws_lc_rs`. Do not enable
+`rust_crypto`: it pulls the unfixed `rsa` Marvin advisory. `aws_lc_rs` needs
+CMake and a C++ compiler, so the CI, release, and container builders install
+those tools. The gateway still does not load PEM or symmetric JWKs. The
+application still rejects non-numeric `exp` and `nbf` itself; the 10.3.0
+upgrade closes the library's type-confusion path without changing the
+authentication contract.

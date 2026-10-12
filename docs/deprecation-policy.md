@@ -40,6 +40,10 @@ The stable v1 contract inventory is the compatibility boundary for 1.x.
   GitHub Actions updates in checked workflow files. They require an intentional
   stable-manifest refresh and do not change request, response, or database
   meaning.
+- **Security dependency correction:** `jsonwebtoken` 10.3.0 with `aws_lc_rs`
+  and PEM decoding disabled. It closes the library type-confusion advisory,
+  keeps JWK authentication unchanged, and refreshes hashes for the auth
+  regression test plus the CMake-enabled builders.
 - **Deferred:** automatic materialized-view routing, pre-aggregation,
   connection pooling, distributed rate limits, runtime OIDC/JWKS discovery,
   general update/delete, and down migrations.

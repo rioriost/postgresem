@@ -80,23 +80,23 @@
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "sha256:22481991e02b5c0b71ac1dd62b931c670f40cf184206176f49802881c44fe649"
+      "sha256": "sha256:05feec27fd3dab1756d51a2c0721121b438a01b269cf8f411908c1e0ad8db403"
     },
     {
       "path": ".github/workflows/release.yml",
-      "sha256": "sha256:73cd9680483a5b31b69b25b60818a157ee0cb90b33ae5fcc50c1f31c7b33b533"
+      "sha256": "sha256:45cea839c562e9c1e618ca1d2b88692e6c1e9301d25ae8808690c042336e813f"
     },
     {
       "path": "Containerfile",
-      "sha256": "sha256:494d26f4982f534fe9177a16588b56afdc06bdd933395fb2c48bcc24e1343f0a"
+      "sha256": "sha256:bbf3700a0ce7181ff37cd816371daf1d53dccb49757cc45afbbea7f902204956"
     },
     {
       "path": "Dockerfile",
-      "sha256": "sha256:494d26f4982f534fe9177a16588b56afdc06bdd933395fb2c48bcc24e1343f0a"
+      "sha256": "sha256:bbf3700a0ce7181ff37cd816371daf1d53dccb49757cc45afbbea7f902204956"
     },
     {
       "path": "IntegrationContainerfile",
-      "sha256": "sha256:0e7e6fb69f8637f5191fca80e3bcefb5cbf712b96363635cb966edd765a2028a"
+      "sha256": "sha256:a0036aad123ec275931cd9bb0174951c395e473100b17484886e16e581657fe2"
     },
     {
       "path": "Makefile",
@@ -192,7 +192,7 @@
     },
     {
       "path": "crates/postgresem/src/mcp_http_auth.rs",
-      "sha256": "sha256:4d6349ae319c1b521c89bf2623269f7ba9a00a08a5d645182128dbe73a235fca"
+      "sha256": "sha256:d15b0dddcda9bd3c55d6469efe8376368a596a0fe7d73fdd293725d601d8178f"
     },
     {
       "path": "crates/postgresem/src/mcp_http_rate.rs",
