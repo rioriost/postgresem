@@ -15,7 +15,7 @@ repository = "https://github.com/rioriost/postgresem"
 [workspace.dependencies]
 async-stream = "0.3"
 axum = "0.8"
-base64 = "0.22"
+base64 = "0.23"
 clap = { version = "4.5", features = ["derive"] }
 fallible-iterator = "0.2"
 hmac = "0.13"
