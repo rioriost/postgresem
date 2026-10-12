@@ -80,11 +80,11 @@
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "sha256:efd565150048b77313ac91105621124bf88e218843eba9f49a7977dbbd54f6bd"
+      "sha256": "sha256:22481991e02b5c0b71ac1dd62b931c670f40cf184206176f49802881c44fe649"
     },
     {
       "path": ".github/workflows/release.yml",
-      "sha256": "sha256:c3dab77740874ec330dab495b571a5cbd9b4fbf41b45ef3fbb65a4d39b745abd"
+      "sha256": "sha256:73cd9680483a5b31b69b25b60818a157ee0cb90b33ae5fcc50c1f31c7b33b533"
     },
     {
       "path": "Containerfile",

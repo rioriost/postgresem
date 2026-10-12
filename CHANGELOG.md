@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update pinned GitHub Actions used by CI, release, and reference comparison.
+  Public request, response, and database contracts are unchanged. Refresh the
+  stable artifact inventory because those workflow files are contract-bearing.
+- Apply Cargo patch updates for `clap` 4.6.7, `thiserror` 2.0.21, and
+  `tokio` 1.53.2. Runtime behavior and the public contract are unchanged.
+
 ### Added
 
 - Add opt-in Apache Ossie `0.1.1` YAML export with

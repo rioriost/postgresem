@@ -37,7 +37,7 @@ the stable `1.0` contract. PostgreSQL remains the only execution engine through
 | LSM | `schema_version: "1"` | strict JSON; bounded insert and approved idempotent upsert only |
 | mutation compiler semantics | `0.1.0` | deterministic output for identical LSM, published writable projection, and options |
 | database migrations | `0001`–`0011` | forward-only; migration 0011 restores writer-role-bound reconciliation; no down migrations |
-| stable contract inventory | `schema_version: "1"` | `postgresem contract show`; checked stable manifest and contract-bearing artifact hashes |
+| stable contract inventory | `schema_version: "1"` | `postgresem contract show`; checked stable manifest and contract-bearing artifact hashes. SHA-pinned workflow updates refresh artifact hashes only and do not change public contracts |
 | source package | `1.0.0` | M12 stable contracts and fail-closed external-evidence release gate |
 | latest published package | `0.7.0` | signed M9 release with authenticated HTTP integration |
 

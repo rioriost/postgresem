@@ -36,6 +36,10 @@ The stable v1 contract inventory is the compatibility boundary for 1.x.
   optional offline `--from` input. The `osi_export: "1"` contract covers only
   catalog-validated Ossie 0.1.1 export with exact Snapshot v1 round-trip
   preservation. Existing native JSON export and import behavior are unchanged.
+- **Artifact-hash refresh, not a public-contract change:** SHA-pinned
+  GitHub Actions updates in checked workflow files. They require an intentional
+  stable-manifest refresh and do not change request, response, or database
+  meaning.
 - **Deferred:** automatic materialized-view routing, pre-aggregation,
   connection pooling, distributed rate limits, runtime OIDC/JWKS discovery,
   general update/delete, and down migrations.
