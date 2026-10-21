@@ -28,6 +28,6 @@ The GitHub Actions
 workflow creates the database from [`postgres/init.sql`](postgres/init.sql),
 runs all four harnesses on Linux amd64, and retains the JSON evidence.
 PostgreSQL and Cube use immutable image digests; the workflow pins
-`uv 0.12.8` and Node `24.20.0`. Each evidence file records its lock digest,
+`uv 0.12.8` and Node `24.22.1`. Each evidence file records its lock digest,
 runtime tool version, and database image identity. The workflow does not add
 any reference implementation to the postgresem runtime or trust boundary.
